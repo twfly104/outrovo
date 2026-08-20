@@ -230,5 +230,28 @@
   </footer>
 
   <script src="script.js"></script>
+  <script>
+    // Pricing page: if signed in, upgrade buttons open checkout; otherwise sign up
+    fetch('/api/me').then(r => r.json()).then(d => {
+      if (!d.ok || !d.user) return;
+      document.querySelectorAll('.plan a[href="signup.html"]').forEach(a => {
+        const plan = a.closest('.plan');
+        const name = plan.querySelector('h3').textContent.trim().toLowerCase();
+        a.textContent = d.plan?.id === name ? 'Current plan' : `Upgrade to ${plan.querySelector('h3').textContent}`;
+        a.href = '#';
+        a.addEventListener('click', async e => {
+          e.preventDefault();
+          const res = await fetch('/api/billing/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plan: name }),
+          });
+          const data = await res.json();
+          if (data.checkoutUrl) window.location.href = data.checkoutUrl;
+          else alert(data.message || data.error || 'Billing is not configured yet.');
+        });
+      });
+    }).catch(() => {});
+  </script>
 </body>
 </html>

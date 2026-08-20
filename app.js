@@ -21,7 +21,15 @@ async function init() {
   $('userCompany').textContent = me?.company || '';
   $('userAvatar').textContent = ((me?.firstName || 'U')[0] + (me?.lastName || '')[0]).toUpperCase();
   if (data.engine === 'demo') $('engineBanner').hidden = false;
-  $('accountInfo').textContent = me ? `${me.firstName} ${me.lastName} — ${me.email} (${me.company})` : '';
+  const planLine = data.plan
+    ? `Plan: ${data.plan.name}${data.plan.id === 'trial' && data.plan.trialEnds ? ` (trial ends ${new Date(data.plan.trialEnds).toLocaleDateString()})` : ''}`
+    : '';
+  $('accountInfo').textContent = (me ? `${me.firstName} ${me.lastName} — ${me.email} (${me.company})` : '') + (planLine ? ` · ${planLine}` : '');
+  if (data.plan?.expired) {
+    const banner = $('engineBanner');
+    banner.hidden = false;
+    banner.innerHTML = '⚠️ <strong>Trial ended</strong> — upgrade on the <a href="/pricing.html" style="color:inherit;text-decoration:underline;">pricing page</a> to keep sending.';
+  }
 
   bindNav();
   bindLogout();

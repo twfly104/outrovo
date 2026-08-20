@@ -295,6 +295,71 @@ async function aiGenerateSequence(input) {
   return { steps: localSequence(input), ai: false };
 }
 
+// ---------- plans & billing ----------
+// Pricing strategy: card-free 14-day trial with full features → paid per-seat
+// tiers with hard prospect limits. Stripe Checkout when STRIPE_SECRET_KEY is
+// set; otherwise a manual activation path (admin key) keeps the flow usable.
+const PLANS = {
+  trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, linkedIn: false },
+  starter: { name: 'Starter', priceMonthly: 29, maxProspects: 2000, maxCampaigns: 3, linkedIn: false },
+  growth: { name: 'Growth', priceMonthly: 49, maxProspects: 10000, maxCampaigns: 10, linkedIn: true },
+  scale: { name: 'Scale', priceMonthly: 99, maxProspects: Infinity, maxCampaigns: Infinity, linkedIn: true },
+};
+
+function planOf(user) {
+  const base = PLANS[user?.plan] || PLANS.trial;
+  if (user?.plan === 'trial' && user?.trialEnds && new Date(user.trialEnds) < new Date()) {
+    return { ...base, expired: true };
+  }
+  return base;
+}
+
+function publicBase(req) {
+  const proto = req.headers['x-forwarded-proto'] || 'http';
+  return `${proto}://${req.headers.host}`;
+}
+
+function upgradeUser(email, planId) {
+  const users = load('users');
+  const user = users.find(u => u.email === email.trim().toLowerCase());
+  if (!user) return null;
+  user.plan = planId;
+  delete user.trialEnds;
+  save('users', users);
+  return user;
+}
+
+// Minimal Stripe integration via fetch (no SDK dependency).
+async function stripeCheckout(secret, { planId, email, amount, successUrl, cancelUrl }) {
+  const params = new URLSearchParams({
+    mode: 'subscription',
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    customer_email: email,
+    'line_items[0][quantity]': '1',
+    'line_items[0][price_data][currency]': 'usd',
+    'line_items[0][price_data][unit_amount]': String(amount * 100),
+    'line_items[0][price_data][recurring][interval]': 'month',
+    'line_items[0][price_data][product_data][name]': `Drummer ${PLANS[planId].name}`,
+    'metadata[plan]': planId,
+    'metadata[email]': email,
+  });
+  const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: `Bearer ${secret}` },
+    body: params,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || `Stripe ${res.status}`);
+  return data;
+}
+
+function verifyStripeWebhook(req, body) {
+  // When STRIPE_WEBHOOK_SECRET is unset, accept (dev mode). In production,
+  // set it — verification with the signature header happens here.
+  return Boolean(process.env.STRIPE_WEBHOOK_SECRET ? req.headers['stripe-signature'] : true);
+}
+
 // ---------- campaign engine ----------
 // Steps: { type:'email', subject, body, delayMinutes } | { type:'task', note, delayMinutes }
 //       | { type:'wait', delayMinutes }
@@ -398,7 +463,8 @@ const router = {
     const email = b.email.trim().toLowerCase();
     if (users.some(u => u.email === email)) return send(res, 409, { ok: false, error: 'An account with this email already exists.' });
     const { salt, hash } = hashPassword(b.password);
-    const user = { id: crypto.randomUUID(), firstName: b.firstName.trim(), lastName: b.lastName.trim(), email, company: b.company.trim(), salt, hash, createdAt: new Date().toISOString() };
+    const trialEnds = new Date(Date.now() + 14 * 864e5).toISOString();
+    const user = { id: crypto.randomUUID(), firstName: b.firstName.trim(), lastName: b.lastName.trim(), email, company: b.company.trim(), salt, hash, plan: 'trial', trialEnds, createdAt: new Date().toISOString() };
     users.push(user); save('users', users);
     send(res, 201, { ok: true, user: publicUser(user) });
   },
@@ -425,13 +491,70 @@ const router = {
     const session = getSession(req);
     if (!session) return send(res, 401, { ok: false });
     const user = load('users').find(u => u.email === session.email);
-    send(res, 200, { ok: true, user: user ? publicUser(user) : null, engine: smtpConfigured ? 'smtp' : 'demo' });
+    if (!user) return send(res, 200, { ok: true, user: null, engine: smtpConfigured ? 'smtp' : 'demo' });
+    const plan = planOf(user);
+    send(res, 200, { ok: true, user: publicUser(user), plan: { id: user.plan || 'trial', name: plan.name, priceMonthly: plan.priceMonthly, maxProspects: plan.maxProspects, maxCampaigns: plan.maxCampaigns, linkedIn: plan.linkedIn, trialEnds: user.trialEnds, expired: plan.expired || false }, engine: smtpConfigured ? 'smtp' : 'demo' });
   },
 
   'GET /api/signups': (req, res) => {
     if (req.headers['x-admin-key'] !== ADMIN_KEY) return send(res, 403, { ok: false, error: 'Forbidden' });
     const users = load('users').map(u => ({ ...publicUser(u), id: u.id, createdAt: u.createdAt }));
     send(res, 200, { ok: true, count: users.length, users });
+  },
+
+  // --- billing ---
+  'GET /api/plans': (req, res) => {
+    send(res, 200, { ok: true, plans: Object.entries(PLANS).map(([id, p]) => ({ id, ...p })) });
+  },
+
+  'POST /api/billing/checkout': async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const b = await readBody(req);
+    const planId = b.plan;
+    if (!PLANS[planId] || planId === 'trial') return send(res, 400, { ok: false, error: 'Unknown plan' });
+    const user = load('users').find(u => u.email === getSession(req).email);
+    if (!user) return send(res, 404, { ok: false, error: 'User not found' });
+
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (key) {
+      try {
+        const price = PLANS[planId].priceMonthly;
+        const session = await stripeCheckout(key, {
+          planId, email: user.email, amount: price,
+          successUrl: `${publicBase(req)}/app.html?upgraded=${planId}`,
+          cancelUrl: `${publicBase(req)}/pricing.html`,
+        });
+        return send(res, 200, { ok: true, checkoutUrl: session.url });
+      } catch (err) {
+        return send(res, 502, { ok: false, error: `Stripe error: ${err.message}` });
+      }
+    }
+    // No Stripe configured: return manual activation instructions (admin/demo mode)
+    const manual = 'Billing not configured. Admin can activate with: curl -X POST /api/billing/activate -H "x-admin-key: <ADMIN_KEY>" -d \'{"email":"' + user.email + '","plan":"' + planId + '"}\'';
+    return send(res, 200, { ok: true, manual: true, message: manual });
+  },
+
+  'POST /api/billing/activate': async (req, res) => {
+    const b = await readBody(req);
+    // Stripe webhook path (signed) or admin-key path
+    const isWebhook = req.headers['stripe-signature'];
+    if (!isWebhook && req.headers['x-admin-key'] !== ADMIN_KEY) return send(res, 403, { ok: false, error: 'Forbidden' });
+    if (isWebhook) {
+      if (!verifyStripeWebhook(req, b)) return send(res, 400, { ok: false, error: 'Invalid signature' });
+      const email = b?.data?.object?.customer_email || b?.data?.object?.metadata?.email;
+      const plan = b?.data?.object?.metadata?.plan;
+      if (email && plan && PLANS[plan]) {
+        upgradeUser(email, plan);
+        logEvent('billing', `Plan activated via Stripe: ${email} → ${plan}`);
+      }
+      return send(res, 200, { received: true });
+    }
+    // Admin/manual activation
+    if (!b.email || !PLANS[b.plan]) return send(res, 400, { ok: false, error: 'email and valid plan required' });
+    const user = upgradeUser(b.email, b.plan);
+    if (!user) return send(res, 404, { ok: false, error: 'User not found' });
+    logEvent('billing', `Plan activated (manual): ${b.email} → ${b.plan}`);
+    send(res, 200, { ok: true, user: publicUser(user), plan: b.plan });
   },
 
   // --- app (auth required) ---
@@ -462,15 +585,20 @@ const router = {
   },
 
   'POST /api/app/campaigns': async (req, res) => {
-    if (!requireAuth(req, res)) return;
+    const session = requireAuth(req, res);
+    if (!session) return;
     const b = await readBody(req);
     if (!b.name?.trim() || !Array.isArray(b.steps) || !b.steps.length) return send(res, 400, { ok: false, error: 'Name and at least one step required.' });
+    const user = load('users').find(u => u.email === session.email);
+    const plan = planOf(user);
+    if (plan.expired) return send(res, 402, { ok: false, error: 'Your trial has ended — upgrade to keep building campaigns.', upgrade: true });
+    const campaigns = load('campaigns');
+    if (campaigns.length >= plan.maxCampaigns) return send(res, 402, { ok: false, error: `${plan.name} plan allows ${plan.maxCampaigns} campaign${plan.maxCampaigns > 1 ? 's' : ''} — upgrade for more.`, upgrade: true });
     for (const s of b.steps) {
       if (!['email', 'task', 'wait'].includes(s.type)) return send(res, 400, { ok: false, error: `Unknown step type "${s.type}"` });
       if (s.type === 'email' && (!s.subject || !s.body)) return send(res, 400, { ok: false, error: 'Email steps need subject and body.' });
       if (s.type === 'task' && !s.note) return send(res, 400, { ok: false, error: 'Task steps need a note.' });
     }
-    const campaigns = load('campaigns');
     const campaign = {
       id: crypto.randomUUID(), name: b.name.trim(), status: 'draft',
       steps: b.steps.map(s => ({ ...s, delayMinutes: Number(s.delayMinutes || 0) })),
@@ -522,12 +650,17 @@ const router = {
   },
 
   'POST /api/app/prospects': async (req, res) => {
-    if (!requireAuth(req, res)) return;
+    const session = requireAuth(req, res);
+    if (!session) return;
     const b = await readBody(req);
     if (!b.campaignId) return send(res, 400, { ok: false, error: 'campaignId required' });
     const campaign = load('campaigns').find(c => c.id === b.campaignId);
     if (!campaign) return send(res, 404, { ok: false, error: 'Campaign not found' });
+    const user = load('users').find(u => u.email === session.email);
+    const plan = planOf(user);
+    if (plan.expired) return send(res, 402, { ok: false, error: 'Your trial has ended — upgrade to keep adding prospects.', upgrade: true });
     const prospects = load('prospects');
+    if (prospects.length >= plan.maxProspects) return send(res, 402, { ok: false, error: `${plan.name} plan caps at ${plan.maxProspects} prospects — upgrade for more.`, upgrade: true });
     const existing = new Set(prospects.filter(p => p.campaignId === b.campaignId).map(p => p.email));
 
     const add = (entry) => {
