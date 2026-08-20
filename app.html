@@ -188,8 +188,13 @@
         <div class="app-card-block">
           <h2>Sending engine</h2>
           <div id="engineInfo"></div>
-          <p class="settings-note">Live sending requires SMTP credentials set as environment variables on the server:
-          <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code>, and optionally <code>SMTP_FROM</code>. Without them the engine logs demo sends instead of delivering.</p>
+          <div class="field-row" style="margin-top:16px;">
+            <div class="field"><label>Send a test email</label><input id="testEmailTo" placeholder="you@yourdomain.com" /></div>
+            <div class="field"><button class="btn btn-primary btn-s" id="testEmailBtn" style="margin-top:26px;">Send test</button></div>
+          </div>
+          <div class="tool-result" id="testEmailResult"></div>
+          <p class="settings-note">Sending uses <code>RESEND_API_KEY</code> (HTTP, recommended) when set, falling back to SMTP
+          (<code>SMTP_HOST</code>/<code>SMTP_PORT</code>/<code>SMTP_USER</code>/<code>SMTP_PASS</code>/<code>SMTP_FROM</code>). With neither, sends are logged as demos.</p>
         </div>
         <div class="app-card-block">
           <h2>Account</h2>

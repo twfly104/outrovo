@@ -36,7 +36,9 @@ const SMTP = {
   pass: process.env.SMTP_PASS,
   from: process.env.SMTP_FROM || process.env.SMTP_USER,
 };
-const smtpConfigured = Boolean(SMTP.host && SMTP.user);
+const RESEND_KEY = process.env.RESEND_API_KEY;
+const RESEND_FROM = process.env.RESEND_FROM || process.env.SMTP_FROM || 'onboarding@resend.dev';
+const smtpConfigured = Boolean(RESEND_KEY || (SMTP.host && SMTP.user));
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -115,17 +117,39 @@ if (smtpConfigured && nodemailer) {
     auth: { user: SMTP.user, pass: SMTP.pass },
   });
 }
+async function sendViaResend(to, subject, text) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_KEY}` },
+    body: JSON.stringify({ from: RESEND_FROM, to: [to], subject, text }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Resend ${res.status}: ${err.slice(0, 200)}`);
+  }
+}
+
 async function sendEmail(campaign, prospect, step) {
+  const subject = renderTemplate(step.subject, prospect);
+  const body = renderTemplate(step.body, prospect);
+  const label = `“${campaign.name}”: email to ${prospect.email}`;
+
+  if (RESEND_KEY) {
+    try {
+      await sendViaResend(prospect.email, subject, body);
+      logEvent('sent', `${label} (via Resend)`, { subject });
+      return { demo: false };
+    } catch (err) {
+      if (!transporter) { logEvent('error', `Send failed to ${prospect.email}: ${err.message}`); throw err; }
+      logEvent('error', `Resend failed for ${prospect.email}, falling back to SMTP: ${err.message}`);
+    }
+  }
   if (!transporter) {
-    logEvent('sent', `[DEMO] “${campaign.name}”: email to ${prospect.email}`, { subject: renderTemplate(step.subject, prospect) });
+    logEvent('sent', `[DEMO] ${label}`, { subject });
     return { demo: true };
   }
-  await transporter.sendMail({
-    from: SMTP.from, to: prospect.email,
-    subject: renderTemplate(step.subject, prospect),
-    text: renderTemplate(step.body, prospect),
-  });
-  logEvent('sent', `“${campaign.name}”: email to ${prospect.email}`, { subject: renderTemplate(step.subject, prospect) });
+  await transporter.sendMail({ from: SMTP.from, to: prospect.email, subject, text: body });
+  logEvent('sent', `${label} (via SMTP)`, { subject });
   return { demo: false };
 }
 
@@ -508,7 +532,20 @@ const router = {
 
   'GET /api/app/engine': (req, res) => {
     if (!requireAuth(req, res)) return;
-    send(res, 200, { ok: true, mode: smtpConfigured ? 'smtp' : 'demo', smtp: smtpConfigured ? { host: SMTP.host, user: SMTP.user, from: SMTP.from } : null });
+    send(res, 200, { ok: true, mode: smtpConfigured ? (RESEND_KEY ? 'resend' : 'smtp') : 'demo', smtp: smtpConfigured ? { provider: RESEND_KEY ? 'resend' : 'smtp', host: SMTP.host, user: SMTP.user, from: RESEND_FROM } : null });
+  },
+
+  'POST /api/app/tools/test-email': async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const b = await readBody(req);
+    const to = (b.to || '').trim();
+    if (!isEmail(to)) return send(res, 400, { ok: false, error: 'Valid email required' });
+    try {
+      await sendEmail({ name: 'Test email' }, { email: to, firstName: 'there' }, { subject: 'Drummer test email ✅', body: 'Hi {{firstName}} — if you see this, your Drummer sending pipeline works.' });
+      send(res, 200, { ok: true });
+    } catch (err) {
+      send(res, 502, { ok: false, error: err.message });
+    }
   },
 
   'POST /api/app/ai/generate-sequence': async (req, res) => {

@@ -331,10 +331,21 @@ function bindTools() {
 // ---------- settings ----------
 async function loadEngine() {
   const { data } = await api('GET', '/api/app/engine');
-  $('engineInfo').innerHTML = data.mode === 'smtp'
-    ? `<p><strong>Live SMTP</strong> — sending via <code>${esc(data.smtp.host)}</code> as <code>${esc(data.smtp.user)}</code>, from <code>${esc(data.smtp.from)}</code>.</p>`
-    : '<p><strong>Demo mode</strong> — no SMTP credentials found. Campaigns run fully, but sends are only logged to the activity feed.</p>';
+  $('engineInfo').innerHTML = data.mode === 'resend'
+    ? `<p><strong>Live — Resend</strong> (HTTP API), from <code>${esc(data.smtp.from)}</code>.</p>`
+    : data.mode === 'smtp'
+    ? `<p><strong>Live SMTP</strong> — sending via <code>${esc(data.smtp.host)}</code> as <code>${esc(data.smtp.user)}</code>.</p>`
+    : '<p><strong>Demo mode</strong> — no sending credentials found. Campaigns run fully, but sends are only logged to the activity feed.</p>';
 }
+
+$('testEmailBtn').addEventListener('click', async () => {
+  const out = $('testEmailResult');
+  out.innerHTML = 'Sending…';
+  const { status, data } = await api('POST', '/api/app/tools/test-email', { to: $('testEmailTo').value });
+  out.innerHTML = status === 200
+    ? '<span class="ok-tag">✓ Sent</span> — check the inbox.'
+    : `<span class="no-tag">✗ Failed</span> — ${esc(data.error || 'unknown error')}`;
+});
 
 async function loadAll() {
   await Promise.all([loadOverview(), loadCampaigns()]);
