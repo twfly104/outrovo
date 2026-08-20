@@ -90,6 +90,9 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   text-transform: uppercase;
   color: var(--crest);
 }
+
+/* Floating chips removed per design — hidden everywhere */
+.hero-visual .chip { display: none !important; }
 .eyebrow::before {
   content: "";
   width: 22px; height: 2px;
@@ -128,8 +131,8 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 }
 .btn-ghost:hover { background: var(--ink); color: var(--paper); transform: translateY(-2px); }
 
-.btn-dark { background: var(--forest); color: var(--paper); }
-.btn-dark:hover { background: var(--forest-deep); transform: translateY(-2px); }
+.btn-dark { background: var(--ink); color: var(--paper); }
+.btn-dark:hover { background: #000; transform: translateY(-2px); }
 
 .btn-light { background: var(--paper); color: var(--forest-deep); }
 .btn-light:hover { background: #fff; transform: translateY(-2px); }
@@ -649,7 +652,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 }
 .dark-section .eyebrow { color: var(--sun); }
 .dark-section .eyebrow::before { background: var(--sun); }
-.dark-section .lede { color: #b9c9bf; }
+.dark-section .lede { color: var(--ink-faint); }
 .dark-section .wrap { position: relative; }
 
 .deliv-grid {
@@ -658,48 +661,48 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   gap: 18px;
 }
 .deliv-card {
-  background: rgba(246, 241, 231, 0.045);
-  border: 1px solid rgba(246, 241, 231, 0.12);
+  background: var(--paper);
+  border: 1px solid var(--line);
   border-radius: var(--radius-m);
   padding: 26px 24px;
   transition: transform 0.3s var(--ease-out), background 0.3s, border-color 0.3s;
 }
 .deliv-card:hover {
   transform: translateY(-6px);
-  background: rgba(246, 241, 231, 0.08);
-  border-color: rgba(255, 200, 50, 0.35);
+  background: var(--paper-deep);
+  border-color: rgba(249, 115, 22, 0.4);
 }
 .deliv-card h3 { font-size: 1.18rem; margin: 18px 0 8px; }
-.deliv-card p { font-size: 0.9rem; color: #b9c9bf; }
+.deliv-card p { font-size: 0.9rem; color: var(--ink-faint); }
 .deliv-ico {
   width: 46px; height: 46px;
   border-radius: 13px;
-  background: rgba(232, 73, 15, 0.18);
-  border: 1px solid rgba(232, 73, 15, 0.4);
-  color: #ff9d73;
+  background: rgba(249, 115, 22, 0.1);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  color: var(--crest);
   display: grid; place-items: center;
 }
 
 /* Mini visuals inside deliv cards */
 .mini { margin-top: 20px; height: 56px; display: flex; align-items: flex-end; }
 .spark { width: 100%; height: 100%; }
-.spark polyline { fill: none; stroke: var(--sun); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.spark polyline { fill: none; stroke: var(--crest); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 .ring {
   width: 56px; height: 56px; border-radius: 50%;
-  background: conic-gradient(#2e9e5b 0 97%, rgba(246,241,231,0.12) 97% 100%);
+  background: conic-gradient(var(--crest) 0 97%, var(--paper-deep) 97% 100%);
   display: grid; place-items: center;
   font-weight: 700; font-size: 0.8rem;
   position: relative;
 }
-.ring::before { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: var(--forest-deep); }
+..ring::before { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: var(--card); }
 .ring span { position: relative; }
 .mini-bars { display: flex; align-items: flex-end; gap: 5px; height: 100%; }
-.mini-bars i { width: 12px; border-radius: 3px 3px 0 0; background: rgba(246,241,231,0.2); }
+.mini-bars i { width: 12px; border-radius: 3px 3px 0 0; background: var(--paper-deep); }
 .mini-bars i.hot { background: var(--crest); }
 .mini-tag {
   align-self: center;
   font-size: 0.75rem; font-weight: 700;
-  border: 1px dashed rgba(246,241,231,0.35);
+  border: 1px dashed var(--line);
   padding: 7px 13px; border-radius: 999px;
   color: var(--ink-faint);
 }
@@ -890,7 +893,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .cta-band .hero-meta li::before { background: #fff; }
 
 /* ---------- Footer ---------- */
-.site-footer { background: var(--forest-deep); color: #b9c9bf; padding: 80px 0 40px; position: relative; }
+.site-footer { background: var(--card); color: var(--ink-faint); padding: 80px 0 40px; position: relative; }
 .foot-grid { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 40px; margin-bottom: 64px; }
 .foot-brand p { font-size: 0.92rem; margin: 16px 0 22px; max-width: 30ch; }
 .foot-brand .logo { color: var(--paper); }
@@ -1058,7 +1061,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 }
 .plan h3 { font-size: 1.4rem; }
 .plan .for { font-size: 0.88rem; color: var(--ink-faint); margin: 6px 0 24px; }
-.plan.featured .for { color: #b9c9bf; }
+.plan.featured .for { color: var(--ink-faint); }
 .plan-price { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
 .plan-price .amount {
   font-family: var(--font-display);
@@ -1068,9 +1071,9 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   letter-spacing: -0.02em;
 }
 .plan-price .per { font-size: 0.9rem; color: var(--ink-faint); }
-.plan.featured .per { color: #b9c9bf; }
+.plan.featured .per { color: var(--ink-faint); }
 .plan-bill { font-size: 0.8rem; color: var(--ink-faint); min-height: 1.2em; margin-bottom: 26px; }
-.plan.featured .plan-bill { color: #b9c9bf; }
+.plan.featured .plan-bill { color: var(--ink-faint); }
 .plan .btn { justify-content: center; margin-bottom: 28px; }
 .plan-feats { display: grid; gap: 11px; font-size: 0.92rem; }
 .plan-feats li { display: flex; gap: 10px; align-items: flex-start; color: var(--ink-soft); }
@@ -1180,7 +1183,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .auth-quote .mark { color: var(--sun); }
 .auth-quote .who { margin-top: 26px; display: flex; align-items: center; gap: 13px; }
 .auth-quote .avatar { background: var(--crest); }
-.auth-quote .who-text span { color: #b9c9bf; }
+.auth-quote .who-text span { color: var(--ink-faint); }
 .auth-points {
   position: relative;
   display: flex;
