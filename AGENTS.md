@@ -44,6 +44,16 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - `node server.js` (or `PORT=xxxx node server.js`) from repo root.
 - Public URL in this sandbox: https://work-1-wtjewisfdrzmkddb.prod-runtime.all-hands.dev/
 
+## Launch checklist (hosting env vars — do these in Render/Vercel)
+- `ADMIN_KEY` — strong random value; without it admin endpoints are locked
+  (verified: 403 with no key, 403 with wrong key, 200 with correct key).
+- `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS` (+ optional `SMTP_FROM`), or
+  `RESEND_API_KEY` — otherwise the engine runs in demo mode and logs sends
+  instead of delivering them. The pipeline is end-to-end verified
+  (`POST /api/app/tools/test-email` delivered via real SMTP during audit).
+- `STRIPE_SECRET_KEY` (+ `STRIPE_WEBHOOK_SECRET` for webhook activation) —
+  otherwise checkout returns manual instructions.
+
 ## API
 - `POST /api/signup` — validates, scrypt-hashes password, 409 on duplicate email
 - `POST /api/login` — verifies hash, sets session cookie; `POST /api/logout`; `GET /api/me`
