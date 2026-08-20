@@ -14,9 +14,9 @@ let nodemailer = null;
 try { nodemailer = require('nodemailer'); } catch { /* demo mode only */ }
 
 const PORT = process.env.PORT || 12000;
-const ADMIN_KEY = process.env.ADMIN_KEY || 'drummer-admin-key';
+const ADMIN_KEY = process.env.ADMIN_KEY || 'outrovo-admin-key';
 // Vercel serverless: filesystem is read-only except /tmp.
-const DATA_DIR = process.env.DATA_DIR || (process.env.VERCEL ? '/tmp/drummer-data' : path.join(__dirname, 'data'));
+const DATA_DIR = process.env.DATA_DIR || (process.env.VERCEL ? "/tmp/outrovo-data" : path.join(__dirname, 'data'));
 const ROOT = __dirname;
 const FILES = {
   users: 'users.json',
@@ -87,7 +87,7 @@ const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: 
 const newToken = () => crypto.randomBytes(24).toString('hex');
 
 function getSession(req) {
-  const cookie = (req.headers.cookie || '').match(/drummer_session=([^;]+)/);
+  const cookie = (req.headers.cookie || '').match(/outrovo_session=([^;]+)/);
   if (!cookie) return null;
   const sessions = load('sessions');
   const session = sessions.find(s => s.token === cookie[1]);
@@ -220,7 +220,7 @@ async function fetchSite(url) {
   try {
     const res = await fetch(target, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DrummerBot/1.0; +https://drummer.app)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OutrovoBot/1.0; +https://drummer.app)' },
       redirect: 'follow',
     });
     if (!res.ok) throw new Error(`Site returned ${res.status}`);
@@ -478,13 +478,13 @@ const router = {
     const token = newToken();
     sessions.push({ token, email: user.email, expires: new Date(Date.now() + 7 * 864e5).toISOString() });
     save('sessions', sessions);
-    send(res, 200, { ok: true, user: publicUser(user) }, { 'Set-Cookie': `drummer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 86400}` });
+    send(res, 200, { ok: true, user: publicUser(user) }, { 'Set-Cookie': `outrovo_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 86400}` });
   },
 
   'POST /api/logout': (req, res) => {
     const session = getSession(req);
     if (session) save('sessions', load('sessions').filter(s => s.token !== session.token));
-    send(res, 200, { ok: true }, { 'Set-Cookie': 'drummer_session=; HttpOnly; Path=/; Max-Age=0' });
+    send(res, 200, { ok: true }, { 'Set-Cookie': 'outrovo_session=; HttpOnly; Path=/; Max-Age=0' });
   },
 
   'GET /api/me': (req, res) => {
@@ -744,7 +744,7 @@ const router = {
     const to = (b.to || '').trim();
     if (!isEmail(to)) return send(res, 400, { ok: false, error: 'Valid email required' });
     try {
-      await sendEmail({ name: 'Test email' }, { email: to, firstName: 'there' }, { subject: 'Drummer test email ✅', body: 'Hi {{firstName}} — if you see this, your Drummer sending pipeline works.' });
+      await sendEmail({ name: 'Test email' }, { email: to, firstName: 'there' }, { subject: 'Outrovo test email ✅', body: 'Hi {{firstName}} — if you see this, your Drummer sending pipeline works.' });
       send(res, 200, { ok: true });
     } catch (err) {
       send(res, 502, { ok: false, error: err.message });

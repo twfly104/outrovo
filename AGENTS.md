@@ -47,7 +47,7 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - `POST /api/login` — verifies hash, sets session cookie; `POST /api/logout`; `GET /api/me`
 - `GET /api/health` — status + user count
 - `GET /api/signups` — admin list, needs `x-admin-key` header (env `ADMIN_KEY`,
-  default `drummer-admin-key` — change it before any real launch)
+  default `outrovo-admin-key` — change it before any real launch)
 - App (session required): `/api/app/overview`, `/api/app/campaigns` (GET/POST,
   `/:id/activate|pause`, DELETE), `/api/app/prospects` (GET/POST single+CSV,
   `/:id/verify`), `/api/app/activity`, `/api/app/tasks` (`/:id/done`),
