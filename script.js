@@ -100,12 +100,20 @@ if (billToggle) {
   });
 }
 
-// Form validation (signup / login)
+// Form validation + API (signup / login)
 document.querySelectorAll('form[id$="Form"]').forEach(form => {
   const success = document.getElementById(form.id.replace('Form', 'Success'));
-  form.addEventListener('submit', e => {
+  const endpoint = form.id === 'signupForm' ? '/api/signup' : '/api/login';
+
+  // Shared spot for server-side errors, created once above the submit button
+  const serverErr = document.createElement('p');
+  serverErr.style.cssText = 'display:none;color:#d93025;font-size:0.85rem;font-weight:600;margin:0 0 14px;';
+  form.querySelector('button[type="submit"]').before(serverErr);
+
+  form.addEventListener('submit', async e => {
     e.preventDefault();
     let valid = true;
+    serverErr.style.display = 'none';
 
     form.querySelectorAll('.field input').forEach(input => {
       const field = input.closest('.field');
@@ -123,17 +131,50 @@ document.querySelectorAll('form[id$="Form"]').forEach(form => {
       wrap.classList.toggle('show-err', !terms.checked);
       if (!terms.checked) valid = false;
     }
+    if (!valid) return;
 
-    if (valid && success) {
-      const email = form.querySelector('#email')?.value.trim();
-      const name = form.querySelector('#firstName')?.value.trim();
-      if (email) success.querySelector('#successEmail').textContent = email;
-      if (name) {
-        const slot = success.querySelector('#successName');
-        if (slot) slot.textContent = name;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.65';
+
+    const payload = Object.fromEntries(
+      [...form.querySelectorAll('.field input')].map(i => [i.name, i.value.trim()])
+    );
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        serverErr.textContent = data.error || 'Something went wrong — please try again.';
+        serverErr.style.display = 'block';
+        if (res.status === 409) {
+          const emailInput = form.querySelector('#email');
+          emailInput.classList.add('invalid');
+          emailInput.closest('.field').classList.add('show-err');
+        }
+        return;
       }
-      form.style.display = 'none';
-      success.style.display = 'block';
+
+      if (success) {
+        const name = data.user?.firstName || form.querySelector('#firstName')?.value.trim();
+        const emailSlot = success.querySelector('#successEmail');
+        if (emailSlot && data.user?.email) emailSlot.textContent = data.user.email;
+        const nameSlot = success.querySelector('#successName');
+        if (nameSlot && name) nameSlot.textContent = name;
+        form.style.display = 'none';
+        success.style.display = 'block';
+      }
+    } catch {
+      serverErr.textContent = 'Cannot reach the server right now — please try again later.';
+      serverErr.style.display = 'block';
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '';
     }
   });
 
@@ -143,5 +184,6 @@ document.querySelectorAll('form[id$="Form"]').forEach(form => {
       field.classList.remove('show-err');
       e.target.classList.remove('invalid');
     }
+    serverErr.style.display = 'none';
   });
 });

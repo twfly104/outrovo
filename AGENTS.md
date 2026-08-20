@@ -4,14 +4,25 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 (hero + product mockup, deliverability grid, testimonial, integrations, 4 steps, FAQ, footer).
 
 ## Stack
-- Plain static site: `index.html`, `pricing.html`, `signup.html`, `login.html`,
+- Static frontend: `index.html`, `pricing.html`, `signup.html`, `login.html`,
   `styles.css`, `script.js` — no build step.
+- Backend: `server.js` — zero-dependency Node server (Node >= 18) serving the
+  static files plus a JSON API. Persistence in `data/signups.json` (gitignored).
+  Passwords are scrypt-hashed with per-user salt.
 - Fonts: Fraunces (display) + Instrument Sans (body) via Google Fonts.
 - Design tokens in `:root` of `styles.css`: warm paper `#f6f1e7`, forest ink `#16281f`,
   vermilion crest `#e8490f`, dark forest `#122e22`.
 
 ## Run
-- `python3 -m http.server 12000` from repo root, open http://localhost:12000/
+- `node server.js` (or `PORT=xxxx node server.js`) from repo root.
+- Public URL in this sandbox: https://work-1-wtjewisfdrzmkddb.prod-runtime.all-hands.dev/
+
+## API
+- `POST /api/signup` — validates, scrypt-hashes password, 409 on duplicate email
+- `POST /api/login` — verifies against stored hash with timing-safe compare
+- `GET /api/health` — status + user count
+- `GET /api/signups` — admin list, needs `x-admin-key` header (env `ADMIN_KEY`,
+  default `drummer-admin-key` — change it before any real launch)
 
 ## Conventions
 - Brand name is "Drummer" (placeholder — can be renamed during enhancement).
