@@ -126,6 +126,78 @@ async function sendEmail(campaign, prospect, step) {
   return { demo: false };
 }
 
+// ---------- AI sequence generation ----------
+// Uses an OpenAI-compatible chat API when LLM_API_KEY is set
+// (LLM_BASE_URL, LLM_MODEL override defaults). Otherwise falls back to the
+// built-in copywriting engine so the feature works with zero config.
+const AI_SYSTEM_PROMPT = `You write short, high-reply-rate cold outreach sequences.
+Return ONLY a JSON object: {"steps":[...]} where each step is one of:
+{"type":"email","subject":"...","body":"...","delayMinutes":N}
+{"type":"task","note":"...","delayMinutes":N}  (a manual LinkedIn action)
+{"type":"wait","delayMinutes":N}
+Rules: 3-5 steps total, starting with an email. Use {{firstName}} and {{company}}
+tokens where useful. Bodies: under 90 words, plain text, one clear ask, no hype,
+no emojis. delayMinutes: realistic gaps (2880=2 days, 4320=3 days).`;
+
+function normalizeSteps(steps) {
+  return steps
+    .filter(s => ['email', 'task', 'wait'].includes(s.type))
+    .map(s => ({
+      type: s.type,
+      subject: String(s.subject || ''),
+      body: String(s.body || ''),
+      note: String(s.note || ''),
+      delayMinutes: Math.max(0, Number(s.delayMinutes || 0)),
+    }));
+}
+
+function localSequence({ product, audience, goal, tone }) {
+  const p = product?.trim() || 'our product';
+  const a = audience?.trim() || 'teams like yours';
+  const g = goal?.trim() || 'book a short call';
+  const opener = tone === 'bold'
+    ? `Most ${a} lose hours every week on manual outbound — {{company}} probably doesn't have to.`
+    : `I noticed {{company}} and thought there might be a fit.`;
+  return normalizeSteps([
+    { type: 'email', subject: 'Quick idea for {{company}}', delayMinutes: 0,
+      body: `Hi {{firstName}},\n\n${opener}\n\nWe built ${p} for ${a} — it handles the repetitive parts so your team can focus on conversations that convert.\n\nOpen to a quick look? I can ${g} — 15 minutes is plenty.\n\nBest,` },
+    { type: 'wait', delayMinutes: 2880 },
+    { type: 'task', note: `Send a LinkedIn connection request to {{firstName}} {{lastName}} — short note referencing ${p}`, delayMinutes: 0 },
+    { type: 'email', subject: 'Re: Quick idea for {{company}}', delayMinutes: 4320,
+      body: `Hi {{firstName}},\n\nFollowing up in case this got buried. The short version: ${p} helps ${a} get more replies with less manual work.\n\nIf it's not a fit, no worries — just let me know and I'll close the loop.\n\nBest,` },
+  ]);
+}
+
+async function aiGenerateSequence(input) {
+  const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+  const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+  const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+  if (key) {
+    try {
+      const res = await fetch(`${base}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: AI_SYSTEM_PROMPT },
+            { role: 'user', content: JSON.stringify(input) },
+          ],
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const parsed = JSON.parse(json.choices?.[0]?.message?.content || '{}');
+        const steps = normalizeSteps(parsed.steps || []);
+        if (steps.length) return { steps, ai: true, model };
+      }
+    } catch { /* fall through to local engine */ }
+  }
+  return { steps: localSequence(input), ai: false };
+}
+
 // ---------- campaign engine ----------
 // Steps: { type:'email', subject, body, delayMinutes } | { type:'task', note, delayMinutes }
 //       | { type:'wait', delayMinutes }
@@ -424,6 +496,14 @@ const router = {
   'GET /api/app/engine': (req, res) => {
     if (!requireAuth(req, res)) return;
     send(res, 200, { ok: true, mode: smtpConfigured ? 'smtp' : 'demo', smtp: smtpConfigured ? { host: SMTP.host, user: SMTP.user, from: SMTP.from } : null });
+  },
+
+  'POST /api/app/ai/generate-sequence': async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const b = await readBody(req);
+    if (!b.product?.trim()) return send(res, 400, { ok: false, error: 'Describe your product or offer first.' });
+    const result = await aiGenerateSequence({ product: b.product, audience: b.audience, goal: b.goal, tone: b.tone });
+    send(res, 200, { ok: true, ...result });
   },
 };
 
