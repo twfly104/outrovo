@@ -1,4 +1,4 @@
-// Drummer dashboard
+// Outrovo dashboard
 const api = (method, path, body) =>
   fetch(path, {
     method,

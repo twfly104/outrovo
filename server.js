@@ -1,4 +1,4 @@
-// Drummer — product MVP server (Node >= 18)
+// Outrovo — product MVP server (Node >= 18)
 // Static site + marketing API + session auth + campaign engine + deliverability tools.
 //
 // SMTP is configured via env (SMTP_HOST/PORT/USER/PASS/FROM). Without it, the
@@ -341,7 +341,7 @@ async function stripeCheckout(secret, { planId, email, amount, successUrl, cance
     'line_items[0][price_data][currency]': 'usd',
     'line_items[0][price_data][unit_amount]': String(amount * 100),
     'line_items[0][price_data][recurring][interval]': 'month',
-    'line_items[0][price_data][product_data][name]': `Drummer ${PLANS[planId].name}`,
+    'line_items[0][price_data][product_data][name]': `Outrovo ${PLANS[planId].name}`,
     'metadata[plan]': planId,
     'metadata[email]': email,
   });
@@ -794,7 +794,7 @@ const router = {
     const to = (b.to || '').trim();
     if (!isEmail(to)) return send(res, 400, { ok: false, error: 'Valid email required' });
     try {
-      await sendEmail({ name: 'Test email' }, { email: to, firstName: 'there' }, { subject: 'Outrovo test email ✅', body: 'Hi {{firstName}} — if you see this, your Drummer sending pipeline works.' });
+      await sendEmail({ name: 'Test email' }, { email: to, firstName: 'there' }, { subject: 'Outrovo test email ✅', body: 'Hi {{firstName}} — if you see this, your Outrovo sending pipeline works.' });
       send(res, 200, { ok: true });
     } catch (err) {
       send(res, 502, { ok: false, error: err.message });
@@ -882,7 +882,7 @@ const server = http.createServer(async (req, res) => {
 
 if (!process.env.VERCEL) {
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Drummer server on http://0.0.0.0:${PORT} — engine mode: ${smtpConfigured ? 'smtp' : 'demo'}`);
+    console.log(`Outrovo server on http://0.0.0.0:${PORT} — engine mode: ${smtpConfigured ? 'smtp' : 'demo'}`);
   });
 }
 
