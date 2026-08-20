@@ -23,6 +23,17 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   (`localSequence`) — the UI labels which mode answered.
 - Logo lives in `logo.svg` (vector bird mark) referenced as `.logo-img`
   across pages — update the file once to rebrand everywhere.
+
+## Monetization
+- Plans in `PLANS` (server.js): trial (14d, 100 prospects, 1 campaign),
+  starter $29 (2K/3), growth $49 (10K/10 + LinkedIn), scale $99 (∞).
+- Signup auto-assigns `plan: 'trial'` + `trialEnds`. `planOf()` marks
+  expiry; campaign & prospect creation return 402 with `upgrade: true`.
+- Billing: `POST /api/billing/checkout` → Stripe Checkout when
+  `STRIPE_SECRET_KEY` set, else manual instructions. Activation via
+  `POST /api/billing/activate` (admin key or Stripe webhook, verified
+  when `STRIPE_WEBHOOK_SECRET` set). Dashboard shows plan + trial banner;
+  pricing page Upgrade buttons call checkout for signed-in users.
 - Fonts: Fraunces (display) + Instrument Sans (body) via Google Fonts.
 - Design tokens in `:root` of `styles.css`: warm paper `#f6f1e7`, forest ink `#16281f`,
   vermilion crest `#e8490f`, dark forest `#122e22`.
