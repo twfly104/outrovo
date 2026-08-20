@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drummer — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='16' fill='%23e8490f'/%3E%3Ccircle cx='17' cy='12' r='3.4' fill='%23fff'/%3E%3C/svg%3E" />
+</head>
+<body class="app-body">
+  <div class="app-shell">
+    <aside class="app-sidebar">
+      <a class="logo" href="index.html"><span class="logo-mark"></span> Drummer</a>
+      <nav class="app-nav" id="appNav">
+        <button data-page="overview" class="active">Overview</button>
+        <button data-page="campaigns">Campaigns</button>
+        <button data-page="prospects">Prospects</button>
+        <button data-page="activity">Activity &amp; tasks</button>
+        <button data-page="tools">Tools</button>
+        <button data-page="settings">Settings</button>
+      </nav>
+      <div class="app-user">
+        <span class="avatar" id="userAvatar">–</span>
+        <div>
+          <strong id="userName">…</strong>
+          <span id="userCompany">…</span>
+        </div>
+        <button id="logoutBtn" title="Log out" aria-label="Log out">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <main class="app-main">
+      <div class="engine-banner" id="engineBanner" hidden>
+        ⚠️ <strong>Demo mode</strong> — SMTP not configured; sends are logged, not delivered. Set <code>SMTP_HOST/PORT/USER/PASS</code> to go live.
+      </div>
+
+      <!-- Overview -->
+      <section class="app-page" id="page-overview">
+        <h1>Overview</h1>
+        <div class="stat-grid" id="statGrid"></div>
+        <div class="app-card-block">
+          <h2>Recent activity</h2>
+          <ul class="event-list" id="overviewEvents"></ul>
+        </div>
+      </section>
+
+      <!-- Campaigns -->
+      <section class="app-page" id="page-campaigns" hidden>
+        <div class="page-head">
+          <h1>Campaigns</h1>
+          <button class="btn btn-primary btn-s" id="newCampaignBtn">+ New campaign</button>
+        </div>
+        <div id="campaignList" class="campaign-list"></div>
+
+        <div class="modal-lite" id="campaignModal" hidden>
+          <div class="modal-lite-card">
+            <div class="page-head">
+              <h2>New campaign</h2>
+              <button class="icon-btn" id="closeCampaignModal" aria-label="Close">✕</button>
+            </div>
+            <div class="field">
+              <label for="cName">Campaign name</label>
+              <input id="cName" placeholder="Q3 founders outreach" />
+            </div>
+            <div id="stepsEditor"></div>
+            <button class="btn btn-ghost btn-s" id="addStepBtn">+ Add step</button>
+            <div class="modal-actions">
+              <button class="btn btn-primary" id="saveCampaignBtn">Create campaign</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Prospects -->
+      <section class="app-page" id="page-prospects" hidden>
+        <div class="page-head">
+          <h1>Prospects</h1>
+          <select id="prospectCampaign"></select>
+        </div>
+        <div class="app-card-block split-2">
+          <div>
+            <h2>Add single prospect</h2>
+            <div class="field-row">
+              <div class="field"><label>Email</label><input id="pEmail" placeholder="sarah@acme.io" /></div>
+              <div class="field"><label>First name</label><input id="pFirst" placeholder="Sarah" /></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Last name</label><input id="pLast" placeholder="Connor" /></div>
+              <div class="field"><label>Company</label><input id="pCompany" placeholder="Acme Inc." /></div>
+            </div>
+            <button class="btn btn-primary btn-s" id="addProspectBtn">Add prospect</button>
+          </div>
+          <div>
+            <h2>Bulk import (CSV)</h2>
+            <div class="field">
+              <label>email, first name, last name, company — one per line</label>
+              <textarea id="csvInput" rows="5" placeholder="sarah@acme.io, Sarah, Connor, Acme&#10;ben@orbcall.io, Ben, Wu, Orbcall"></textarea>
+            </div>
+            <button class="btn btn-dark btn-s" id="importBtn">Import</button>
+            <span class="import-note" id="importNote"></span>
+          </div>
+        </div>
+        <div class="app-card-block">
+          <h2>All prospects <span id="prospectCount"></span></h2>
+          <table class="data-table" id="prospectTable">
+            <thead><tr><th>Email</th><th>Name</th><th>Company</th><th>Step</th><th>Verification</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Activity -->
+      <section class="app-page" id="page-activity" hidden>
+        <h1>Activity &amp; tasks</h1>
+        <div class="app-card-block">
+          <h2>Open LinkedIn tasks</h2>
+          <ul class="event-list" id="taskList"></ul>
+        </div>
+        <div class="app-card-block">
+          <h2>Event feed</h2>
+          <ul class="event-list" id="eventList"></ul>
+        </div>
+      </section>
+
+      <!-- Tools -->
+      <section class="app-page" id="page-tools" hidden>
+        <h1>Deliverability tools</h1>
+        <div class="app-card-block split-2">
+          <div>
+            <h2>Email verification</h2>
+            <div class="field"><label>Email address</label><input id="vEmail" placeholder="sarah@acme.io" /></div>
+            <button class="btn btn-primary btn-s" id="verifyBtn">Verify</button>
+            <div class="tool-result" id="verifyResult"></div>
+          </div>
+          <div>
+            <h2>Domain health audit</h2>
+            <div class="field"><label>Domain</label><input id="dDomain" placeholder="yourcompany.com" /></div>
+            <button class="btn btn-dark btn-s" id="auditBtn">Run audit</button>
+            <div class="tool-result" id="auditResult"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section class="app-page" id="page-settings" hidden>
+        <h1>Settings</h1>
+        <div class="app-card-block">
+          <h2>Sending engine</h2>
+          <div id="engineInfo"></div>
+          <p class="settings-note">Live sending requires SMTP credentials set as environment variables on the server:
+          <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code>, and optionally <code>SMTP_FROM</code>. Without them the engine logs demo sends instead of delivering.</p>
+        </div>
+        <div class="app-card-block">
+          <h2>Account</h2>
+          <p id="accountInfo"></p>
+          <button class="btn btn-ghost btn-s" id="logoutBtn2">Log out</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -160,6 +160,11 @@ document.querySelectorAll('form[id$="Form"]').forEach(form => {
         return;
       }
 
+      if (form.id === 'loginForm') {
+        window.location.href = '/app.html';
+        return;
+      }
+
       if (success) {
         const name = data.user?.firstName || form.querySelector('#firstName')?.value.trim();
         const emailSlot = success.querySelector('#successEmail');

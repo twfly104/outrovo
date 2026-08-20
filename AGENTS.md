@@ -4,11 +4,18 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 (hero + product mockup, deliverability grid, testimonial, integrations, 4 steps, FAQ, footer).
 
 ## Stack
-- Static frontend: `index.html`, `pricing.html`, `signup.html`, `login.html`,
+- Marketing frontend: `index.html`, `pricing.html`, `signup.html`, `login.html`,
   `styles.css`, `script.js` — no build step.
-- Backend: `server.js` — zero-dependency Node server (Node >= 18) serving the
-  static files plus a JSON API. Persistence in `data/signups.json` (gitignored).
-  Passwords are scrypt-hashed with per-user salt.
+- Product app: `app.html` + `app.js` — session-gated dashboard (Overview,
+  Campaigns, Prospects, Activity & tasks, Tools, Settings).
+- Backend: `server.js` (Node >= 18, one dep: `nodemailer` — `npm install` first).
+  Static hosting + JSON API + campaign engine. Persistence in `data/*.json`
+  (gitignored). Passwords scrypt-hashed, sessions in httpOnly cookie
+  `drummer_session` (7 days).
+- Engine: ticks every `ENGINE_INTERVAL_MS` (default 15s). Steps: `email`
+  (subject/body, `{{firstName}}`-style templating), `task` (manual LinkedIn
+  queue), `wait`. Without `SMTP_HOST/USER/PASS` env it runs in DEMO mode —
+  sends are logged to the activity feed, never delivered.
 - Fonts: Fraunces (display) + Instrument Sans (body) via Google Fonts.
 - Design tokens in `:root` of `styles.css`: warm paper `#f6f1e7`, forest ink `#16281f`,
   vermilion crest `#e8490f`, dark forest `#122e22`.
@@ -19,10 +26,16 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 
 ## API
 - `POST /api/signup` — validates, scrypt-hashes password, 409 on duplicate email
-- `POST /api/login` — verifies against stored hash with timing-safe compare
+- `POST /api/login` — verifies hash, sets session cookie; `POST /api/logout`; `GET /api/me`
 - `GET /api/health` — status + user count
 - `GET /api/signups` — admin list, needs `x-admin-key` header (env `ADMIN_KEY`,
   default `drummer-admin-key` — change it before any real launch)
+- App (session required): `/api/app/overview`, `/api/app/campaigns` (GET/POST,
+  `/:id/activate|pause`, DELETE), `/api/app/prospects` (GET/POST single+CSV,
+  `/:id/verify`), `/api/app/activity`, `/api/app/tasks` (`/:id/done`),
+  `/api/app/tools/verify` (syntax + MX), `/api/app/tools/domain-audit`
+  (MX/SPF/DMARC/DKIM-selector DNS checks), `/api/app/engine`
+- `/app.html` and `/app.js` redirect to `/login.html` without a session
 
 ## Conventions
 - Brand name is "Drummer" (placeholder — can be renamed during enhancement).

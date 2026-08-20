@@ -1,23 +1,39 @@
-// Drummer MVP server — zero dependencies (Node >= 18)
-// Serves the static site and a small JSON API with real persistence.
+// Drummer — product MVP server (Node >= 18)
+// Static site + marketing API + session auth + campaign engine + deliverability tools.
 //
-//   GET  /api/health            -> { ok: true }
-//   POST /api/signup            -> 201 { ok, user } | 409 duplicate | 400 invalid
-//   POST /api/login             -> 200 { ok, user } | 401 wrong credentials
-//   GET  /api/signups           -> admin list (requires x-admin-key header)
-//
-// Data lives in data/signups.json (gitignored). Passwords are scrypt-hashed.
+// SMTP is configured via env (SMTP_HOST/PORT/USER/PASS/FROM). Without it, the
+// engine runs in DEMO mode: sends are logged to the activity feed, not the network.
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const dns = require('dns').promises;
+
+let nodemailer = null;
+try { nodemailer = require('nodemailer'); } catch { /* demo mode only */ }
 
 const PORT = process.env.PORT || 12000;
 const ADMIN_KEY = process.env.ADMIN_KEY || 'drummer-admin-key';
 const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, 'data');
-const DB_FILE = path.join(DATA_DIR, 'signups.json');
+const FILES = {
+  users: 'users.json',
+  campaigns: 'campaigns.json',
+  prospects: 'prospects.json',
+  events: 'events.json',
+  tasks: 'tasks.json',
+  sessions: 'sessions.json',
+};
+
+const SMTP = {
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT || 587),
+  user: process.env.SMTP_USER,
+  pass: process.env.SMTP_PASS,
+  from: process.env.SMTP_FROM || process.env.SMTP_USER,
+};
+const smtpConfigured = Boolean(SMTP.host && SMTP.user);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -26,142 +42,427 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
-  '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
 };
 
 // ---------- storage ----------
-function loadUsers() {
-  try {
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-  } catch {
-    return [];
-  }
+function load(name) {
+  try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, FILES[name]), 'utf8')); } catch { return []; }
 }
-
-function saveUsers(users) {
+function save(name, data) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(DB_FILE, JSON.stringify(users, null, 2));
+  fs.writeFileSync(path.join(DATA_DIR, FILES[name]), JSON.stringify(data, null, 2));
 }
 
+// ---------- crypto ----------
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return { salt, hash };
+  return { salt, hash: crypto.scryptSync(password, salt, 64).toString('hex') };
 }
-
 function verifyPassword(password, salt, expected) {
   const { hash } = hashPassword(password, salt);
-  const a = Buffer.from(hash, 'hex');
-  const b = Buffer.from(expected, 'hex');
+  const a = Buffer.from(hash, 'hex'), b = Buffer.from(expected, 'hex');
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 // ---------- helpers ----------
+function send(res, status, body, headers = {}) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', ...headers });
+  res.end(JSON.stringify(body));
+}
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
-    req.on('data', chunk => {
-      data += chunk;
-      if (data.length > 1e5) req.destroy(); // 100KB cap
-    });
-    req.on('end', () => {
-      try {
-        resolve(data ? JSON.parse(data) : {});
-      } catch {
-        reject(new Error('Invalid JSON'));
-      }
-    });
+    req.on('data', c => { data += c; if (data.length > 5e5) req.destroy(); });
+    req.on('end', () => { try { resolve(data ? JSON.parse(data) : {}); } catch (e) { reject(e); } });
     req.on('error', reject);
   });
 }
-
-function send(res, status, body, headers = {}) {
-  const payload = typeof body === 'string' ? body : JSON.stringify(body);
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', ...headers });
-  res.end(payload);
-}
-
 const isEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
 const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company });
+const newToken = () => crypto.randomBytes(24).toString('hex');
+
+function getSession(req) {
+  const cookie = (req.headers.cookie || '').match(/drummer_session=([^;]+)/);
+  if (!cookie) return null;
+  const sessions = load('sessions');
+  const session = sessions.find(s => s.token === cookie[1]);
+  if (!session || new Date(session.expires) < new Date()) return null;
+  return session;
+}
+function requireAuth(req, res) {
+  const session = getSession(req);
+  if (!session) { send(res, 401, { ok: false, error: 'Not signed in.' }); return null; }
+  return session;
+}
+function logEvent(type, message, meta = {}) {
+  const events = load('events');
+  events.unshift({ id: crypto.randomUUID(), type, message, meta, demo: !smtpConfigured, at: new Date().toISOString() });
+  save('events', events.slice(0, 500));
+}
+
+// ---------- transport ----------
+function renderTemplate(text, prospect) {
+  return text.replace(/\{\{(\w+)\}\}/g, (_, key) => prospect[key] ?? '');
+}
+let transporter = null;
+if (smtpConfigured && nodemailer) {
+  transporter = nodemailer.createTransport({
+    host: SMTP.host, port: SMTP.port,
+    secure: SMTP.port === 465,
+    auth: { user: SMTP.user, pass: SMTP.pass },
+  });
+}
+async function sendEmail(campaign, prospect, step) {
+  if (!transporter) {
+    logEvent('sent', `[DEMO] “${campaign.name}”: email to ${prospect.email}`, { subject: renderTemplate(step.subject, prospect) });
+    return { demo: true };
+  }
+  await transporter.sendMail({
+    from: SMTP.from, to: prospect.email,
+    subject: renderTemplate(step.subject, prospect),
+    text: renderTemplate(step.body, prospect),
+  });
+  logEvent('sent', `“${campaign.name}”: email to ${prospect.email}`, { subject: renderTemplate(step.subject, prospect) });
+  return { demo: false };
+}
+
+// ---------- campaign engine ----------
+// Steps: { type:'email', subject, body, delayMinutes } | { type:'task', note, delayMinutes }
+//       | { type:'wait', delayMinutes }
+const ENGINE_INTERVAL_MS = Number(process.env.ENGINE_INTERVAL_MS || 15000);
+function engineTick() {
+  const campaigns = load('campaigns');
+  const prospects = load('prospects');
+  let tasks = load('tasks');
+  const now = Date.now();
+  let changed = false;
+
+  for (const campaign of campaigns.filter(c => c.status === 'active')) {
+    for (const prospect of prospects.filter(p => p.campaignId === campaign.id)) {
+      if (prospect.finished || !prospect.nextRunAt || prospect.nextRunAt > now) continue;
+      const step = campaign.steps[prospect.stepIndex];
+      if (!step) { prospect.finished = true; changed = true; continue; }
+
+      if (step.type === 'email') {
+        sendEmail(campaign, prospect, step).catch(err =>
+          logEvent('error', `Send failed to ${prospect.email}: ${err.message}`));
+      } else if (step.type === 'task') {
+        tasks.unshift({ id: crypto.randomUUID(), kind: 'linkedin', note: renderTemplate(step.note, prospect), prospect: prospect.email, campaign: campaign.name, done: false, at: new Date().toISOString() });
+        logEvent('task', `LinkedIn task for ${prospect.email}: ${renderTemplate(step.note, prospect)}`);
+      }
+      prospect.stepIndex += 1;
+      const nextStep = campaign.steps[prospect.stepIndex];
+      if (!nextStep) { prospect.finished = true; prospect.nextRunAt = null; }
+      else { prospect.nextRunAt = now + (nextStep.delayMinutes || 0) * 60000; }
+      changed = true;
+    }
+  }
+  if (changed) { save('prospects', prospects); save('tasks', tasks); }
+}
+setInterval(engineTick, ENGINE_INTERVAL_MS).unref();
+
+// ---------- tools ----------
+async function verifyEmail(email) {
+  const syntax = isEmail(email);
+  const result = { email, syntax, mx: null, verdict: 'invalid' };
+  if (!syntax) return result;
+  const domain = email.split('@')[1];
+  try {
+    const mx = await dns.resolveMx(domain);
+    result.mx = mx.length ? mx.map(m => m.exchange).slice(0, 3) : [];
+  } catch { result.mx = []; }
+  result.verdict = result.mx && result.mx.length ? 'deliverable' : 'undeliverable';
+  return result;
+}
+async function domainAudit(domain) {
+  const checks = [
+    { name: 'MX records', ok: false, detail: 'none found' },
+    { name: 'SPF', ok: false, detail: 'no v=spf1 record' },
+    { name: 'DMARC', ok: false, detail: 'no _dmarc record' },
+    { name: 'DKIM (common selectors)', ok: false, detail: 'not published (selector probes: google, selector1, default, s1, k1)' },
+  ];
+  try {
+    const mx = await dns.resolveMx(domain);
+    if (mx.length) { checks[0].ok = true; checks[0].detail = mx.map(m => `${m.exchange} (pri ${m.priority})`).join(', '); }
+  } catch {}
+  try {
+    const txt = (await dns.resolveTxt(domain)).flat().join('');
+    if (/v=spf1/i.test(txt)) { checks[1].ok = true; checks[1].detail = txt.match(/v=spf1[^"]*/i)[0].slice(0, 120); }
+  } catch {}
+  try {
+    const txt = (await dns.resolveTxt(`_dmarc.${domain}`)).flat().join('');
+    if (/v=dmarc1/i.test(txt)) { checks[2].ok = true; checks[2].detail = txt.slice(0, 120); }
+  } catch {}
+  const selectors = ['google', 'selector1', 'selector2', 'default', 's1', 'k1', 'dkim'];
+  for (const sel of selectors) {
+    try {
+      const txt = (await dns.resolveTxt(`${sel}._domainkey.${domain}`)).flat().join('');
+      if (/v=dkim1|k=rsa|p=/i.test(txt)) {
+        checks[3].ok = true;
+        checks[3].detail = `found at selector "${sel}"`;
+        break;
+      }
+    } catch {}
+  }
+  const passed = checks.filter(c => c.ok).length;
+  return { domain, score: Math.round((passed / checks.length) * 100), checks };
+}
 
 // ---------- API ----------
-async function handleApi(req, res, url) {
-  if (url.pathname === '/api/health' && req.method === 'GET') {
-    return send(res, 200, { ok: true, users: loadUsers().length });
-  }
+const router = {
+  // --- marketing / auth ---
+  'GET /api/health': (req, res) => send(res, 200, { ok: true, users: load('users').length, engine: !smtpConfigured ? 'demo' : 'smtp' }),
 
-  if (url.pathname === '/api/signup' && req.method === 'POST') {
-    const body = await readBody(req);
-    const { firstName, lastName, email, company, password } = body || {};
+  'POST /api/signup': async (req, res) => {
+    const b = await readBody(req);
     const errors = {};
-    if (!firstName?.trim()) errors.firstName = 'required';
-    if (!lastName?.trim()) errors.lastName = 'required';
-    if (!isEmail(email)) errors.email = 'invalid';
-    if (!company?.trim()) errors.company = 'required';
-    if (!password || password.length < 8) errors.password = 'min 8 chars';
+    if (!b.firstName?.trim()) errors.firstName = 'required';
+    if (!b.lastName?.trim()) errors.lastName = 'required';
+    if (!isEmail(b.email)) errors.email = 'invalid';
+    if (!b.company?.trim()) errors.company = 'required';
+    if (!b.password || b.password.length < 8) errors.password = 'min 8 chars';
     if (Object.keys(errors).length) return send(res, 400, { ok: false, errors });
+    const users = load('users');
+    const email = b.email.trim().toLowerCase();
+    if (users.some(u => u.email === email)) return send(res, 409, { ok: false, error: 'An account with this email already exists.' });
+    const { salt, hash } = hashPassword(b.password);
+    const user = { id: crypto.randomUUID(), firstName: b.firstName.trim(), lastName: b.lastName.trim(), email, company: b.company.trim(), salt, hash, createdAt: new Date().toISOString() };
+    users.push(user); save('users', users);
+    send(res, 201, { ok: true, user: publicUser(user) });
+  },
 
-    const users = loadUsers();
-    const normalized = email.trim().toLowerCase();
-    if (users.some(u => u.email === normalized)) {
-      return send(res, 409, { ok: false, error: 'An account with this email already exists.' });
+  'POST /api/login': async (req, res) => {
+    const b = await readBody(req);
+    if (!isEmail(b.email) || !b.password) return send(res, 400, { ok: false, error: 'Email and password required.' });
+    const user = load('users').find(u => u.email === b.email.trim().toLowerCase());
+    if (!user || !verifyPassword(b.password, user.salt, user.hash)) return send(res, 401, { ok: false, error: 'Wrong email or password.' });
+    const sessions = load('sessions');
+    const token = newToken();
+    sessions.push({ token, email: user.email, expires: new Date(Date.now() + 7 * 864e5).toISOString() });
+    save('sessions', sessions);
+    send(res, 200, { ok: true, user: publicUser(user) }, { 'Set-Cookie': `drummer_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 86400}` });
+  },
+
+  'POST /api/logout': (req, res) => {
+    const session = getSession(req);
+    if (session) save('sessions', load('sessions').filter(s => s.token !== session.token));
+    send(res, 200, { ok: true }, { 'Set-Cookie': 'drummer_session=; HttpOnly; Path=/; Max-Age=0' });
+  },
+
+  'GET /api/me': (req, res) => {
+    const session = getSession(req);
+    if (!session) return send(res, 401, { ok: false });
+    const user = load('users').find(u => u.email === session.email);
+    send(res, 200, { ok: true, user: user ? publicUser(user) : null, engine: smtpConfigured ? 'smtp' : 'demo' });
+  },
+
+  'GET /api/signups': (req, res) => {
+    if (req.headers['x-admin-key'] !== ADMIN_KEY) return send(res, 403, { ok: false, error: 'Forbidden' });
+    const users = load('users').map(u => ({ ...publicUser(u), id: u.id, createdAt: u.createdAt }));
+    send(res, 200, { ok: true, count: users.length, users });
+  },
+
+  // --- app (auth required) ---
+  'GET /api/app/overview': (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const campaigns = load('campaigns');
+    const prospects = load('prospects');
+    const events = load('events');
+    const tasks = load('tasks');
+    send(res, 200, { ok: true, stats: {
+      campaigns: campaigns.length,
+      active: campaigns.filter(c => c.status === 'active').length,
+      prospects: prospects.length,
+      sent: events.filter(e => e.type === 'sent').length,
+      openTasks: tasks.filter(t => !t.done).length,
+      engine: smtpConfigured ? 'smtp' : 'demo',
+    } });
+  },
+
+  'GET /api/app/campaigns': (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const campaigns = load('campaigns');
+    const prospects = load('prospects');
+    send(res, 200, { ok: true, campaigns: campaigns.map(c => ({
+      ...c, prospects: prospects.filter(p => p.campaignId === c.id).length,
+      finished: prospects.filter(p => p.campaignId === c.id && p.finished).length,
+    })) });
+  },
+
+  'POST /api/app/campaigns': async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const b = await readBody(req);
+    if (!b.name?.trim() || !Array.isArray(b.steps) || !b.steps.length) return send(res, 400, { ok: false, error: 'Name and at least one step required.' });
+    for (const s of b.steps) {
+      if (!['email', 'task', 'wait'].includes(s.type)) return send(res, 400, { ok: false, error: `Unknown step type "${s.type}"` });
+      if (s.type === 'email' && (!s.subject || !s.body)) return send(res, 400, { ok: false, error: 'Email steps need subject and body.' });
+      if (s.type === 'task' && !s.note) return send(res, 400, { ok: false, error: 'Task steps need a note.' });
     }
-
-    const { salt, hash } = hashPassword(password);
-    const user = {
-      id: crypto.randomUUID(),
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      email: normalized,
-      company: company.trim(),
-      salt,
-      hash,
+    const campaigns = load('campaigns');
+    const campaign = {
+      id: crypto.randomUUID(), name: b.name.trim(), status: 'draft',
+      steps: b.steps.map(s => ({ ...s, delayMinutes: Number(s.delayMinutes || 0) })),
       createdAt: new Date().toISOString(),
     };
-    users.push(user);
-    saveUsers(users);
-    return send(res, 201, { ok: true, user: publicUser(user) });
-  }
+    campaigns.push(campaign); save('campaigns', campaigns);
+    send(res, 201, { ok: true, campaign });
+  },
 
-  if (url.pathname === '/api/login' && req.method === 'POST') {
-    const body = await readBody(req);
-    const { email, password } = body || {};
-    if (!isEmail(email) || !password) return send(res, 400, { ok: false, error: 'Email and password required.' });
-
-    const user = loadUsers().find(u => u.email === email.trim().toLowerCase());
-    if (!user || !verifyPassword(password, user.salt, user.hash)) {
-      return send(res, 401, { ok: false, error: 'Wrong email or password.' });
+  'POST /api/app/campaigns/:id/activate': (req, res, id) => {
+    if (!requireAuth(req, res)) return;
+    const campaigns = load('campaigns');
+    const campaign = campaigns.find(c => c.id === id);
+    if (!campaign) return send(res, 404, { ok: false, error: 'Not found' });
+    const prospects = load('prospects');
+    let enrolled = 0;
+    for (const p of prospects.filter(p => p.campaignId === id && !p.finished)) {
+      if (p.nextRunAt == null) { p.stepIndex = 0; p.nextRunAt = Date.now(); enrolled++; }
     }
-    return send(res, 200, { ok: true, user: publicUser(user) });
-  }
+    campaign.status = 'active';
+    save('campaigns', campaigns); save('prospects', prospects);
+    logEvent('campaign', `Campaign “${campaign.name}” activated (${enrolled} prospects enrolled)`);
+    send(res, 200, { ok: true, enrolled });
+  },
 
-  if (url.pathname === '/api/signups' && req.method === 'GET') {
-    if (req.headers['x-admin-key'] !== ADMIN_KEY) return send(res, 403, { ok: false, error: 'Forbidden' });
-    const users = loadUsers().map(u => ({ ...publicUser(u), id: u.id, createdAt: u.createdAt }));
-    return send(res, 200, { ok: true, count: users.length, users });
-  }
+  'POST /api/app/campaigns/:id/pause': (req, res, id) => {
+    if (!requireAuth(req, res)) return;
+    const campaigns = load('campaigns');
+    const campaign = campaigns.find(c => c.id === id);
+    if (!campaign) return send(res, 404, { ok: false, error: 'Not found' });
+    campaign.status = 'paused';
+    save('campaigns', campaigns);
+    logEvent('campaign', `Campaign “${campaign.name}” paused`);
+    send(res, 200, { ok: true });
+  },
 
-  send(res, 404, { ok: false, error: 'Not found' });
+  'DELETE /api/app/campaigns/:id': (req, res, id) => {
+    if (!requireAuth(req, res)) return;
+    save('campaigns', load('campaigns').filter(c => c.id !== id));
+    save('prospects', load('prospects').filter(p => p.campaignId !== id));
+    send(res, 200, { ok: true });
+  },
+
+  'POST /api/app/prospects': async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const b = await readBody(req);
+    if (!b.campaignId) return send(res, 400, { ok: false, error: 'campaignId required' });
+    const campaign = load('campaigns').find(c => c.id === b.campaignId);
+    if (!campaign) return send(res, 404, { ok: false, error: 'Campaign not found' });
+    const prospects = load('prospects');
+    const existing = new Set(prospects.filter(p => p.campaignId === b.campaignId).map(p => p.email));
+
+    const add = (entry) => {
+      const email = (entry.email || '').trim().toLowerCase();
+      if (!isEmail(email) || existing.has(email)) return false;
+      existing.add(email);
+      prospects.push({ id: crypto.randomUUID(), campaignId: b.campaignId, email, firstName: entry.firstName || '', lastName: entry.lastName || '', company: entry.company || '', stepIndex: null, nextRunAt: null, finished: false, verified: null, addedAt: new Date().toISOString() });
+      return true;
+    };
+
+    let added = 0;
+    if (Array.isArray(b.list)) for (const e of b.list) if (add(e)) added++;
+    if (typeof b.csv === 'string') {
+      for (const line of b.csv.split(/\r?\n/)) {
+        const [email2, firstName, lastName, company] = line.split(/,|;/).map(s => (s || '').trim());
+        if (add({ email: email2, firstName, lastName, company })) added++;
+      }
+    }
+    save('prospects', prospects);
+    send(res, 200, { ok: true, added, total: existing.size });
+  },
+
+  'GET /api/app/prospects': (req, res, _id, query) => {
+    if (!requireAuth(req, res)) return;
+    let prospects = load('prospects');
+    if (query?.get('campaignId')) prospects = prospects.filter(p => p.campaignId === query.get('campaignId'));
+    send(res, 200, { ok: true, prospects });
+  },
+
+  'POST /api/app/prospects/:id/verify': async (req, res, id) => {
+    if (!requireAuth(req, res)) return;
+    const prospects = load('prospects');
+    const p = prospects.find(p => p.id === id);
+    if (!p) return send(res, 404, { ok: false, error: 'Not found' });
+    p.verified = await verifyEmail(p.email);
+    save('prospects', prospects);
+    send(res, 200, { ok: true, verified: p.verified });
+  },
+
+  'GET /api/app/activity': (req, res) => {
+    if (!requireAuth(req, res)) return;
+    send(res, 200, { ok: true, events: load('events').slice(0, 100) });
+  },
+
+  'GET /api/app/tasks': (req, res) => {
+    if (!requireAuth(req, res)) return;
+    send(res, 200, { ok: true, tasks: load('tasks') });
+  },
+
+  'POST /api/app/tasks/:id/done': (req, res, id) => {
+    if (!requireAuth(req, res)) return;
+    const tasks = load('tasks');
+    const task = tasks.find(t => t.id === id);
+    if (!task) return send(res, 404, { ok: false, error: 'Not found' });
+    task.done = true;
+    save('tasks', tasks);
+    send(res, 200, { ok: true });
+  },
+
+  'POST /api/app/tools/verify': async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const b = await readBody(req);
+    send(res, 200, { ok: true, result: await verifyEmail(b.email || '') });
+  },
+
+  'GET /api/app/tools/domain-audit': async (req, res, _id, query) => {
+    if (!requireAuth(req, res)) return;
+    const domain = (query?.get('domain') || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    if (!domain) return send(res, 400, { ok: false, error: 'domain required' });
+    send(res, 200, { ok: true, result: await domainAudit(domain) });
+  },
+
+  'GET /api/app/engine': (req, res) => {
+    if (!requireAuth(req, res)) return;
+    send(res, 200, { ok: true, mode: smtpConfigured ? 'smtp' : 'demo', smtp: smtpConfigured ? { host: SMTP.host, user: SMTP.user, from: SMTP.from } : null });
+  },
+};
+
+async function handleApi(req, res, url) {
+  const rawPath = url.pathname;
+  const routeMatch = Object.keys(router).find(key => {
+    const [method, route] = key.split(' ');
+    if (method !== req.method) return false;
+    const pattern = '^' + route.replace(/:id/g, '([^/]+)') + '$';
+    return new RegExp(pattern).test(rawPath);
+  });
+  if (!routeMatch) return send(res, 404, { ok: false, error: 'Not found' });
+  const [method, route] = routeMatch.split(' ');
+  const match = rawPath.match(new RegExp('^' + route.replace(/:id/g, '([^/]+)') + '$'));
+  return router[routeMatch](req, res, match?.[1], url.searchParams);
 }
 
 // ---------- static ----------
+const PUBLIC_ONLY = ['/app.html', '/app.js'];
 function serveStatic(req, res, url) {
   let pathname = decodeURIComponent(url.pathname);
   if (pathname === '/') pathname = '/index.html';
-  const file = path.normalize(path.join(ROOT, pathname));
-  if (!file.startsWith(ROOT) || file.startsWith(DATA_DIR)) {
-    res.writeHead(403);
-    return res.end('Forbidden');
+
+  if (PUBLIC_ONLY.includes(pathname)) {
+    const session = getSession(req);
+    if (!session) {
+      res.writeHead(302, { Location: '/login.html' });
+      return res.end();
+    }
   }
+
+  const file = path.normalize(path.join(ROOT, pathname));
+  if (!file.startsWith(ROOT) || file.startsWith(DATA_DIR)) { res.writeHead(403); return res.end('Forbidden'); }
   fs.readFile(file, (err, content) => {
     if (err) {
       res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
       return res.end('<h1>404 — page not found</h1><p><a href="/">Back to homepage</a></p>');
     }
-    res.writeHead(200, {
-      'Content-Type': MIME[path.extname(file)] || 'application/octet-stream',
-      'Cache-Control': 'no-cache',
-    });
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(content);
   });
 }
@@ -170,10 +471,10 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     if (url.pathname.startsWith('/api/')) {
-      if (!['GET', 'POST'].includes(req.method)) return send(res, 405, { ok: false, error: 'Method not allowed' });
+      if (!['GET', 'POST', 'PUT', 'DELETE'].includes(req.method)) return send(res, 405, { ok: false });
       return await handleApi(req, res, url);
     }
-    if (req.method !== 'GET') return send(res, 405, { ok: false, error: 'Method not allowed' });
+    if (req.method !== 'GET') return send(res, 405, { ok: false });
     serveStatic(req, res, url);
   } catch (err) {
     send(res, 400, { ok: false, error: err.message });
@@ -181,5 +482,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Drummer server on http://0.0.0.0:${PORT}`);
+  console.log(`Drummer server on http://0.0.0.0:${PORT} — engine mode: ${smtpConfigured ? 'smtp' : 'demo'}`);
 });
