@@ -25,6 +25,7 @@ const FILES = {
   events: 'events.json',
   tasks: 'tasks.json',
   sessions: 'sessions.json',
+  replies: 'replies.json',
 };
 // /tmp resets between serverless instances at any moment; this marks that in the API.
 const EPHEMERAL_DATA = process.env.VERCEL && !process.env.DATA_DIR;
@@ -698,6 +699,55 @@ const router = {
     p.verified = await verifyEmail(p.email);
     save('prospects', prospects);
     send(res, 200, { ok: true, verified: p.verified });
+  },
+
+  'GET /api/app/inbox': (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const replies = load('replies');
+    send(res, 200, { ok: true, replies: replies.slice(0, 100) });
+  },
+
+  'POST /api/app/inbox/simulate': (req, res) => {
+    // Demo/simulated inbound until IMAP/webhook is wired
+    if (!requireAuth(req, res)) return;
+    const replies = load('replies');
+    replies.unshift({
+      id: crypto.randomUUID(),
+      from: 'sarah@acme.io',
+      subject: 'Re: Quick idea for Acme',
+      body: 'Thanks for reaching out — this actually looks relevant. Can you send over a short demo link?',
+      prospect: 'Sarah Connor',
+      campaign: 'Q3 founders',
+      read: false,
+      at: new Date().toISOString(),
+    });
+    save('replies', replies);
+    send(res, 200, { ok: true, message: 'Simulated reply added to inbox.' });
+  },
+
+  // Resend inbound webhook (set RESEND_SIGNING_SECRET to verify)
+  'POST /api/email/receive': async (req, res) => {
+    const b = await readBody(req).catch(() => ({}));
+    const secret = process.env.RESEND_SIGNING_SECRET;
+    if (secret && b?.secret && b.secret !== secret) return send(res, 403, { ok: false, error: 'Invalid secret' });
+    const from = b?.from || b?.data?.from || 'unknown@unknown';
+    const subject = b?.subject || b?.data?.subject || '(no subject)';
+    const body = b?.text || b?.data?.text || b?.html?.replace(/<[^>]+>/g, ' ') || '';
+    const replies = load('replies');
+    replies.unshift({ id: crypto.randomUUID(), from, subject, body, prospect: from.split('@')[0], campaign: 'incoming', read: false, at: new Date().toISOString() });
+    save('replies', replies);
+    logEvent('received', `Reply from ${from}: ${subject}`);
+    send(res, 200, { received: true });
+  },
+
+  'POST /api/app/inbox/:id/read': (req, res, id) => {
+    if (!requireAuth(req, res)) return;
+    const replies = load('replies');
+    const r = replies.find(x => x.id === id);
+    if (!r) return send(res, 404, { ok: false });
+    r.read = true;
+    save('replies', replies);
+    send(res, 200, { ok: true });
   },
 
   'GET /api/app/activity': (req, res) => {

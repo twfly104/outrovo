@@ -16,9 +16,10 @@
       <a class="logo" href="index.html"><img src="logo.svg" class="logo-img" alt="Outrovo logo"> Outrovo</a>
       <nav class="app-nav" id="appNav">
         <button data-page="overview" class="active">Overview</button>
+        <button data-page="inbox">Inbox</button>
         <button data-page="campaigns">Campaigns</button>
         <button data-page="prospects">Prospects</button>
-        <button data-page="activity">Activity &amp; tasks</button>
+        <button data-page="activity">Activity</button>
         <button data-page="tools">Tools</button>
         <button data-page="settings">Settings</button>
       </nav>
@@ -158,9 +159,21 @@
         </div>
       </section>
 
+      <!-- Inbox -->
+      <section class="app-page" id="page-inbox" hidden>
+        <div class="page-head">
+          <h1>Inbox</h1>
+          <button class="btn btn-ghost btn-s" id="simulateReplyBtn">Simulate reply</button>
+        </div>
+        <div class="app-card-block">
+          <h2>Replies from prospects</h2>
+          <ul class="inbox-list" id="inboxList"></ul>
+        </div>
+      </section>
+
       <!-- Activity -->
       <section class="app-page" id="page-activity" hidden>
-        <h1>Activity &amp; tasks</h1>
+        <h1>Activity</h1>
         <div class="app-card-block">
           <h2>Open LinkedIn tasks</h2>
           <ul class="event-list" id="taskList"></ul>

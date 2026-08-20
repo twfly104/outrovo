@@ -49,6 +49,7 @@ function bindNav() {
     btn.classList.add('active');
     document.querySelectorAll('.app-page').forEach(p => p.hidden = true);
     $('page-' + btn.dataset.page).hidden = false;
+    if (btn.dataset.page === 'inbox') loadInbox();
     if (btn.dataset.page === 'campaigns') loadCampaigns();
     if (btn.dataset.page === 'prospects') loadProspects();
     if (btn.dataset.page === 'activity') loadActivity();
@@ -323,6 +324,35 @@ async function importCsv() {
   $('importNote').textContent = data.ok ? `Imported ${data.added} (${data.total} total)` : (data.error || 'Error');
   if (data.ok) $('csvInput').value = '';
   loadProspects();
+}
+
+// ---------- inbox ----------
+async function loadInbox() {
+  const { data } = await api('GET', '/api/app/inbox');
+  if (!data.ok) return;
+  const list = $('inboxList');
+  const replies = data.replies || [];
+  list.innerHTML = replies.length ? replies.map(r => `
+    <li class="${r.read ? 'read' : 'unread'}">
+      <div class="inbox-meta">
+        <strong>${esc(r.subject)}</strong>
+        <span>${esc(r.from)} · ${esc(r.prospect)} · ${esc(r.campaign)}</span>
+      </div>
+      <p>${esc((r.body || '').slice(0, 160))}${(r.body || '').length > 160 ? '…' : ''}</p>
+      <time>${fmtTime(r.at)}</time>
+      ${r.read ? '' : `<button class="link" data-read="${r.id}">Mark read</button>`}
+    </li>`).join('') : '<li class="empty">No replies yet — the unified inbox catches everything here.</li>';
+  list.querySelectorAll('[data-read]').forEach(btn => btn.addEventListener('click', async () => {
+    await api('POST', `/api/app/inbox/${btn.dataset.read}/read`);
+    loadInbox();
+  }));
+  if (!$('simulateReplyBtn').hasListener) {
+    $('simulateReplyBtn').hasListener = true;
+    $('simulateReplyBtn').addEventListener('click', async () => {
+      await api('POST', '/api/app/inbox/simulate');
+      loadInbox();
+    });
+  }
 }
 
 // ---------- activity & tasks ----------
