@@ -139,6 +139,36 @@ function addStepRow(type, data = {}) {
 }
 
 function bindAiGenerate() {
+  $('aiScanBtn').addEventListener('click', async () => {
+    const status = $('aiScanStatus');
+    const url = $('aiSiteUrl').value.trim();
+    if (!url) {
+      status.className = 'ai-status err';
+      status.textContent = 'Enter your company website first (e.g. yourcompany.com).';
+      return;
+    }
+    const btn = $('aiScanBtn');
+    btn.disabled = true;
+    status.className = 'ai-status loading';
+    status.textContent = '🔍 Reading your site…';
+    try {
+      const { data } = await api('POST', '/api/app/ai/scan-site', { url });
+      if (!data.ok) throw new Error(data.error || 'Scan failed');
+      $('aiProduct').value = data.product || '';
+      $('aiAudience').value = data.audience || '';
+      $('aiGoal').value = data.goal || '';
+      status.className = 'ai-status ok';
+      status.textContent = data.ai
+        ? `✦ Filled from ${data.site?.url} — review the fields, then generate.`
+        : `✦ Filled from ${data.site?.url} (heuristic — set LLM_API_KEY for smarter fills).`;
+    } catch (err) {
+      status.className = 'ai-status err';
+      status.textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   $('aiGenerateBtn').addEventListener('click', async () => {
     const status = $('aiStatus');
     const product = $('aiProduct').value.trim();

@@ -195,6 +195,76 @@ function localSequence({ product, audience, goal, tone }) {
   ]);
 }
 
+// ---------- site scan for AI autofill ----------
+function extractSiteInfo(html, url) {
+  const pick = (re) => (html.match(re) || [])[1]?.trim();
+  const title = pick(/<title[^>]*>([^<]+)<\/title>/i) || '';
+  const desc = pick(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)
+    || pick(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i) || '';
+  const h1s = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)]
+    .map(m => m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 3);
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 3000);
+  return { url, title, desc, h1s, text };
+}
+
+async function fetchSite(url) {
+  const target = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(target, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DrummerBot/1.0; +https://drummer.app)' },
+      redirect: 'follow',
+    });
+    if (!res.ok) throw new Error(`Site returned ${res.status}`);
+    const html = (await res.text()).slice(0, 200000);
+    return extractSiteInfo(html, target);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function analyzeSite(info) {
+  const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+  const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+  const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+  if (key) {
+    try {
+      const res = await fetch(`${base}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: `Given website content, infer what the company SELLS (its product/offer, as the company would pitch it), WHO buys it (specific audience), and a likely outreach GOAL for its sales team. Return ONLY JSON: {"product":"...","audience":"...","goal":"..."} — each a short phrase, no sentences.` },
+            { role: 'user', content: JSON.stringify({ title: info.title, description: info.desc, headings: info.h1s, text: info.text.slice(0, 1500) }) },
+          ],
+        }),
+        signal: AbortSignal.timeout(25000),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const parsed = JSON.parse(json.choices?.[0]?.message?.content || '{}');
+        if (parsed.product) return { ...parsed, ai: true };
+      }
+    } catch { /* fall through */ }
+  }
+  // Local heuristic fallback
+  const company = (info.title.split(/[|\-–—:]/)[0] || '').trim() || new URL(info.url).hostname.replace(/^www\./, '').split('.')[0];
+  const product = info.desc
+    ? info.desc.replace(/\.$/, '').slice(0, 120)
+    : info.h1s[0] || `${company}'s product`;
+  return { product, audience: 'B2B teams', goal: 'book a short intro call', ai: false, company };
+}
+
 async function aiGenerateSequence(input) {
   const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
   const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
@@ -545,6 +615,22 @@ const router = {
       send(res, 200, { ok: true });
     } catch (err) {
       send(res, 502, { ok: false, error: err.message });
+    }
+  },
+
+  'POST /api/app/ai/scan-site': async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const b = await readBody(req);
+    const url = (b.url || '').trim();
+    if (!url || !/^[\w.-]+\.[a-z]{2,}/i.test(url.replace(/^https?:\/\//, ''))) {
+      return send(res, 400, { ok: false, error: 'Enter a valid domain or URL.' });
+    }
+    try {
+      const info = await fetchSite(url);
+      const analysis = await analyzeSite(info);
+      send(res, 200, { ok: true, site: { url: info.url, title: info.title }, ...analysis });
+    } catch (err) {
+      send(res, 502, { ok: false, error: `Could not read that site: ${err.message}` });
     }
   },
 

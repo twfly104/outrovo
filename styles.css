@@ -1590,6 +1590,8 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   background: var(--card);
   font: inherit;
 }
+.ai-scan-row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
+.ai-scan-row .btn-ghost { border-style: dashed; }
 .ai-status { font-size: 0.84rem; color: var(--ink-soft); min-height: 1.2em; }
 .ai-status.loading { color: var(--crest); font-weight: 600; }
 .ai-status.ok { color: var(--forest); font-weight: 600; }
