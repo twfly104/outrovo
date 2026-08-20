@@ -1373,46 +1373,47 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 /* ============================================================
    App dashboard
    ============================================================ */
-.app-body { background: var(--paper-deep); }
+.app-body { background: var(--paper); }
 .app-shell { display: grid; grid-template-columns: 230px 1fr; min-height: 100vh; }
 .app-sidebar {
-  background: var(--forest-deep);
-  color: var(--paper);
+  background: var(--card);
+  color: var(--ink);
   padding: 24px 16px;
   display: flex;
   flex-direction: column;
   position: sticky;
   top: 0;
   height: 100vh;
+  border-right: 1px solid var(--line);
 }
-.app-sidebar .logo { color: var(--paper); font-size: 1.25rem; margin-bottom: 30px; }
+.app-sidebar .logo { color: var(--ink); font-size: 1.25rem; margin-bottom: 30px; }
 .app-nav { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .app-nav button {
   text-align: left;
   padding: 11px 14px;
   border-radius: var(--radius-s);
-  color: #b9c9bf;
+  color: var(--ink-soft);
   font-weight: 550;
   font-size: 0.94rem;
   transition: background 0.15s, color 0.15s;
 }
-.app-nav button:hover { background: rgba(246,241,231,0.07); color: var(--paper); }
+.app-nav button:hover { background: var(--paper-deep); color: var(--ink); }
 .app-nav button.active { background: var(--crest); color: #fff; }
 .app-user {
   display: flex;
   align-items: center;
   gap: 11px;
   padding-top: 16px;
-  border-top: 1px solid rgba(246,241,231,0.12);
+  border-top: 1px solid var(--line);
 }
 .app-user .avatar { width: 38px; height: 38px; font-size: 0.85rem; background: var(--crest); }
-.app-user strong { display: block; font-size: 0.9rem; }
-.app-user span { font-size: 0.76rem; color: #b9c9bf; }
+.app-user strong { display: block; font-size: 0.9rem; color: var(--ink); }
+.app-user span { font-size: 0.76rem; color: var(--ink-faint); }
 .app-user button {
   margin-left: auto;
   width: 32px; height: 32px;
   border-radius: 8px;
-  color: #b9c9bf;
+  color: var(--ink-faint);
   display: grid; place-items: center;
 }
 .app-user button:hover { background: var(--crest); color: #fff; }
