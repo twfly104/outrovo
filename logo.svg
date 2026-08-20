@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Drummer bird mark -->
-  <circle cx="27" cy="31" r="23" fill="#e8490f"/>
-  <path d="M46 22 L62 33 L45 37 Z" fill="#122e22"/>
+  <!-- Outrovo bird mark -->
+  <circle cx="27" cy="31" r="23" fill="#f97316"/>
+  <path d="M46 22 L62 33 L45 37 Z" fill="#15171b"/>
   <circle cx="24" cy="26" r="4.5" fill="#fff"/>
 </svg>

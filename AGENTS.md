@@ -1,4 +1,4 @@
-# Drummer — landing page project
+# Outrovo — landing page project
 
 A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's structure
 (hero + product mockup, deliverability grid, testimonial, integrations, 4 steps, FAQ, footer).
@@ -35,8 +35,10 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   when `STRIPE_WEBHOOK_SECRET` set). Dashboard shows plan + trial banner;
   pricing page Upgrade buttons call checkout for signed-in users.
 - Fonts: Fraunces (display) + Instrument Sans (body) via Google Fonts.
-- Design tokens in `:root` of `styles.css`: warm paper `#f6f1e7`, forest ink `#16281f`,
-  vermilion crest `#e8490f`, dark forest `#122e22`.
+- Design tokens in `:root` of `styles.css`: paper `#f7f7f8`, ink `#0b0c0e`,
+  orange crest `#f97316` (deep `#ea580c`), forest `#15171b`. `index.html` uses
+  `styles-lite.css` with the same palette under shorter variable names
+  (`--accent` = `--crest`, `--bg` = `--paper`, etc.).
 
 ## Run
 - `node server.js` (or `PORT=xxxx node server.js`) from repo root.
@@ -46,8 +48,8 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - `POST /api/signup` — validates, scrypt-hashes password, 409 on duplicate email
 - `POST /api/login` — verifies hash, sets session cookie; `POST /api/logout`; `GET /api/me`
 - `GET /api/health` — status + user count
-- `GET /api/signups` — admin list, needs `x-admin-key` header (env `ADMIN_KEY`,
-  default `outrovo-admin-key` — change it before any real launch)
+- `GET /api/signups` — admin list, needs `x-admin-key` header (env `ADMIN_KEY`;
+  no default — admin endpoints stay locked with 403 until it is set)
 - App (session required): `/api/app/overview`, `/api/app/campaigns` (GET/POST,
   `/:id/activate|pause`, DELETE), `/api/app/prospects` (GET/POST single+CSV,
   `/:id/verify`), `/api/app/activity`, `/api/app/tasks` (`/:id/done`),
@@ -56,7 +58,7 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - `/app.html` and `/app.js` redirect to `/login.html` without a session
 
 ## Conventions
-- Brand name is "Drummer" (placeholder — can be renamed during enhancement).
+- Brand name is "Outrovo" (formerly "Drummer" placeholder).
 - All product screenshots are pure CSS/HTML mockups (`.app-card`, `.panel`, `.orbit`).
 - JS behaviors: sticky header shadow, FAQ accordion (`.faq-item`), scroll reveal
   (`.reveal` + IntersectionObserver), mobile menu toggle, demo modal (`#demoModal`,

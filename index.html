@@ -14,10 +14,10 @@
 
   <header class="hdr" id="hdr">
     <div class="wrap nav">
-      <a class="logo" href="index-v2.html"><img src="logo.svg" alt="Outrovo"> Outrovo</a>
+      <a class="logo" href="index.html"><img src="logo.svg" alt="Outrovo"> Outrovo</a>
       <a class="l" href="pricing.html">Pricing</a>
       <a class="l" href="#faq">FAQ</a>
-      <a class="l" href="#how">How it works</a>
+      <a class="l" href="#steps">How it works</a>
       <div class="c">
         <a class="lg" href="login.html">Log in</a>
         <a class="o" href="signup.html">Book a demo</a>
@@ -31,7 +31,7 @@
     <section class="hero">
       <div class="wrap hero-g">
         <div class="hero-copy">
-          <span class="eyebrow">Cold outreach that land in the inbox</span>
+          <span class="eyebrow">Cold outreach that lands in the inbox</span>
           <h1 class="h-xl">Turn cold outreach into <span class="kw">pipeline</span></h1>
           <ul class="plist">
             <li><span class="tick">✓</span><span><strong>Send emails safely</strong> — verified first, never guess again</span></li>
@@ -89,7 +89,7 @@
     </section>
 
     <!-- Features -->
-    <section class="band grid2" style="padding-top:90px;">
+    <section class="band grid2" id="product" style="padding-top:90px;">
       <div>
         <span class="eyebrow">Land in the inbox</span>
         <h2 class="h-l">Send emails that get read, not spammed</h2>
@@ -120,7 +120,7 @@
     </section>
 
     <!-- 4 steps -->
-    <section class="band" style="background:var(--bg2);">
+    <section class="band" id="steps" style="background:var(--bg2);">
       <div class="wrap">
         <span class="eyebrow" style="justify-content:center;">How it works</span>
         <h2 class="h-l" style="margin:14px auto 40px;text-align:center;">Your first campaign in 4 steps</h2>
@@ -191,7 +191,7 @@
           <h5>Product</h5>
           <ul>
             <li><a href="pricing.html">Pricing</a></li>
-            <li><a href="#faq">How it works</a></li>
+            <li><a href="#steps">How it works</a></li>
             <li><a href="login.html">Log in</a></li>
             <li><a href="signup.html">Free trial</a></li>
           </ul>
@@ -199,30 +199,91 @@
         <div>
           <h5>Features</h5>
           <ul>
-            <li><a href="#">Verify every email</a></li>
-            <li><a href="#">Domain check</a></li>
-            <li><a href="#">Smart send schedule</a></li>
-            <li><a href="#">Unified inbox</a></li>
+            <li><a href="#product">Verify every email</a></li>
+            <li><a href="#product">Domain check</a></li>
+            <li><a href="#product">Smart send schedule</a></li>
+            <li><a href="#product">Unified inbox</a></li>
           </ul>
         </div>
         <div>
           <h5>Company</h5>
           <ul>
-            <li><a href="#">About</a></li>
-            <li><a href="#">Contact</a></li>
-            <li><a href="#">Privacy</a></li>
-            <li><a href="#">Terms</a></li>
+            <li><a href="index.html">About</a></li>
+            <li><a href="signup.html">Book a demo</a></li>
+            <li><a href="privacy.html">Privacy</a></li>
+            <li><a href="terms.html">Terms</a></li>
           </ul>
         </div>
       </div>
       <div class="ft-b">
         <span>© 2026 Outrovo Inc.</span>
-        <div class="lg"><a href="#">Terms</a><a href="#">Privacy</a><a href="#">Status</a></div>
+        <div class="lg"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a></div>
       </div>
     </div>
   </footer>
 
+  <!-- Demo modal -->
+  <div class="modal" id="demoModal" role="dialog" aria-modal="true" aria-label="Product demo">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <button class="modal-close" aria-label="Close demo">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <div class="demo-screen">
+        <span class="demo-play">
+          <svg width="26" height="30" viewBox="0 0 26 30" fill="currentColor"><path d="M3 3.5v23L23 15 3 3.5z" stroke-linejoin="round"/></svg>
+        </span>
+        <div class="demo-idle">
+          <h3>See Outrovo in action</h3>
+          <p>A 4-chapter tour: deliverability, prospects, multichannel sequences and the unified inbox. Press play.</p>
+        </div>
+        <div class="demo-live">Verify emails and check your domain</div>
+        <div class="demo-timeline"><span></span><span></span><span></span><span></span></div>
+        <div class="demo-chapters">
+          <span>Deliverability</span><span>Prospects</span><span>Sequences</span><span>Inbox</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // Demo modal
+    const modal = document.getElementById('demoModal');
+    document.querySelectorAll('[data-demo]').forEach(btn =>
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        modal.classList.add('open');
+        document.body.style.overflow = 'hidden';
+      })
+    );
+    const closeModal = () => {
+      modal.classList.remove('open', 'playing');
+      document.body.style.overflow = '';
+    };
+    modal.querySelector('.modal-close').addEventListener('click', closeModal);
+    modal.querySelector('.modal-backdrop').addEventListener('click', closeModal);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && modal.classList.contains('open')) closeModal();
+    });
+    const chapters = [
+      'Verify emails and check your domain',
+      'Add people and build your sequence',
+      'Mix email and LinkedIn in one campaign',
+      'Watch replies land in one inbox'
+    ];
+    let chapterTimer;
+    modal.querySelector('.demo-play').addEventListener('click', function () {
+      modal.classList.add('playing');
+      this.innerHTML = '<svg width="26" height="26" viewBox="0 0 26 26" fill="currentColor"><rect x="6" y="5" width="5" height="16" rx="1.5"/><rect x="15" y="5" width="5" height="16" rx="1.5"/></svg>';
+      const live = modal.querySelector('.demo-live');
+      let i = 0;
+      live.textContent = chapters[0];
+      clearInterval(chapterTimer);
+      chapterTimer = setInterval(() => {
+        i = (i + 1) % chapters.length;
+        live.textContent = chapters[i];
+      }, 6000);
+    });
     // FAQ toggle
     document.querySelectorAll('.fq .item').forEach(item => {
       item.querySelector('.q').addEventListener('click', () => {

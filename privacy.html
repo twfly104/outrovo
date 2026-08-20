@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy policy — Outrovo</title>
+  <meta name="description" content="How Outrovo collects, uses and protects your data." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles-lite.css" />
+  <link rel="icon" href="logo.svg" />
+</head>
+<body>
+
+  <header class="hdr" id="hdr">
+    <div class="wrap nav">
+      <a class="logo" href="index.html"><img src="logo.svg" alt="Outrovo"> Outrovo</a>
+      <a class="l" href="pricing.html">Pricing</a>
+      <a class="l" href="index.html#faq">FAQ</a>
+      <a class="l" href="index.html#steps">How it works</a>
+      <div class="c">
+        <a class="lg" href="login.html">Log in</a>
+        <a class="btn btn-a s" href="signup.html">Start free</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="band">
+      <div class="wrap" style="max-width:760px;">
+        <span class="eyebrow">Legal</span>
+        <h1 class="h-l" style="margin:14px 0 30px;">Privacy policy</h1>
+        <p class="lead">Last updated: August 2026. This policy explains what Outrovo collects, why, and the control you have over it.</p>
+
+        <h2 class="h-m" style="margin:36px 0 10px;">What we collect</h2>
+        <ul class="plist">
+          <li><span class="tick">•</span><span><strong>Account data</strong> — your name, work email and company when you sign up.</span></li>
+          <li><span class="tick">•</span><span><strong>Workspace data</strong> — the prospects, campaigns and sequences you create. This is your data, stored only to run the product.</span></li>
+          <li><span class="tick">•</span><span><strong>Usage data</strong> — basic product analytics (pages viewed, features used) so we can improve Outrovo.</span></li>
+          <li><span class="tick">•</span><span><strong>Billing data</strong> — processed by our payment provider (Stripe). We never see or store full card numbers.</span></li>
+        </ul>
+
+        <h2 class="h-m" style="margin:36px 0 10px;">What we never do</h2>
+        <ul class="plist">
+          <li><span class="tick">✓</span><span>We never sell your data or your prospect lists.</span></li>
+          <li><span class="tick">✓</span><span>We never read the content of your replies for advertising.</span></li>
+          <li><span class="tick">✓</span><span>We never email your prospects except as part of campaigns you start.</span></li>
+        </ul>
+
+        <h2 class="h-m" style="margin:36px 0 10px;">How we protect it</h2>
+        <p class="lead" style="font-size:1rem;">Passwords are salted and hashed (scrypt) — never stored in plain text. Sessions use httpOnly cookies. Data in transit is encrypted with TLS. Access to production data is limited to the engineers who operate the service.</p>
+
+        <h2 class="h-m" style="margin:36px 0 10px;">Your controls</h2>
+        <p class="lead" style="font-size:1rem;">You can export or delete your prospects at any time from the app. To delete your account and all associated data, contact us and we will remove it within 30 days.</p>
+
+        <h2 class="h-m" style="margin:36px 0 10px;">Contact</h2>
+        <p class="lead" style="font-size:1rem;">Questions about this policy? Reach us via the <a href="signup.html">demo booking page</a> and we will get back to you.</p>
+        <p style="color:var(--ink3);font-size:.85rem;margin-top:40px;">This is a template policy provided for launch readiness — have it reviewed by your legal advisor before operating at scale.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="ft">
+    <div class="wrap">
+      <div class="ft-b">
+        <span>© 2026 Outrovo Inc.</span>
+        <div class="lg"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a></div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    addEventListener('scroll', () => hdr.classList.toggle('sc', scrollY > 8), { passive: true });
+  </script>
+</body>
+</html>

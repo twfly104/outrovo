@@ -1,4 +1,4 @@
-// Drummer — product MVP server (Node >= 18)
+// Outrovo — product MVP server (Node >= 18)
 // Static site + marketing API + session auth + campaign engine + deliverability tools.
 //
 // SMTP is configured via env (SMTP_HOST/PORT/USER/PASS/FROM). Without it, the
@@ -14,7 +14,13 @@ let nodemailer = null;
 try { nodemailer = require('nodemailer'); } catch { /* demo mode only */ }
 
 const PORT = process.env.PORT || 12000;
-const ADMIN_KEY = process.env.ADMIN_KEY || 'outrovo-admin-key';
+// No default admin key: admin endpoints stay locked until ADMIN_KEY is set.
+const ADMIN_KEY = process.env.ADMIN_KEY || '';
+const adminOk = req => {
+  const k = req.headers['x-admin-key'] || '';
+  return ADMIN_KEY.length > 0 && k.length === ADMIN_KEY.length &&
+    crypto.timingSafeEqual(Buffer.from(k), Buffer.from(ADMIN_KEY));
+};
 // Vercel serverless: filesystem is read-only except /tmp.
 const DATA_DIR = process.env.DATA_DIR || (process.env.VERCEL ? "/tmp/outrovo-data" : path.join(__dirname, 'data'));
 const ROOT = __dirname;
@@ -221,7 +227,7 @@ async function fetchSite(url) {
   try {
     const res = await fetch(target, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OutrovoBot/1.0; +https://drummer.app)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OutrovoBot/1.0; +https://github.com/twfly104/outrovo)' },
       redirect: 'follow',
     });
     if (!res.ok) throw new Error(`Site returned ${res.status}`);
@@ -341,7 +347,7 @@ async function stripeCheckout(secret, { planId, email, amount, successUrl, cance
     'line_items[0][price_data][currency]': 'usd',
     'line_items[0][price_data][unit_amount]': String(amount * 100),
     'line_items[0][price_data][recurring][interval]': 'month',
-    'line_items[0][price_data][product_data][name]': `Drummer ${PLANS[planId].name}`,
+    'line_items[0][price_data][product_data][name]': `Outrovo ${PLANS[planId].name}`,
     'metadata[plan]': planId,
     'metadata[email]': email,
   });
@@ -498,7 +504,7 @@ const router = {
   },
 
   'GET /api/signups': (req, res) => {
-    if (req.headers['x-admin-key'] !== ADMIN_KEY) return send(res, 403, { ok: false, error: 'Forbidden' });
+    if (!adminOk(req)) return send(res, 403, { ok: false, error: 'Forbidden' });
     const users = load('users').map(u => ({ ...publicUser(u), id: u.id, createdAt: u.createdAt }));
     send(res, 200, { ok: true, count: users.length, users });
   },
@@ -539,7 +545,7 @@ const router = {
     const b = await readBody(req);
     // Stripe webhook path (signed) or admin-key path
     const isWebhook = req.headers['stripe-signature'];
-    if (!isWebhook && req.headers['x-admin-key'] !== ADMIN_KEY) return send(res, 403, { ok: false, error: 'Forbidden' });
+    if (!isWebhook && !adminOk(req)) return send(res, 403, { ok: false, error: 'Forbidden' });
     if (isWebhook) {
       if (!verifyStripeWebhook(req, b)) return send(res, 400, { ok: false, error: 'Invalid signature' });
       const email = b?.data?.object?.customer_email || b?.data?.object?.metadata?.email;
@@ -794,7 +800,7 @@ const router = {
     const to = (b.to || '').trim();
     if (!isEmail(to)) return send(res, 400, { ok: false, error: 'Valid email required' });
     try {
-      await sendEmail({ name: 'Test email' }, { email: to, firstName: 'there' }, { subject: 'Outrovo test email ✅', body: 'Hi {{firstName}} — if you see this, your Drummer sending pipeline works.' });
+      await sendEmail({ name: 'Test email' }, { email: to, firstName: 'there' }, { subject: 'Outrovo test email ✅', body: 'Hi {{firstName}} — if you see this, your Outrovo sending pipeline works.' });
       send(res, 200, { ok: true });
     } catch (err) {
       send(res, 502, { ok: false, error: err.message });
@@ -882,7 +888,8 @@ const server = http.createServer(async (req, res) => {
 
 if (!process.env.VERCEL) {
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Drummer server on http://0.0.0.0:${PORT} — engine mode: ${smtpConfigured ? 'smtp' : 'demo'}`);
+    console.log(`Outrovo server on http://0.0.0.0:${PORT} — engine mode: ${smtpConfigured ? 'smtp' : 'demo'}`);
+    if (!ADMIN_KEY) console.warn('ADMIN_KEY is not set — admin endpoints (/api/signups, /api/billing/activate) are locked.');
   });
 }
 
