@@ -164,30 +164,10 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   letter-spacing: -0.02em;
   margin-right: 8px;
 }
-.logo-mark {
-  width: 34px; height: 34px;
-  border-radius: 50% 50% 50% 4px;
-  background: var(--crest);
-  position: relative;
+.logo-img {
+  width: 36px; height: 36px;
   flex: none;
-  box-shadow: 0 4px 10px rgba(232, 73, 15, 0.35);
-}
-.logo-mark::after {
-  content: "";
-  position: absolute;
-  top: 9px; left: 11px;
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: #fff;
-}
-.logo-mark::before {
-  content: "";
-  position: absolute;
-  bottom: -3px; right: -6px;
-  width: 12px; height: 12px;
-  background: var(--forest);
-  border-radius: 0 8px 8px 8px;
-  transform: rotate(45deg);
+  filter: drop-shadow(0 4px 10px rgba(232, 73, 15, 0.35));
 }
 
 .nav-links { display: flex; align-items: center; gap: 4px; flex: 1; }
@@ -471,28 +451,40 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .bars i:nth-child(7) { height: 95%; animation-delay: 1.08s; }
 @keyframes grow { from { transform: scaleY(0); } }
 
-/* Floating chips around mockup */
+/* Floating notification cards around mockup */
 .chip {
   position: absolute;
   z-index: 3;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 11px;
   background: var(--card);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-m);
-  border-radius: 999px;
-  padding: 10px 16px;
-  font-size: 0.84rem;
-  font-weight: 600;
-  animation: float 5.5s ease-in-out infinite;
+  border-radius: 14px;
+  padding: 11px 15px;
+  font-size: 0.83rem;
+  animation: float 6s ease-in-out infinite;
 }
-.chip .dot { width: 9px; height: 9px; border-radius: 50%; }
+.chip small { display: block; color: var(--ink-faint); font-size: 0.72rem; font-weight: 500; }
+.chip strong { font-weight: 650; }
+.chip-avatar {
+  flex: none;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--forest);
+}
+.chip-avatar.warm { background: var(--crest); }
 .chip-a { top: 8%; left: -7%; }
-.chip-a .dot { background: #2e9e5b; }
 .chip-b { bottom: 12%; right: -6%; animation-delay: 1.4s; }
-.chip-b .dot { background: var(--crest); }
-@keyframes float { 50% { transform: translateY(-12px); } }
+@keyframes float { 50% { transform: translateY(-10px); } }
+@media (max-width: 1100px) { .chip { display: none; } }
+@media (prefers-reduced-motion: reduce) { .chip { animation: none; } }
 
 /* ---------- Logo marquee ---------- */
 .marquee-band { padding: 54px 0 8px; }
