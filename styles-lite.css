@@ -209,3 +209,4 @@ img{max-width:100%;display:block}
 .demo-live{display:none;font-family:var(--fd);font-size:clamp(1.2rem,2vw,1.5rem);min-height:2.2em;margin-bottom:26px;color:var(--ink)}
 .modal.playing .demo-live{display:block}
 .modal.playing .demo-idle{display:none}
+.h-m{font-family:var(--fd);font-weight:560;line-height:1.15;letter-spacing:-.015em;font-size:1.45rem}
