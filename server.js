@@ -15,8 +15,9 @@ try { nodemailer = require('nodemailer'); } catch { /* demo mode only */ }
 
 const PORT = process.env.PORT || 12000;
 const ADMIN_KEY = process.env.ADMIN_KEY || 'drummer-admin-key';
+// Vercel serverless: filesystem is read-only except /tmp.
+const DATA_DIR = process.env.DATA_DIR || (process.env.VERCEL ? '/tmp/drummer-data' : path.join(__dirname, 'data'));
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, 'data');
 const FILES = {
   users: 'users.json',
   campaigns: 'campaigns.json',
@@ -25,6 +26,8 @@ const FILES = {
   tasks: 'tasks.json',
   sessions: 'sessions.json',
 };
+// /tmp resets between serverless instances at any moment; this marks that in the API.
+const EPHEMERAL_DATA = process.env.VERCEL && !process.env.DATA_DIR;
 
 const SMTP = {
   host: process.env.SMTP_HOST,
@@ -231,7 +234,10 @@ function engineTick() {
   }
   if (changed) { save('prospects', prospects); save('tasks', tasks); }
 }
-setInterval(engineTick, ENGINE_INTERVAL_MS).unref();
+// Long-lived local server ticks forever; serverless functions must not start
+// unmanaged background loops, so on Vercel the engine only runs on-demand
+// (triggered by POSTs and lazy ticks via /api/app/engine/tick).
+if (!process.env.VERCEL) setInterval(engineTick, ENGINE_INTERVAL_MS).unref();
 
 // ---------- tools ----------
 async function verifyEmail(email) {
@@ -393,7 +399,14 @@ const router = {
     campaign.status = 'active';
     save('campaigns', campaigns); save('prospects', prospects);
     logEvent('campaign', `Campaign “${campaign.name}” activated (${enrolled} prospects enrolled)`);
+    engineTick(); // immediate pass — on serverless there is no background loop
     send(res, 200, { ok: true, enrolled });
+  },
+
+  'POST /api/app/engine/tick': (req, res) => {
+    if (!requireAuth(req, res)) return;
+    engineTick();
+    send(res, 200, { ok: true });
   },
 
   'POST /api/app/campaigns/:id/pause': (req, res, id) => {
@@ -561,6 +574,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Drummer server on http://0.0.0.0:${PORT} — engine mode: ${smtpConfigured ? 'smtp' : 'demo'}`);
-});
+if (!process.env.VERCEL) {
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Drummer server on http://0.0.0.0:${PORT} — engine mode: ${smtpConfigured ? 'smtp' : 'demo'}`);
+  });
+}
+
+// Vercel imports the handler as a serverless function.
+module.exports = (req, res) => server.emit("request", req, res);
