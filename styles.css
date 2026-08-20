@@ -1,21 +1,22 @@
 /* ============================================================
    Drummer — cold email & LinkedIn outreach
-   Design system: warm paper, deep forest ink, vermilion crest
+   Design system: modern SaaS — off-white paper, black ink, violet accent
    ============================================================ */
 
 :root {
-  --paper: #f6f1e7;
-  --paper-deep: #efe8d9;
-  --ink: #16281f;
-  --ink-soft: #3d4f45;
-  --ink-faint: #75827a;
-  --crest: #e8490f;
-  --crest-deep: #c93a08;
-  --forest: #1e4634;
-  --forest-deep: #122e22;
-  --moss: #cfe0d3;
-  --line: #ddd3bf;
-  --card: #fffdf8;
+  /* Modern SaaS palette — off-white, true black ink, single violet accent */
+  --paper: #f7f7f8;
+  --paper-deep: #eef0f2;
+  --ink: #0b0c0e;
+  --ink-soft: #3f434a;
+  --ink-faint: #8a9199;
+  --crest: #6c5ce7;
+  --crest-deep: #5138d6;
+  --forest: #15171b;
+  --forest-deep: #0f1114;
+  --moss: #e3dcf9;
+  --line: #e4e6ea;
+  --card: #ffffff;
   --sun: #ffc832;
 
   --font-display: "Fraunces", Georgia, serif;
@@ -254,12 +255,13 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   background: var(--forest-deep);
   color: var(--paper);
 }
-.hero .eyebrow { color: #ffb694; }
-.hero .eyebrow::before { background: #ffb694; }
+.hero .eyebrow { color: #b3a7ff; }
+.hero .eyebrow::before { background: #b3a7ff; }
 .hero h1 { color: var(--paper); }
-.hero-points li { color: #dfe9e3; }
+.hero-points li { color: #e8e9ec; }
 .hero-points strong { color: #fff; }
-.hero .tick { background: rgba(207, 224, 211, 0.18); color: #b9e0c4; }
+.hero .hero-points strong { color: #ffffff; }
+.hero .tick { background: rgba(108, 92, 231, 0.22); color: #c4bbfb; }
 .hero .btn-ghost { border-color: var(--paper); color: var(--paper); }
 .hero .btn-ghost:hover { background: var(--paper); color: var(--forest-deep); }
 .hero-meta { color: #9fb4ab; }
@@ -294,7 +296,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 /* Keyword with animated color cycle */
 .kw-animate {
   font-style: italic;
-  background: linear-gradient(100deg, var(--crest), #b13a9e, #2e6fd8, #1c9e83, var(--crest));
+  background: linear-gradient(100deg, #a79bff, #6c5ce7, #4d7cff, #a79bff);
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -435,6 +437,9 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 }
 .seq-ico.is-mail { background: var(--crest); border-color: var(--crest); color: #fff; }
 .seq-ico.is-li { background: #0a66c2; border-color: #0a66c2; color: #fff; }
+.hero .chip-avatar { background: var(--crest); }
+.chip-avatar { background: var(--forest); }
+.chip-avatar.warm { background: var(--crest); }
 .seq-info { padding-top: 2px; }
 .seq-info strong { display: block; font-size: 0.92rem; }
 .seq-info span { font-size: 0.78rem; color: var(--ink-faint); }
