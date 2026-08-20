@@ -1661,6 +1661,20 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .settings-note { font-size: 0.85rem; color: var(--ink-soft); margin-top: 10px; }
 .settings-note code { background: var(--paper-deep); padding: 1px 6px; border-radius: 4px; }
 
+/* Sender accounts */
+[hidden] { display: none !important; }
+.sender-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.sender-row:last-child { border-bottom: 0; }
+.sender-info { flex: 1; min-width: 240px; }
+.sender-info strong { display: block; }
+.sender-info span { color: var(--ink-faint); font-size: 0.82rem; }
+.sender-pill { font-size: 0.72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--paper-deep); color: var(--ink-soft); white-space: nowrap; }
+.sender-pill.warming { background: #fff3cd; color: #8a5c00; }
+.warmup-bar { width: 140px; height: 5px; background: var(--paper-deep); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.warmup-bar > i { display: block; height: 100%; background: var(--crest); }
+.sender-check { display: flex; align-items: flex-end; padding-bottom: 8px; }
+.sender-check label { display: flex; gap: 8px; align-items: center; font-size: 0.9rem; white-space: nowrap; }
+
 @media (max-width: 800px) {
   .app-shell { grid-template-columns: 1fr; }
   .app-sidebar { position: static; height: auto; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 16px; }

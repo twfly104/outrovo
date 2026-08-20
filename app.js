@@ -37,6 +37,8 @@ async function init() {
   bindAiGenerate();
   bindProspects();
   bindTools();
+  bindSenders();
+  bindDomainDiag();
   loadAll();
 }
 
@@ -65,7 +67,7 @@ function showPage(name) {
   if (name === 'prospects') loadProspects();
   if (name === 'activity') loadActivity();
   if (name === 'overview') loadOverview();
-  if (name === 'settings') loadEngine();
+  if (name === 'settings') { loadEngine(); loadSenders(); loadDomainDiag(); }
 }
 
 // ---------- logout ----------
@@ -120,7 +122,7 @@ function stepRowHtml(type) {
   let fields = '';
   if (type === 'email') {
     fields = `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" />
-              <textarea class="body" placeholder="Hi {{firstName}}, noticed {{company}}…">{{company}} caught my eye — quick idea.</textarea>`;
+              <textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}… — variables and {spintax|variants} work here">{Hi|Hello|Hey} {{firstName}}, {{company}} caught my eye — quick idea.</textarea>`;
   } else if (type === 'task') {
     fields = `<textarea class="note" placeholder="LinkedIn action — e.g. Send connection request to {{firstName}}">Send LinkedIn connection request to {{firstName}} {{lastName}}</textarea>`;
   }
@@ -331,7 +333,9 @@ async function addSingleProspect() {
 async function importCsv() {
   if (!selectedCampaign) { $('importNote').textContent = 'Pick a campaign first.'; return; }
   const { data } = await api('POST', '/api/app/prospects', { campaignId: selectedCampaign, csv: $('csvInput').value });
-  $('importNote').textContent = data.ok ? `Imported ${data.added} (${data.total} total)` : (data.error || 'Error');
+  $('importNote').textContent = data.ok
+    ? `Imported ${data.added} (${data.total} total)` + (data.customVars?.length ? ` — custom variables: ${data.customVars.map(v => '{{' + v + '}}').join(' ')}` : '')
+    : (data.error || 'Error');
   if (data.ok) $('csvInput').value = '';
   loadProspects();
 }
@@ -406,14 +410,123 @@ function bindTools() {
   });
 }
 
+// ---------- sender accounts ----------
+function bindSenders() {
+  $('sProvider').addEventListener('change', e => {
+    $('sCustomFields').hidden = e.target.value !== 'custom';
+  });
+  $('addSenderBtn').addEventListener('click', addSender);
+}
+
+async function addSender() {
+  const out = $('senderResult');
+  out.innerHTML = 'Connecting…';
+  const payload = {
+    provider: $('sProvider').value,
+    email: $('sEmail').value,
+    fromName: $('sFromName').value,
+    pass: $('sPass').value,
+    dailyLimit: Number($('sDailyLimit').value) || 50,
+    warmup: $('sWarmup').checked,
+  };
+  if (payload.provider === 'custom') {
+    payload.host = $('sHost').value;
+    payload.port = Number($('sPort').value) || 587;
+  }
+  const { status, data } = await api('POST', '/api/app/senders', payload);
+  out.innerHTML = data.ok
+    ? `<span class="ok-tag">✓ Connected</span> — ${esc(data.sender.email)} added to the rotation.`
+    : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
+  if (data.ok) {
+    ['sEmail', 'sFromName', 'sPass', 'sHost'].forEach(id => $(id).value = '');
+    loadSenders();
+  }
+}
+
+async function loadSenders() {
+  const { data } = await api('GET', '/api/app/senders');
+  if (!data.ok) return;
+  const rows = data.senders.map(s => {
+    const pct = Math.min(100, Math.round((s.usedToday / Math.max(1, s.capToday)) * 100));
+    const warm = s.warmup?.isWarming
+      ? `<span class="sender-pill warming">warmup · cap ${s.capToday}/day</span>`
+      : `<span class="sender-pill">cap ${s.dailyLimit}/day</span>`;
+    return `<div class="sender-row">
+      <div class="sender-info">
+        <strong>${esc(s.fromName ? `${s.fromName} <${s.email}>` : s.email)}</strong>
+        <span>${esc(s.provider)} · used ${s.usedToday}/${s.capToday} today</span>
+        <div class="warmup-bar"><i style="width:${pct}%"></i></div>
+      </div>
+      ${warm}
+      <button class="link" data-test-sender="${s.id}">Send test</button>
+      <button class="link" data-del-sender="${s.id}">Remove</button>
+    </div>`;
+  });
+  if (data.gateway) {
+    rows.push(`<div class="sender-row">
+      <div class="sender-info">
+        <strong>${esc(data.gateway.email)}</strong>
+        <span>env-configured gateway (${data.gateway.resend ? 'Resend' : 'SMTP'}) · no daily cap</span>
+      </div>
+      <span class="sender-pill">gateway</span>
+    </div>`);
+  }
+  $('senderList').innerHTML = rows.join('') || '<p class="settings-note" style="margin-bottom:16px">No inboxes connected yet — add your first sender below.</p>';
+  $('senderList').querySelectorAll('[data-del-sender]').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm('Remove this inbox from the rotation?')) return;
+    await api('DELETE', `/api/app/senders/${btn.dataset.delSender}`);
+    loadSenders();
+  }));
+  $('senderList').querySelectorAll('[data-test-sender]').forEach(btn => btn.addEventListener('click', async () => {
+    const to = $('testEmailTo').value || me?.email;
+    if (!to) { $('senderResult').innerHTML = 'Enter a test recipient in "Send a test email" below.'; return; }
+    btn.textContent = '…';
+    const { data: r } = await api('POST', '/api/app/tools/test-email', { to, senderId: btn.dataset.testSender });
+    btn.textContent = 'Send test';
+    $('senderResult').innerHTML = r.ok
+      ? `<span class="ok-tag">✓ Sent</span> via ${esc(r.sender || 'rotation')}${r.demo ? ' (demo — logged, not sent)' : ''}.`
+      : `<span class="no-tag">✗ ${esc(r.error || 'Failed')}</span>`;
+  }));
+}
+
+// ---------- domain health (onboarding diagnostic) ----------
+function bindDomainDiag() {
+  $('sdAuditBtn').addEventListener('click', () => runDomainDiag($('sdDomain').value));
+}
+
+function renderAudit(target, r) {
+  target.innerHTML = r ? `
+    <div class="score">${r.score}/100</div>
+    <ul>${r.checks.map(c => `<li><span class="${c.ok ? 'ok-tag' : 'no-tag'}">${c.ok ? '✓' : '✗'}</span><strong>${esc(c.name)}</strong> — ${esc(c.detail)}</li>`).join('')}</ul>
+    ${r.score < 100 ? '<p class="settings-note">Fix the failing records in your DNS provider before sending at volume — otherwise most mail lands in spam.</p>' : ''}` : 'No result';
+}
+
+async function runDomainDiag(domain) {
+  const out = $('sdAuditResult');
+  out.innerHTML = 'Running DNS checks…';
+  const { data } = await api('GET', `/api/app/tools/domain-audit?domain=${encodeURIComponent(domain || '')}`);
+  renderAudit(out, data.result);
+}
+
+async function loadDomainDiag() {
+  if (me?.email && !$('sdDomain').value) $('sdDomain').value = me.email.split('@')[1];
+  // The signup-time diagnostic result is logged in the activity feed — show it
+  // instantly instead of re-running DNS lookups.
+  const { data } = await api('GET', '/api/app/activity');
+  const audit = (data.events || []).find(e => e.type === 'domain-audit' && e.meta?.checks);
+  if (audit) renderAudit($('sdAuditResult'), { score: audit.meta.score, checks: audit.meta.checks });
+}
+
 // ---------- settings ----------
 async function loadEngine() {
   const { data } = await api('GET', '/api/app/engine');
-  $('engineInfo').innerHTML = data.mode === 'resend'
-    ? `<p><strong>Live — Resend</strong> (HTTP API), from <code>${esc(data.smtp.from)}</code>.</p>`
+  $('engineInfo').innerHTML = data.mode === 'multi-inbox'
+    ? `<p><strong>Multi-inbox rotation</strong> — ${data.inboxes} connected sender account${data.inboxes > 1 ? 's' : ''} load-balance campaign sends.</p>`
+    : data.mode === 'resend'
+    ? `<p><strong>Live — Resend</strong> (HTTP API), from <code>${esc(data.smtp.user)}</code>.</p>`
     : data.mode === 'smtp'
     ? `<p><strong>Live SMTP</strong> — sending via <code>${esc(data.smtp.host)}</code> as <code>${esc(data.smtp.user)}</code>.</p>`
-    : '<p><strong>Demo mode</strong> — no sending credentials found. Campaigns run fully, but sends are only logged to the activity feed.</p>';
+    : '<p><strong>Demo mode</strong> — no sender inbox connected and no gateway credentials. Campaigns run fully, but sends are only logged to the activity feed.</p>';
 }
 
 $('testEmailBtn').addEventListener('click', async () => {

@@ -167,8 +167,8 @@
           <div>
             <h2>Paste a list (CSV)</h2>
             <div class="field">
-              <label>email, first name, last name, company — one per line</label>
-              <textarea id="csvInput" rows="5" placeholder="sarah@acme.io, Sarah, Connor, Acme&#10;ben@orbcall.io, Ben, Wu, Orbcall"></textarea>
+              <label>email, first name, last name, company — one per line. Optional header row; extra columns become {{variables}} you can use in emails.</label>
+              <textarea id="csvInput" rows="5" placeholder="email,first name,company,icebreaker&#10;sarah@acme.io,Sarah,Acme,saw your launch post&#10;ben@orbcall.io,Ben,Orbcall,noticed you're hiring SDRs"></textarea>
             </div>
             <button class="btn btn-dark btn-s" id="importBtn">Add people</button>
             <span class="import-note" id="importNote"></span>
@@ -230,6 +230,47 @@
       <!-- Settings -->
       <section class="app-page" id="page-settings" hidden>
         <h1>Settings</h1>
+        <div class="app-card-block">
+          <h2>Sender accounts</h2>
+          <p class="settings-note">Connect the inboxes you send from. Campaigns rotate across them automatically, and
+          each inbox has its own daily cap. Turn on <strong>warmup ramp-up</strong> for new accounts — the cap starts
+          small and grows each day so mailbox providers build trust in the address.</p>
+          <div id="senderList"></div>
+          <div class="field-row">
+            <div class="field"><label>Provider</label>
+              <select id="sProvider">
+                <option value="gmail">Google (Gmail / Workspace)</option>
+                <option value="microsoft">Microsoft 365 / Outlook</option>
+                <option value="custom">Custom SMTP</option>
+              </select>
+            </div>
+            <div class="field"><label>Email address</label><input id="sEmail" placeholder="you@yourdomain.com" /></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Display name (optional)</label><input id="sFromName" placeholder="Jane from Acme" /></div>
+            <div class="field"><label>App password</label><input id="sPass" type="password" placeholder="App password" /></div>
+          </div>
+          <div class="field-row" id="sCustomFields" hidden>
+            <div class="field"><label>SMTP host</label><input id="sHost" placeholder="smtp.example.com" /></div>
+            <div class="field"><label>SMTP port</label><input id="sPort" type="number" placeholder="587" /></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Daily sending limit</label><input id="sDailyLimit" type="number" value="50" min="1" max="500" /></div>
+            <div class="field sender-check"><label><input id="sWarmup" type="checkbox" checked /> Enable warmup ramp-up</label></div>
+          </div>
+          <button class="btn btn-primary btn-s" id="addSenderBtn">Connect inbox</button>
+          <div class="tool-result" id="senderResult"></div>
+        </div>
+        <div class="app-card-block">
+          <h2>Domain health</h2>
+          <p class="settings-note">Onboarding diagnostic for your signup domain — run it before your first campaign to
+          catch SPF/DKIM/DMARC problems that would tank deliverability.</p>
+          <div class="field-row">
+            <div class="field"><label>Domain</label><input id="sdDomain" placeholder="yourdomain.com" /></div>
+            <div class="field"><button class="btn btn-dark btn-s" id="sdAuditBtn" style="margin-top:26px;">Run diagnostic</button></div>
+          </div>
+          <div class="tool-result" id="sdAuditResult"></div>
+        </div>
         <div class="app-card-block">
           <h2>Sending engine</h2>
           <div id="engineInfo"></div>
