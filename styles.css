@@ -141,21 +141,12 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   position: sticky;
   top: 0;
   z-index: 100;
-  background: var(--forest-deep);
-  color: var(--paper);
+  background: rgba(247, 247, 248, 0.88);
   backdrop-filter: blur(14px);
-  border-bottom: 1px solid rgba(246, 241, 231, 0.12);
-  transition: box-shadow 0.3s;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.3s, box-shadow 0.3s;
 }
-.site-header.is-scrolled { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); }
-.site-header .logo { color: var(--paper); }
-.site-header .nav-links > li > a { color: #c9d8cf; }
-.site-header .nav-links > li > a:hover { background: rgba(246, 241, 231, 0.08); color: #fff; }
-.site-header .drop a strong { color: var(--ink); }
-.site-header .nav-actions .login { color: #c9d8cf; }
-.site-header .nav-actions .login:hover { color: #fff; }
-.site-header .btn-ghost { border-color: var(--paper); color: var(--paper); }
-.site-header .btn-ghost:hover { background: var(--paper); color: var(--forest-deep); }
+.site-header.is-scrolled { border-bottom-color: var(--line); box-shadow: 0 6px 24px rgba(11, 12, 14, 0.05); }
 
 .nav {
   display: flex;
@@ -252,21 +243,16 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   position: relative;
   padding: 84px 0 0;
   overflow: hidden;
-  background: var(--forest-deep);
-  color: var(--paper);
 }
-.hero .eyebrow { color: #b3a7ff; }
-.hero .eyebrow::before { background: #b3a7ff; }
-.hero h1 { color: var(--paper); }
-.hero-points li { color: #e8e9ec; }
-.hero-points strong { color: #fff; }
-.hero .hero-points strong { color: #ffffff; }
-.hero .tick { background: rgba(108, 92, 231, 0.22); color: #c4bbfb; }
-.hero .btn-ghost { border-color: var(--paper); color: var(--paper); }
-.hero .btn-ghost:hover { background: var(--paper); color: var(--forest-deep); }
-.hero-meta { color: #9fb4ab; }
-.rating { background: rgba(255, 253, 248, 0.08); border-color: rgba(246, 241, 231, 0.2); color: var(--paper); }
-.rating small { color: #9fb4ab; }
+.hero .eyebrow { color: var(--crest); }
+.hero .eyebrow::before { background: var(--crest); }
+.hero h1 { color: var(--ink); }
+.hero-points li { color: var(--ink-soft); }
+.hero-points strong { color: var(--ink); }
+.hero .tick { background: rgba(108, 92, 231, 0.12); color: var(--crest); }
+.hero-meta { color: var(--ink-faint); }
+.rating { background: var(--card); border: 1px solid var(--line); color: var(--ink); }
+.rating small { color: var(--ink-faint); }
 .hero-grid {
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
@@ -296,7 +282,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 /* Keyword with animated color cycle */
 .kw-animate {
   font-style: italic;
-  background: linear-gradient(100deg, #a79bff, #6c5ce7, #4d7cff, #a79bff);
+  background: linear-gradient(100deg, var(--crest), #3b82f6, #7c3aed, var(--crest));
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
