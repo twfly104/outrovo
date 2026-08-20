@@ -175,7 +175,12 @@ document.querySelectorAll('form[id$="Form"]').forEach(form => {
         success.style.display = 'block';
       }
     } catch {
-      serverErr.textContent = 'Cannot reach the server right now — please try again later.';
+      // Static-host preview (e.g. GitHub Pages): the API isn't reachable, so
+      // show a graceful note instead of a scary error.
+      const isPreview = location.hostname.endsWith('github.io');
+      serverErr.textContent = isPreview
+        ? '👋 This is the marketing preview — account creation runs on the live app server. Want the full demo? Ask us for the app link.'
+        : 'Cannot reach the server right now — please try again later.';
       serverErr.style.display = 'block';
     } finally {
       submitBtn.disabled = false;
