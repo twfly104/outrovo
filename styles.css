@@ -1667,3 +1667,37 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   .app-nav { flex-direction: row; flex-wrap: wrap; }
   .app-user { border-top: none; margin-left: auto; padding-top: 0; }
 }
+
+/* ---------- Simple action cards (dashboard hero) ---------- */
+.action-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+.action-card {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-m);
+  padding: 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  box-shadow: var(--shadow-s);
+  transition: transform 0.25s var(--ease-out), border-color 0.25s, box-shadow 0.25s;
+}
+.action-card:hover { transform: translateY(-4px); border-color: var(--crest); box-shadow: var(--shadow-m); }
+.action-card .a-ico {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: rgba(249, 115, 22, 0.1);
+  color: var(--crest);
+  display: grid; place-items: center;
+  font-size: 20px;
+}
+.action-card strong { font-family: var(--font-display); font-size: 1.15rem; }
+.action-card span { font-size: 0.88rem; color: var(--ink-faint); line-height: 1.4; }
+.action-card .a-link {
+  margin-top: auto;
+  font-weight: 650;
+  font-size: 0.86rem;
+  color: var(--crest);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+@media (max-width: 900px) { .action-grid { grid-template-columns: 1fr; } }

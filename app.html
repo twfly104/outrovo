@@ -37,13 +37,37 @@
 
     <main class="app-main">
       <div class="engine-banner" id="engineBanner" hidden>
-        ⚠️ <strong>Demo mode</strong> — SMTP not configured; sends are logged, not delivered. Set <code>SMTP_HOST/PORT/USER/PASS</code> to go live.
+        ⚠️ <strong>Demo mode</strong> — emails are logged, not sent. To go live, set SMTP_HOST/PORT/USER/PASS (or RESEND_API_KEY) in Render env vars.
       </div>
 
       <!-- Overview -->
       <section class="app-page" id="page-overview">
-        <h1>Overview</h1>
-        <div class="stat-grid" id="statGrid"></div>
+        <h1>What do you want to do?</h1>
+        <div class="action-grid">
+          <button class="action-card" data-goto="campaigns">
+            <span class="a-ico">✉️</span>
+            <strong>Send emails</strong>
+            <span>Build a sequence, add people, hit run.</span>
+            <span class="a-link">Go to campaigns →</span>
+          </button>
+          <button class="action-card" data-goto="inbox">
+            <span class="a-ico">📥</span>
+            <strong>Check replies</strong>
+            <span>Every reply lands here in one place.</span>
+            <span class="a-link">Open inbox →</span>
+          </button>
+          <button class="action-card" data-goto="tools">
+            <span class="a-ico">✓</span>
+            <strong>Check my email</strong>
+            <span>Verify emails and audit your domain.</span>
+            <span class="a-link">Open tools →</span>
+          </button>
+        </div>
+
+        <div class="app-card-block">
+          <h2>At a glance</h2>
+          <div class="stat-grid" id="statGrid"></div>
+        </div>
         <div class="app-card-block">
           <h2>Recent activity</h2>
           <ul class="event-list" id="overviewEvents"></ul>
@@ -124,12 +148,12 @@
       <!-- Prospects -->
       <section class="app-page" id="page-prospects" hidden>
         <div class="page-head">
-          <h1>Prospects</h1>
+          <h1>People to email</h1>
           <select id="prospectCampaign"></select>
         </div>
         <div class="app-card-block split-2">
           <div>
-            <h2>Add single prospect</h2>
+            <h2>Add one person</h2>
             <div class="field-row">
               <div class="field"><label>Email</label><input id="pEmail" placeholder="sarah@acme.io" /></div>
               <div class="field"><label>First name</label><input id="pFirst" placeholder="Sarah" /></div>
@@ -138,20 +162,20 @@
               <div class="field"><label>Last name</label><input id="pLast" placeholder="Connor" /></div>
               <div class="field"><label>Company</label><input id="pCompany" placeholder="Acme Inc." /></div>
             </div>
-            <button class="btn btn-primary btn-s" id="addProspectBtn">Add prospect</button>
+            <button class="btn btn-primary btn-s" id="addProspectBtn">Add person</button>
           </div>
           <div>
-            <h2>Bulk import (CSV)</h2>
+            <h2>Paste a list (CSV)</h2>
             <div class="field">
               <label>email, first name, last name, company — one per line</label>
               <textarea id="csvInput" rows="5" placeholder="sarah@acme.io, Sarah, Connor, Acme&#10;ben@orbcall.io, Ben, Wu, Orbcall"></textarea>
             </div>
-            <button class="btn btn-dark btn-s" id="importBtn">Import</button>
+            <button class="btn btn-dark btn-s" id="importBtn">Add people</button>
             <span class="import-note" id="importNote"></span>
           </div>
         </div>
         <div class="app-card-block">
-          <h2>All prospects <span id="prospectCount"></span></h2>
+          <h2>All people <span id="prospectCount"></span></h2>
           <table class="data-table" id="prospectTable">
             <thead><tr><th>Email</th><th>Name</th><th>Company</th><th>Step</th><th>Verification</th><th></th></tr></thead>
             <tbody></tbody>
@@ -175,7 +199,7 @@
       <section class="app-page" id="page-activity" hidden>
         <h1>Activity</h1>
         <div class="app-card-block">
-          <h2>Open LinkedIn tasks</h2>
+          <h2>LinkedIn to-dos</h2>
           <ul class="event-list" id="taskList"></ul>
         </div>
         <div class="app-card-block">
@@ -186,18 +210,18 @@
 
       <!-- Tools -->
       <section class="app-page" id="page-tools" hidden>
-        <h1>Deliverability tools</h1>
+        <h1>Check my email</h1>
         <div class="app-card-block split-2">
           <div>
-            <h2>Email verification</h2>
+            <h2>Verify one email</h2>
             <div class="field"><label>Email address</label><input id="vEmail" placeholder="sarah@acme.io" /></div>
-            <button class="btn btn-primary btn-s" id="verifyBtn">Verify</button>
+            <button class="btn btn-primary btn-s" id="verifyBtn">Check email</button>
             <div class="tool-result" id="verifyResult"></div>
           </div>
           <div>
-            <h2>Domain health audit</h2>
+            <h2>Check your domain</h2>
             <div class="field"><label>Domain</label><input id="dDomain" placeholder="yourcompany.com" /></div>
-            <button class="btn btn-dark btn-s" id="auditBtn">Run audit</button>
+            <button class="btn btn-dark btn-s" id="auditBtn">Check domain</button>
             <div class="tool-result" id="auditResult"></div>
           </div>
         </div>

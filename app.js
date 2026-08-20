@@ -45,17 +45,27 @@ function bindNav() {
   $('appNav').addEventListener('click', e => {
     const btn = e.target.closest('button');
     if (!btn) return;
-    document.querySelectorAll('#appNav button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.app-page').forEach(p => p.hidden = true);
-    $('page-' + btn.dataset.page).hidden = false;
-    if (btn.dataset.page === 'inbox') loadInbox();
-    if (btn.dataset.page === 'campaigns') loadCampaigns();
-    if (btn.dataset.page === 'prospects') loadProspects();
-    if (btn.dataset.page === 'activity') loadActivity();
-    if (btn.dataset.page === 'overview') loadOverview();
-    if (btn.dataset.page === 'settings') loadEngine();
+    showPage(btn.dataset.page);
   });
+
+  // Action cards on overview jump to sections
+  document.querySelectorAll('.action-card[data-goto]').forEach(card => {
+    card.addEventListener('click', () => showPage(card.dataset.goto));
+  });
+}
+
+function showPage(name) {
+  document.querySelectorAll('#appNav button').forEach(b => {
+    b.classList.toggle('active', b.dataset.page === name);
+  });
+  document.querySelectorAll('.app-page').forEach(p => p.hidden = true);
+  $('page-' + name).hidden = false;
+  if (name === 'inbox') loadInbox();
+  if (name === 'campaigns') loadCampaigns();
+  if (name === 'prospects') loadProspects();
+  if (name === 'activity') loadActivity();
+  if (name === 'overview') loadOverview();
+  if (name === 'settings') loadEngine();
 }
 
 // ---------- logout ----------
@@ -74,8 +84,8 @@ async function loadOverview() {
   if (!data.ok) return;
   const s = data.stats;
   const cards = [
-    ['Campaigns', s.campaigns], ['Active', s.active], ['Prospects', s.prospects],
-    ['Emails sent', s.sent], ['Open tasks', s.openTasks],
+    ['Campaigns', s.campaigns], ['Active', s.active], ['People', s.prospects],
+    ['Emails sent', s.sent], ['To-dos', s.openTasks],
   ];
   $('statGrid').innerHTML = cards.map(([label, n]) =>
     `<div class="stat-card"><span>${label}</span><strong>${n}</strong></div>`).join('');
