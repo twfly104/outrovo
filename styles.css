@@ -10,11 +10,11 @@
   --ink: #0b0c0e;
   --ink-soft: #3f434a;
   --ink-faint: #8a9199;
-  --crest: #6c5ce7;
-  --crest-deep: #5138d6;
+  --crest: #f97316;
+  --crest-deep: #ea580c;
   --forest: #15171b;
   --forest-deep: #0f1114;
-  --moss: #e3dcf9;
+  --moss: #fde8d7;
   --line: #e4e6ea;
   --card: #ffffff;
   --sun: #ffc832;
@@ -249,7 +249,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .hero h1 { color: var(--ink); }
 .hero-points li { color: var(--ink-soft); }
 .hero-points strong { color: var(--ink); }
-.hero .tick { background: rgba(108, 92, 231, 0.12); color: var(--crest); }
+.hero .tick { background: rgba(249, 115, 22, 0.12); color: var(--crest); }
 .hero-meta { color: var(--ink-faint); }
 .rating { background: var(--card); border: 1px solid var(--line); color: var(--ink); }
 .rating small { color: var(--ink-faint); }
@@ -282,7 +282,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 /* Keyword with animated color cycle */
 .kw-animate {
   font-style: italic;
-  background: linear-gradient(100deg, var(--crest), #3b82f6, #7c3aed, var(--crest));
+  background: linear-gradient(100deg, var(--crest), #e11d48, #f59e0b, var(--crest));
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
