@@ -6,3 +6,26 @@ services:
     buildCommand: npm install
     startCommand: node server.js
     healthCheckPath: /api/health
+    envVars:
+      # Set these in Render > Environment before launch; `sync: false` means
+      # they are read from the dashboard. The app fails closed when unset.
+      - key: ADMIN_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        value: outbound@yourdomain.com
+      - key: RESEND_API_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: DATA_DIR
+        value: /var/data
