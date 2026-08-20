@@ -78,3 +78,26 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - All pages share the same header/footer markup — update links in every page when
   nav changes. CTAs point to `signup.html` / `login.html` / `pricing.html`.
 - Responsive breakpoints at 1024px and 720px.
+
+## Phase 1 additions (multi-inbox foundation)
+- Sender accounts: `data/senders.json`, per-user inboxes with provider presets
+  (`gmail`/`microsoft`/`custom` SMTP). App passwords stored AES-256-GCM-encrypted
+  in `encPass` (`DATA_KEY` env; falls back to deriving from ADMIN_KEY — set
+  DATA_KEY before users connect inboxes; changing it orphans stored passwords).
+- `pickSender(owner, prospect)`: deterministic round-robin across the owner's
+  active inboxes + the env gateway (RESEND_API_KEY / legacy SMTP_* env), skipping
+  inboxes at their daily cap. `recordSend` advances warmup state.
+- Warmup: `sender.warmup` → capToday = min(dailyLimit, startCap + rampDays *
+  WARMUP_RAMP_INCREMENT (5)); rampDays increments once per active send day.
+- Spintax `{a|b|c}` (nested, MAX_SPINTAX_DEPTH 10, deterministic per
+  prospect+template) + `{{var}}` templating over prospect fields AND
+  `prospect.customVars` (CSV header row: extra columns → customVars).
+  `personalize()` = renderTemplate then applySpintax. Preview via
+  POST /api/app/tools/preview-spintax.
+- All-capped inboxes → engine defers the prospect CAP_RETRY_MS (1h), no error.
+- Step delays get ±20% jitter at scheduling time.
+- Signup fires a fire-and-forget domainAudit of the signup domain; result lands
+  in the activity feed (`domain-audit` event, meta.checks) and Settings →
+  Domain health renders it instantly.
+- IMPORTANT: PATCH is an allowed method in the server allowlist — anything
+  adding a route with another method must extend the allowlist too.
