@@ -16,10 +16,13 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   (subject/body, `{{firstName}}`-style templating), `task` (manual LinkedIn
   queue), `wait`. Without `SMTP_HOST/USER/PASS` env it runs in DEMO mode —
   sends are logged to the activity feed, never delivered.
-- AI assistant: `POST /api/app/ai/generate-sequence` powers the campaign
-  builder's "✦ Generate sequence" panel. With `LLM_API_KEY` (+ optional
-  `LLM_BASE_URL`, `LLM_MODEL`) it calls an OpenAI-compatible chat API;
-  otherwise it uses the built-in copywriting engine (`localSequence`).
+- AI assistant: `POST /api/app/ai/generate-sequence` (+ `POST
+  /api/app/ai/scan-site` for website autofill). With `LLM_API_KEY`
+  (+ optional `LLM_BASE_URL`, `LLM_MODEL`) it calls an OpenAI-compatible
+  chat API; otherwise it uses the built-in copywriting engine
+  (`localSequence`) — the UI labels which mode answered.
+- Logo lives in `logo.svg` (vector bird mark) referenced as `.logo-img`
+  across pages — update the file once to rebrand everywhere.
 - Fonts: Fraunces (display) + Instrument Sans (body) via Google Fonts.
 - Design tokens in `:root` of `styles.css`: warm paper `#f6f1e7`, forest ink `#16281f`,
   vermilion crest `#e8490f`, dark forest `#122e22`.
