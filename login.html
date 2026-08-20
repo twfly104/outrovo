@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Log in — Drummer</title>
+  <meta name="description" content="Log in to your Drummer workspace." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='16' fill='%23e8490f'/%3E%3Ccircle cx='17' cy='12' r='3.4' fill='%23fff'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="auth-page">
+    <aside class="auth-side">
+      <a class="logo" href="index.html">
+        <span class="logo-mark"></span>
+        Drummer
+      </a>
+      <div class="auth-quote">
+        <blockquote>
+          <span class="mark">“</span>No other outbound tool lets you scale one-to-one conversations in such a personalized way.<span class="mark">”</span>
+        </blockquote>
+        <div class="who">
+          <span class="avatar">PC</span>
+          <div class="who-text">
+            <strong>Patrick Calloway</strong>
+            <span>CEO &amp; founder, SignalWorks</span>
+          </div>
+        </div>
+      </div>
+      <ul class="auth-points">
+        <li>Free warm-up</li>
+        <li>Free verification</li>
+        <li>GDPR compliant</li>
+      </ul>
+    </aside>
+
+    <main class="auth-main">
+      <div class="auth-box">
+        <form id="loginForm" novalidate>
+          <h1>Welcome back</h1>
+          <p class="sub">New to Drummer? <a href="signup.html">Start your free trial</a></p>
+
+          <div class="field">
+            <label for="email">Work email</label>
+            <input type="email" id="email" name="email" placeholder="alex@company.com" autocomplete="email" />
+            <span class="err">Please enter a valid email</span>
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" placeholder="Your password" autocomplete="current-password" />
+            <span class="err">Please enter your password</span>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Log in
+            <svg width="15" height="12" viewBox="0 0 15 12" fill="none"><path d="M1 6h12M9 1l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </form>
+
+        <div class="auth-success" id="loginSuccess">
+          <span class="big-tick">
+            <svg width="34" height="26" viewBox="0 0 34 26" fill="none"><path d="M3 13.5L12 22L31 3" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <h2>Logged in</h2>
+          <p>This is a demo workspace — hook up your auth backend to make it real.</p>
+          <a class="btn btn-dark" href="index.html">Back to homepage</a>
+        </div>
+
+        <p class="auth-alt"><a href="#">Forgot your password?</a></p>
+      </div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

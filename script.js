@@ -1,8 +1,10 @@
 // Header shadow on scroll
 const header = document.getElementById('siteHeader');
-addEventListener('scroll', () => {
-  header.classList.toggle('is-scrolled', scrollY > 8);
-}, { passive: true });
+if (header) {
+  addEventListener('scroll', () => {
+    header.classList.toggle('is-scrolled', scrollY > 8);
+  }, { passive: true });
+}
 
 // FAQ accordion
 document.querySelectorAll('.faq-item').forEach(item => {
@@ -36,7 +38,110 @@ document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 // Mobile menu
 const toggle = document.getElementById('navToggle');
 const menu = document.getElementById('mobileMenu');
-toggle.addEventListener('click', () => menu.classList.toggle('open'));
-menu.querySelectorAll('a').forEach(a =>
-  a.addEventListener('click', () => menu.classList.remove('open'))
-);
+if (toggle && menu) {
+  toggle.addEventListener('click', () => menu.classList.toggle('open'));
+  menu.querySelectorAll('a').forEach(a =>
+    a.addEventListener('click', () => menu.classList.remove('open'))
+  );
+}
+
+// Demo modal
+const modal = document.getElementById('demoModal');
+if (modal) {
+  document.querySelectorAll('[data-demo]').forEach(btn =>
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      modal.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    })
+  );
+  const close = () => {
+    modal.classList.remove('open', 'playing');
+    document.body.style.overflow = '';
+  };
+  modal.querySelector('.modal-close').addEventListener('click', close);
+  modal.querySelector('.modal-backdrop').addEventListener('click', close);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && modal.classList.contains('open')) close();
+  });
+  const chapters = [
+    'Connect or buy warmed-up domains',
+    'Pull leads from the 1B+ database',
+    'Mix email and LinkedIn in one sequence',
+    'Watch replies land in one inbox'
+  ];
+  let chapterTimer;
+  modal.querySelector('.demo-play').addEventListener('click', function () {
+    modal.classList.add('playing');
+    this.innerHTML = '<svg width="26" height="26" viewBox="0 0 26 26" fill="currentColor"><rect x="6" y="5" width="5" height="16" rx="1.5"/><rect x="15" y="5" width="5" height="16" rx="1.5"/></svg>';
+    const live = modal.querySelector('.demo-live');
+    let i = 0;
+    live.textContent = chapters[0];
+    clearInterval(chapterTimer);
+    chapterTimer = setInterval(() => {
+      i = (i + 1) % chapters.length;
+      live.textContent = chapters[i];
+    }, 6000);
+  });
+}
+
+// Pricing toggle
+const billToggle = document.getElementById('billToggle');
+if (billToggle) {
+  billToggle.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      billToggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const mode = btn.dataset.mode;
+      document.querySelectorAll('[data-monthly]').forEach(el => {
+        el.textContent = mode === 'yearly' ? el.dataset.yearly : el.dataset.monthly;
+      });
+    });
+  });
+}
+
+// Form validation (signup / login)
+document.querySelectorAll('form[id$="Form"]').forEach(form => {
+  const success = document.getElementById(form.id.replace('Form', 'Success'));
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    let valid = true;
+
+    form.querySelectorAll('.field input').forEach(input => {
+      const field = input.closest('.field');
+      let ok = input.value.trim().length > 0;
+      if (input.type === 'email') ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value.trim());
+      if (input.type === 'password' && form.id === 'signupForm') ok = input.value.length >= 8;
+      field.classList.toggle('show-err', !ok);
+      input.classList.toggle('invalid', !ok);
+      if (!ok) valid = false;
+    });
+
+    const terms = form.querySelector('#terms');
+    if (terms) {
+      const wrap = document.getElementById('termsField');
+      wrap.classList.toggle('show-err', !terms.checked);
+      if (!terms.checked) valid = false;
+    }
+
+    if (valid && success) {
+      const email = form.querySelector('#email')?.value.trim();
+      const name = form.querySelector('#firstName')?.value.trim();
+      if (email) success.querySelector('#successEmail').textContent = email;
+      if (name) {
+        const slot = success.querySelector('#successName');
+        if (slot) slot.textContent = name;
+      }
+      form.style.display = 'none';
+      success.style.display = 'block';
+    }
+  });
+
+  form.addEventListener('input', e => {
+    const field = e.target.closest('.field');
+    if (field) {
+      field.classList.remove('show-err');
+      e.target.classList.remove('invalid');
+    }
+  });
+});

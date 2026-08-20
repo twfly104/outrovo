@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Start your free trial — Drummer</title>
+  <meta name="description" content="Start your 14-day free trial of Drummer. All features unlocked, no credit card required." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='16' fill='%23e8490f'/%3E%3Ccircle cx='17' cy='12' r='3.4' fill='%23fff'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="auth-page">
+    <aside class="auth-side">
+      <a class="logo" href="index.html">
+        <span class="logo-mark"></span>
+        Drummer
+      </a>
+      <div class="auth-quote">
+        <blockquote>
+          <span class="mark">“</span>We booked 40 meetings in the first month. Drummer paid for a year of itself in week two.<span class="mark">”</span>
+        </blockquote>
+        <div class="who">
+          <span class="avatar">MV</span>
+          <div class="who-text">
+            <strong>Marta Velasquez</strong>
+            <span>Head of Growth, Orbcall</span>
+          </div>
+        </div>
+      </div>
+      <ul class="auth-points">
+        <li>14-day free trial</li>
+        <li>All features unlocked</li>
+        <li>No credit card required</li>
+      </ul>
+    </aside>
+
+    <main class="auth-main">
+      <div class="auth-box">
+        <form id="signupForm" novalidate>
+          <h1>Start your free trial</h1>
+          <p class="sub">14 days, every feature. Already have an account? <a href="login.html">Log in</a></p>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="firstName">First name</label>
+              <input type="text" id="firstName" name="firstName" placeholder="Alex" autocomplete="given-name" />
+              <span class="err">Please enter your first name</span>
+            </div>
+            <div class="field">
+              <label for="lastName">Last name</label>
+              <input type="text" id="lastName" name="lastName" placeholder="Rivera" autocomplete="family-name" />
+              <span class="err">Please enter your last name</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="email">Work email</label>
+            <input type="email" id="email" name="email" placeholder="alex@company.com" autocomplete="email" />
+            <span class="err">Please enter a valid work email</span>
+          </div>
+
+          <div class="field">
+            <label for="company">Company</label>
+            <input type="text" id="company" name="company" placeholder="Company Inc." autocomplete="organization" />
+            <span class="err">Please enter your company name</span>
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" placeholder="8+ characters" autocomplete="new-password" />
+            <span class="err">Password must be at least 8 characters</span>
+          </div>
+
+          <div class="check-field" id="termsField">
+            <input type="checkbox" id="terms" />
+            <label for="terms">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>, and consent to processing my data under GDPR.</label>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Create my account
+            <svg width="15" height="12" viewBox="0 0 15 12" fill="none"><path d="M1 6h12M9 1l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </form>
+
+        <div class="auth-success" id="signupSuccess">
+          <span class="big-tick">
+            <svg width="34" height="26" viewBox="0 0 34 26" fill="none"><path d="M3 13.5L12 22L31 3" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <h2>You're in, <span id="successName">friend</span>!</h2>
+          <p>We've sent a confirmation link to <strong id="successEmail">your inbox</strong>. Verify your email to unlock your workspace.</p>
+          <a class="btn btn-dark" href="index.html">Back to homepage</a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
