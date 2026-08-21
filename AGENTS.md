@@ -67,7 +67,11 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   credits/month (1 credit per returned lead), tracked on `user.leadFinder`.
   `GET /api/app/lead-finder/status` also returns `seed` (the signup email's
   domain) when autopilot has no saved criteria; the form auto-fills from
-  `autopilot` first, then `seed`.
+  `autopilot` first, then `seed`, then `GET /api/app/lead-finder/prefill`
+  (scans the signup domain's site to infer keywords/title/size/location;
+  uses LLM when `LLM_API_KEY` is set, heuristic regexes otherwise; builtin
+  crawler no longer truncates pages — `slice(0, 500000)` was cutting off
+  emails past 500KB on sites like stripe.com).
 - `LLM_API_KEY` (or `OPENAI_API_KEY`; optional `LLM_BASE_URL`, `LLM_MODEL`) —
   upgrades the AI sequence writer, site-scan prefill, reply-intent
   classification, and AI reply drafts to a real LLM. Without it all four run

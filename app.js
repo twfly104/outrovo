@@ -902,6 +902,27 @@ async function loadLeadFinderStatus() {
     if (src?.location && !$('lfLocation').value) $('lfLocation').value = src.location;
   };
   fill(ap || data.seed);
+
+  // If the form is still fully empty, fetch the website-scan prefill —
+  // derived from the user's own domain's site content.
+  const stillEmpty = !$('lfKeywords').value && !$('lfTitle').value;
+  if (stillEmpty && !applyLeadFinderPrefill.done) {
+    applyLeadFinderPrefill.done = true;
+    applyLeadFinderPrefill();
+  }
+}
+
+async function applyLeadFinderPrefill() {
+  try {
+    const d = await api('/api/app/lead-finder/prefill');
+    if (!d?.prefill) return;
+    const p = d.prefill;
+    const fill = (id, val) => { const el = $(id); if (el && !el.value) el.value = val; };
+    fill('lfKeywords', p.keywords);
+    fill('lfTitle', p.title);
+    fill('lfSize', p.size);
+    fill('lfLocation', p.location);
+  } catch {}
 }
 
 async function saveAutopilot(enabled) {

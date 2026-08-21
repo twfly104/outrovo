@@ -637,7 +637,7 @@ async function builtinSearchLeads(f, perPage, sessionEmail) {
         });
         clearTimeout(timer);
         if (!res.ok) continue;
-        const html = (await res.text()).slice(0, 500000);
+        const html = await res.text();
         const matches = html.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
         for (const m of matches) {
           const e = m.toLowerCase();
@@ -1926,6 +1926,81 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       used: usage.used, quota: usage.quota, month: usage.month,
       autopilot: user.leadFinderAutopilot || null, seed,
     });
+  },
+
+  // Scan the user's own website (from their signup email domain) and infer
+  // their ICP: keywords, job title, company size, location. Uses the LLM
+  // when configured, otherwise falls back to a keyword heuristic.
+  'GET /api/app/lead-finder/prefill': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const domain = session.email.split('@')[1] || '';
+    if (!domain) return send(res, 200, { ok: true, prefill: null });
+
+    // --- Try LLM-powered inference first ---
+    const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+    if (key) {
+      try {
+        const info = await fetchSite(domain);
+        const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+        const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+        const llmRes = await fetch(`${base}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            model,
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: 'You help sales teams find their ideal customer profile (ICP). Given a company website, infer the ICP fields for a lead-finder tool: keywords (target market or complementary companies to search), title (typical buyer job title), size (typical company size bucket), location (typical geography). Return ONLY JSON: {"keywords":"...","title":"...","size":"...","location":"..."} — each a short phrase, no sentences. Keep keywords to 2-4 words or domains.' },
+              { role: 'user', content: JSON.stringify({ url: info.url, title: info.title, description: info.desc, headings: info.h1s, text: info.text.slice(0, 2000) }) },
+            ],
+            temperature: 0.3, max_tokens: 120,
+          }),
+          signal: AbortSignal.timeout(25000),
+        });
+        const llmData = await llmRes.json();
+        const raw = llmData.choices?.[0]?.message?.content || '{}';
+        const parsed = JSON.parse(raw);
+        const prefill = {
+          keywords: (parsed.keywords || '').slice(0, 200),
+          title: (parsed.title || '').slice(0, 120),
+          size: (parsed.size || '').slice(0, 40),
+          location: (parsed.location || '').slice(0, 120),
+        };
+        if (prefill.keywords) {
+          return send(res, 200, { ok: true, prefill, source: 'llm', siteTitle: info.title });
+        }
+      } catch { /* LLM failed — fall through to heuristic */ }
+    }
+
+    // --- Heuristic fallback ---
+    try {
+      const info = await fetchSite(domain);
+      const text = (info.title + ' ' + info.desc + ' ' + info.text).toLowerCase();
+      const prefill = { keywords: domain, title: '', size: '', location: '' };
+
+      // Infer job title from common B2B buyer personas mentioned on the site
+      if (/\bfounder|ceo|co-founder|chief executive\b/.test(text)) prefill.title = 'founder';
+      else if (/\bhead of sales|sales director|vp sales|chief revenue\b/.test(text)) prefill.title = 'head of sales';
+      else if (/\bhead of marketing|marketing director|cmo|vp marketing\b/.test(text)) prefill.title = 'head of marketing';
+      else if (/\bhead of product|product manager|cpo|vp product\b/.test(text)) prefill.title = 'head of product';
+      else if (/\bhead of engineering|cto|vp engineering|engineering manager\b/.test(text)) prefill.title = 'head of engineering';
+
+      // Infer company size from language
+      if (/\benterprise|fortune 500|global|multinational|enterprise-grade\b/.test(text)) prefill.size = '1000+';
+      else if (/\bsolo|freelance|indie|bootstrap|solopreneur\b/.test(text)) prefill.size = '1-10';
+      else if (/\bmid-market|smb|small business|startup|scale-up|growth|early-stage|micro\b/.test(text)) prefill.size = '11-50';
+
+      // Infer location from common markets
+      if (/\bunited states|us-based|america|new york|san francisco|silicon valley|austin|boston|chicago|los angeles|seattle|miami\b/.test(text)) prefill.location = 'United States';
+      else if (/\blondon|uk|united kingdom|britain\b/.test(text)) prefill.location = 'United Kingdom';
+      else if (/\beurope|berlin|paris|amsterdam|dublin|barcelona|stockholm\b/.test(text)) prefill.location = 'Europe';
+      else if (/\bsingapore|hong kong|tokyo|japan|asia|apac|sydney|australia|bangalore|india\b/.test(text)) prefill.location = 'Asia';
+
+      return send(res, 200, { ok: true, prefill, source: 'heuristic', siteTitle: info.title });
+    } catch {
+      return send(res, 200, { ok: true, prefill: null });
+    }
   },
 
   'PUT /api/app/lead-finder/autopilot': async (req, res) => {
