@@ -707,6 +707,63 @@ async function searchLeads(f, perPage, sessionEmail) {
   return { leads: verified.slice(0, perPage), provider: leads[0].source, errors };
 }
 
+// ---------- lead finder autopilot ----------
+// Saved search criteria that runs once per UTC day inside the engine tick:
+// finds fresh leads, keeps only MX-verified deliverables, and auto-enrolls
+// them into the chosen campaign. Daily cap + monthly quota guards prevent
+// silent credit burn; the first run of each day logs an activity event.
+const AUTOPILOT_MAX_DAILY = 10;
+function leadFinderAutopilot(user) {
+  const ap = user.leadFinderAutopilot;
+  if (!ap || !ap.enabled || !ap.campaignId || !ap.keywords?.trim()) return null;
+  return ap;
+}
+
+async function autopilotRun() {
+  const users = load('users');
+  const today = new Date().toISOString().slice(0, 10);
+  let changed = false;
+  for (const user of users) {
+    const ap = leadFinderAutopilot(user);
+    if (!ap) continue;
+    if (ap.lastRunDate === today) continue;
+    const plan = planOf(user);
+    ap.lastRunDate = today;
+    changed = true;
+    if (plan.expired) { ap.lastNote = 'Trial expired — autopilot paused.'; continue; }
+    const usage = leadFinderUsage(user, plan);
+    if (usage.used >= usage.quota) { ap.lastNote = `Monthly quota reached (${usage.quota}). Autopilot resumes next month.`; continue; }
+    const dailyCap = Math.min(Math.max(1, Number(ap.dailyLimit) || 5), AUTOPILOT_MAX_DAILY);
+    const limit = Math.min(dailyCap, usage.quota - usage.used);
+    try {
+      const found = await searchLeads({
+        keywords: ap.keywords.slice(0, 200), title: (ap.title || '').slice(0, 120),
+        size: ap.size || '', location: (ap.location || '').slice(0, 120),
+      }, limit, user.email);
+      user.leadFinder.used = usage.used + Math.min(found.leads.length, limit);
+      // Guardrail: only auto-enroll MX-verified deliverables — never risk
+      // the sender's domain reputation on unknown/invalid addresses.
+      const validOnly = found.leads.filter(l => l.verified === 'valid');
+      const result = validOnly.length ? enrollLeads(user.email, ap.campaignId, validOnly) : { added: 0 };
+      ap.lastNote = `${result.added || 0} new lead${result.added === 1 ? '' : 's'} auto-enrolled from ${found.leads.length} found into "${result.campaignName || 'campaign'}"`;
+      if (!result.added) logEvent('lead-finder', `Autopilot: ${ap.lastNote}`, { owner: user.email });
+      // Wake new prospects immediately if the campaign is already active.
+      const camp = load('campaigns').find(c => c.id === ap.campaignId && c.owner === user.email);
+      if (camp && camp.status === 'active' && result.added) {
+        const prospects = load('prospects');
+        let woke = false;
+        for (const p of prospects.filter(p => p.campaignId === camp.id && !p.finished && p.nextRunAt == null)) {
+          p.stepIndex = 0; p.nextRunAt = Date.now(); woke = true;
+        }
+        if (woke) save('prospects', prospects);
+      }
+    } catch (err) {
+      ap.lastNote = `Autopilot error: ${err.message}`;
+    }
+  }
+  if (changed) save('users', users);
+}
+
 function leadFinderUsage(user, plan) {
   const now = new Date();
   const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -1251,6 +1308,7 @@ function engineTick() {
     }
   }
   if (changed) { save('prospects', prospects); save('tasks', tasks); }
+  autopilotRun().catch(() => {});
 }
 // Long-lived local server ticks forever; serverless functions must not start
 // unmanaged background loops, so on Vercel the engine only runs on-demand
@@ -1860,7 +1918,38 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     send(res, 200, {
       ok: true, provider: leadFinderProvider() || 'builtin',
       used: usage.used, quota: usage.quota, month: usage.month,
+      autopilot: user.leadFinderAutopilot || null,
     });
+  },
+
+  'PUT /api/app/lead-finder/autopilot': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const b = await readBody(req);
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    if (!user) return send(res, 404, { ok: false, error: 'User not found' });
+    const enabled = !!b.enabled;
+    const ap = {
+      enabled,
+      keywords: (b.keywords || user.leadFinderAutopilot?.keywords || '').slice(0, 200),
+      title: (b.title || user.leadFinderAutopilot?.title || '').slice(0, 120),
+      size: b.size || user.leadFinderAutopilot?.size || '',
+      location: (b.location || user.leadFinderAutopilot?.location || '').slice(0, 120),
+      campaignId: b.campaignId || user.leadFinderAutopilot?.campaignId || '',
+      dailyLimit: Math.min(Math.max(1, parseInt(b.dailyLimit, 10) || user.leadFinderAutopilot?.dailyLimit || 5), AUTOPILOT_MAX_DAILY),
+      lastRunDate: user.leadFinderAutopilot?.lastRunDate || null,
+      lastNote: user.leadFinderAutopilot?.lastNote || null,
+    };
+    if (enabled) {
+      if (!ap.keywords.trim()) return send(res, 400, { ok: false, error: 'Enter target domains or keywords for the autopilot search.' });
+      const campaign = load('campaigns').find(c => c.id === ap.campaignId && c.owner === session.email);
+      if (!campaign) return send(res, 400, { ok: false, error: 'Choose one of your campaigns for auto-enrollment.' });
+    }
+    user.leadFinderAutopilot = ap;
+    save('users', users);
+    logEvent('lead-finder', enabled ? `Lead Finder autopilot ON — up to ${ap.dailyLimit} verified leads/day` : 'Lead Finder autopilot off');
+    send(res, 200, { ok: true, autopilot: ap });
   },
 
   'POST /api/app/lead-finder/search': async (req, res) => {

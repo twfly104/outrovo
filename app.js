@@ -885,7 +885,38 @@ async function loadLeadFinderStatus() {
   const { data } = await api('GET', '/api/app/lead-finder/status');
   if (!data.ok) return;
   const src = data.provider === 'apollo' ? 'via Apollo' : data.provider === 'hunter' ? 'via Hunter' : 'built-in verify';
-  $('leadFinderStatus').textContent = `${data.used}/${data.quota} credits used this month · ${src}`;
+  const ap = data.autopilot;
+  $('leadFinderStatus').textContent = `${data.used}/${data.quota} credits used this month · ${src}${ap?.enabled ? ' · ✦ auto-pilot on' : ''}`;
+  const toggle = $('autopilotEnabled');
+  toggle.checked = !!ap?.enabled;
+  $('autopilotSettings').hidden = !ap?.enabled;
+  $('apCampaign').innerHTML = campaigns.map(c => `<option value="${c.id}" ${ap?.campaignId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+  if (ap?.dailyLimit) $('apDailyLimit').value = String(ap.dailyLimit);
+  $('autopilotNote').textContent = ap?.enabled && ap.lastNote ? `Last run: ${ap.lastNote}` : '';
+}
+
+async function saveAutopilot(enabled) {
+  const body = {
+    enabled,
+    keywords: $('lfKeywords').value.trim(),
+    title: $('lfTitle').value.trim(),
+    size: $('lfSize').value,
+    location: $('lfLocation').value.trim(),
+    campaignId: $('apCampaign').value,
+    dailyLimit: Number($('apDailyLimit').value || 5),
+  };
+  const { status, data } = await api('PUT', '/api/app/lead-finder/autopilot', body);
+  if (status !== 200 || !data.ok) {
+    $('autopilotEnabled').checked = false;
+    $('autopilotSettings').hidden = true;
+    $('autopilotNote').textContent = '';
+    $('leadFindNote').textContent = data.error || 'Could not save autopilot.';
+    return;
+  }
+  $('autopilotNote').textContent = enabled
+    ? `✓ Auto-pilot on — up to ${data.autopilot.dailyLimit} verified leads/day into this campaign. First run on the next engine pass.`
+    : 'Auto-pilot off.';
+  loadLeadFinderStatus();
 }
 
 function renderLeadResults(leads) {
@@ -906,6 +937,13 @@ function renderLeadResults(leads) {
 }
 
 function bindLeadFinder() {
+  $('autopilotEnabled').addEventListener('change', e => {
+    $('autopilotSettings').hidden = !e.target.checked;
+    if (e.target.checked) { $('apCampaign').innerHTML = campaigns.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join(''); }
+    saveAutopilot(e.target.checked);
+  });
+  $('apCampaign').addEventListener('change', () => { if ($('autopilotEnabled').checked) saveAutopilot(true); });
+  $('apDailyLimit').addEventListener('change', () => { if ($('autopilotEnabled').checked) saveAutopilot(true); });
   $('leadFindBtn').addEventListener('click', async () => {
     const btn = $('leadFindBtn');
     const note = $('leadFindNote');

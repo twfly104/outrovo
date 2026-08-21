@@ -60,7 +60,8 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - `STRIPE_SECRET_KEY` (+ `STRIPE_WEBHOOK_SECRET` for webhook activation) —
   otherwise checkout returns manual instructions.
 - `APOLLO_API_KEY` or `HUNTER_API_KEY` — powers Lead Finder search
-  (Campaigns page). Without one, Lead Finder falls back to crawling the
+  (Campaigns page), including optional daily auto-pilot
+  (`PUT /api/app/lead-finder/autopilot`). Without one, Lead Finder falls back to crawling the
   target company domains the user types in and MX-verifies what it finds.
   Quotas per plan: trial 25, starter 100, growth 1,000, scale/agency 10,000
   credits/month (1 credit per returned lead), tracked on `user.leadFinder`.
