@@ -222,6 +222,134 @@ function recordSend(sender) {
   save('senders', senders);
 }
 
+// ---------- suppression list & one-click unsubscribe ----------
+// Google/Yahoo require one-click unsubscribe for bulk senders (RFC 8058).
+// Each user carries a suppression list; every campaign email gets a
+// List-Unsubscribe header + footer link signed with an HMAC token.
+const PUBLIC_URL = (process.env.PUBLIC_URL || 'https://outrovo.onrender.com').replace(/\/$/, '');
+const UNSUB_KEY = crypto.createHash('sha256')
+  .update(`${process.env.DATA_KEY || ADMIN_KEY}:outrovo-unsub`)
+  .digest();
+
+function unsubToken(ownerEmail, prospectEmail) {
+  return crypto.createHmac('sha256', UNSUB_KEY)
+    .update(`${ownerEmail}|${prospectEmail}`)
+    .digest('base64url');
+}
+
+function unsubUrl(ownerEmail, prospectEmail) {
+  const q = new URLSearchParams({ u: ownerEmail, e: prospectEmail, t: unsubToken(ownerEmail, prospectEmail) });
+  return `${PUBLIC_URL}/api/unsubscribe?${q}`;
+}
+
+function suppressionList(ownerEmail) {
+  const user = load('users').find(u => u.email === ownerEmail);
+  return user?.suppressed || [];
+}
+
+function isSuppressed(ownerEmail, email) {
+  return suppressionList(ownerEmail).some(s => s.email === email);
+}
+
+function suppressEmail(ownerEmail, email, reason = 'unsubscribe') {
+  const users = load('users');
+  const user = users.find(u => u.email === ownerEmail);
+  if (!user) return false;
+  user.suppressed = user.suppressed || [];
+  if (!user.suppressed.some(s => s.email === email)) {
+    user.suppressed.push({ email, reason, at: new Date().toISOString() });
+    save('users', users);
+    logEvent('unsubscribe', `${email} opted out (${reason})`);
+    // Stop any in-flight sequences for this prospect across the owner's campaigns.
+    const ownerCampaigns = new Set(load('campaigns').filter(c => c.owner === ownerEmail).map(c => c.id));
+    const prospects = load('prospects');
+    let touched = 0;
+    for (const p of prospects) {
+      if (ownerCampaigns.has(p.campaignId) && p.email === email && !p.finished) {
+        p.finished = true; p.nextRunAt = null; p.suppressed = true; touched++;
+      }
+    }
+    if (touched) save('prospects', prospects);
+  }
+  return true;
+}
+
+// ---------- campaign pacing ----------
+// Per-campaign daily cap + send window in the campaign's timezone. Outside
+// the window or past the cap, prospects are deferred — never failed.
+function hourInTz(tz) {
+  try {
+    return Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: tz || 'UTC' }).format(new Date()));
+  } catch {
+    return new Date().getUTCHours();
+  }
+}
+
+function campaignWindowOk(campaign) {
+  const start = Number(campaign.sendWindowStart ?? 9);
+  const end = Number(campaign.sendWindowEnd ?? 17);
+  if (start === end) return true; // window disabled
+  const hour = hourInTz(campaign.timezone);
+  return start < end ? (hour >= start && hour < end) : (hour >= start || hour < end);
+}
+
+function campaignUsedToday(campaign) {
+  const today = new Date().toISOString().slice(0, 10);
+  return campaign.sentLog?.date === today ? campaign.sentLog.count : 0;
+}
+
+function campaignDailyCap(campaign) {
+  return Math.max(1, Number(campaign.dailyCap || 25));
+}
+
+function recordCampaignSend(campaignId, bounced = false) {
+  if (!campaignId) return;
+  const campaigns = load('campaigns');
+  const c = campaigns.find(x => x.id === campaignId);
+  if (!c) return;
+  const today = new Date().toISOString().slice(0, 10);
+  c.sentLog = { date: today, count: campaignUsedToday(c) + 1 };
+  c.sentCount = Number(c.sentCount || 0) + 1;
+  if (bounced) c.bounceCount = Number(c.bounceCount || 0) + 1;
+  save('campaigns', campaigns);
+}
+
+// ---------- bounce classification ----------
+// 5xx / permanent SMTP errors → hard bounce: stop the sequence for this
+// prospect. 4xx / transient → soft: retry a few times before giving up.
+const HARD_BOUNCE_RE = /\b5\d\d\b|user unknown|does not exist|mailbox unavailable|no such user|invalid recipient|recipient rejected|mailbox not found/i;
+const SOFT_BOUNCE_RE = /\b4\d\d\b|try again|temporarily|rate limit|greylist|throttl/i;
+const SOFT_RETRY_MS = Number(process.env.SOFT_RETRY_MS || 30 * 60000);
+const SOFT_MAX_RETRIES = 3;
+
+function classifySendError(err) {
+  const text = `${err?.responseCode || ''} ${err?.message || err}`;
+  if (HARD_BOUNCE_RE.test(text)) return 'hard';
+  if (SOFT_BOUNCE_RE.test(text)) return 'soft';
+  return 'unknown';
+}
+
+// ---------- LinkedIn task safety ----------
+// Daily action budget per user (human-safe pacing), spread across a work
+// window. External autopilots close the loop via a signed callback endpoint.
+const LINKEDIN_DAILY_BUDGET = Number(process.env.LINKEDIN_DAILY_BUDGET || 20);
+const LINKEDIN_SPREAD_HOURS = Number(process.env.LINKEDIN_SPREAD_HOURS || 6);
+
+function linkedinBudget(user) {
+  return Math.max(1, Number(user?.linkedinBudget || LINKEDIN_DAILY_BUDGET));
+}
+
+function linkedinUsedToday(ownerEmail) {
+  const today = new Date().toISOString().slice(0, 10);
+  return load('tasks').filter(t => t.owner === ownerEmail && (t.at || '').slice(0, 10) === today).length;
+}
+
+function integrationTokenOk(token) {
+  if (!token) return null;
+  const hash = crypto.createHash('sha256').update(token).digest('hex');
+  return load('users').find(u => u.integrationTokenHash && u.integrationTokenHash === hash) || null;
+}
+
 // ---------- spintax & personalization ----------
 // Spintax: {Hi|Hello|Hey} spins one variant, supports nesting. Guards against
 // pathological input with a depth limit. Deterministic per prospect + template
@@ -262,11 +390,13 @@ if (smtpConfigured && nodemailer) {
     auth: { user: SMTP.user, pass: SMTP.pass },
   });
 }
-async function sendViaResend(to, subject, text, from = RESEND_FROM) {
+async function sendViaResend(to, subject, text, from = RESEND_FROM, headers = null) {
+  const payload = { from, to: [to], subject, text };
+  if (headers) payload.headers = headers;
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_KEY}` },
-    body: JSON.stringify({ from, to: [to], subject, text }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.text();
@@ -289,7 +419,16 @@ function senderTransport(sender) {
 // legacy env SMTP transport kept for backward compatibility.
 async function sendEmail(campaign, prospect, step, opts = {}) {
   const subject = personalize(step.subject, prospect);
-  const body = personalize(step.body, prospect);
+  // Compliance footer + List-Unsubscribe headers on real campaign sends
+  // (skipped for the test-email tool, which passes campaign.id undefined).
+  const withUnsub = Boolean(campaign.id && campaign.owner);
+  const link = withUnsub ? unsubUrl(campaign.owner, prospect.email) : null;
+  const body = personalize(step.body, prospect)
+    + (withUnsub ? `\n\n—\nDon't want these emails? Unsubscribe: ${link}` : '');
+  const unsubHeaders = withUnsub ? {
+    'List-Unsubscribe': `<${link}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  } : null;
   const label = `“${campaign.name}”: email to ${prospect.email}`;
 
   let sender = opts.sender || null;
@@ -306,7 +445,8 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
   }
 
   if (sender.resend) {
-    await sendViaResend(prospect.email, subject, body, senderDisplayName(sender));
+    await sendViaResend(prospect.email, subject, body, senderDisplayName(sender), unsubHeaders);
+    recordCampaignSend(campaign.id);
     logEvent('sent', `${label} (via Resend)`, { subject, sender: sender.email });
     return { demo: false, sender: sender.email };
   }
@@ -320,8 +460,9 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
     return { demo: true, sender: sender.email };
   }
   const from = senderHasSmtp ? senderDisplayName(sender) : (SMTP.from || senderDisplayName(sender));
-  await t.sendMail({ from, to: prospect.email, subject, text: body });
+  await t.sendMail({ from, to: prospect.email, subject, text: body, headers: unsubHeaders || undefined });
   recordSend(sender);
+  recordCampaignSend(campaign.id);
   logEvent('sent', `${label} (via ${sender.email})`, { subject, sender: sender.email });
   return { demo: false, sender: sender.email };
 }
@@ -548,12 +689,30 @@ function engineTick() {
   let changed = false;
 
   for (const campaign of campaigns.filter(c => c.status === 'active')) {
+    const owner = campaign.owner ? load('users').find(u => u.email === campaign.owner) : null;
+    const inWindow = campaignWindowOk(campaign);
+    // Sends are dispatched async, so the on-disk counter lags within a tick.
+    // Count in-flight dispatches too, otherwise a burst blows past the cap.
+    let dispatchedThisTick = 0;
     for (const prospect of prospects.filter(p => p.campaignId === campaign.id)) {
       if (prospect.finished || !prospect.nextRunAt || prospect.nextRunAt > now) continue;
       const step = campaign.steps[prospect.stepIndex];
       if (!step) { prospect.finished = true; changed = true; continue; }
 
       if (step.type === 'email') {
+        // Opted out since enrollment → stop quietly.
+        if (campaign.owner && isSuppressed(campaign.owner, prospect.email)) {
+          prospect.finished = true; prospect.nextRunAt = null; prospect.suppressed = true;
+          changed = true;
+          continue;
+        }
+        // Campaign pacing: outside the send window or past the daily cap →
+        // defer, don't fail.
+        if (!inWindow || campaignUsedToday(campaign) + dispatchedThisTick >= campaignDailyCap(campaign)) {
+          prospect.nextRunAt = now + CAP_RETRY_MS;
+          changed = true;
+          continue;
+        }
         const sender = campaign.owner ? pickSender(campaign.owner, prospect) : gatewaySender();
         if (!sender) {
           // Every inbox capped for today: retry this prospect later, keep step.
@@ -561,11 +720,49 @@ function engineTick() {
           changed = true;
           continue;
         }
-        sendEmail(campaign, prospect, step).catch(err =>
-          logEvent('error', `Send failed to ${prospect.email}: ${err.message}`));
+        dispatchedThisTick++;
+        sendEmail(campaign, prospect, step).catch(err => {
+          const kind = classifySendError(err);
+          if (kind === 'hard') {
+            prospect.bounced = { kind: 'hard', at: new Date().toISOString(), reason: err.message.slice(0, 200) };
+            prospect.finished = true; prospect.nextRunAt = null;
+            recordCampaignSend(campaign.id, true);
+            logEvent('bounce', `Hard bounce: ${prospect.email} — sequence stopped`, { reason: err.message.slice(0, 200) });
+          } else if (kind === 'soft' && Number(prospect.softRetries || 0) < SOFT_MAX_RETRIES) {
+            // stepIndex already advanced below — rewind so the retry re-runs
+            // this email step rather than skipping ahead.
+            prospect.stepIndex -= 1;
+            prospect.softRetries = Number(prospect.softRetries || 0) + 1;
+            prospect.nextRunAt = Date.now() + SOFT_RETRY_MS;
+            logEvent('soft-bounce', `Soft bounce: ${prospect.email} — retry ${prospect.softRetries}/${SOFT_MAX_RETRIES} in 30 min`);
+          } else {
+            logEvent('error', `Send failed to ${prospect.email}: ${err.message}`);
+          }
+          save('prospects', load('prospects').map(p => p.id === prospect.id ? prospect : p));
+        });
       } else if (step.type === 'task') {
-        tasks.unshift({ id: crypto.randomUUID(), kind: 'linkedin', note: personalize(step.note, prospect), prospect: prospect.email, campaign: campaign.name, done: false, at: new Date().toISOString() });
-        logEvent('task', `LinkedIn task for ${prospect.email}: ${personalize(step.note, prospect)}`);
+        // LinkedIn safety: plan gate + daily action budget (owner-scoped;
+        // legacy ownerless campaigns keep the old unguarded behavior).
+        // Over budget → defer the prospect, never drop the task.
+        const plan = owner ? planOf(owner) : null;
+        if (plan && !plan.linkedIn) {
+          logEvent('task', `LinkedIn step skipped for ${prospect.email} — ${plan.name} plan has no LinkedIn actions`);
+        } else if (campaign.owner && linkedinUsedToday(campaign.owner) >= linkedinBudget(owner)) {
+          prospect.nextRunAt = now + CAP_RETRY_MS;
+          changed = true;
+          continue;
+        } else {
+          // Paced surfacing: the task becomes due at a random point within the
+          // spread window instead of instantly, so action patterns stay human.
+          const dueAt = now + Math.round(Math.random() * LINKEDIN_SPREAD_HOURS * 3600000);
+          tasks.unshift({
+            id: crypto.randomUUID(), kind: 'linkedin', taskKind: step.taskKind || 'connect',
+            note: personalize(step.note, prospect), prospect: prospect.email,
+            campaign: campaign.name, owner: campaign.owner || null,
+            done: false, dueAt, at: new Date().toISOString(),
+          });
+          logEvent('task', `LinkedIn task for ${prospect.email}: ${personalize(step.note, prospect)}`);
+        }
       }
       prospect.stepIndex += 1;
       const nextStep = campaign.steps[prospect.stepIndex];
@@ -750,20 +947,85 @@ const router = {
     send(res, 200, { ok: true, user: publicUser(user), plan: b.plan });
   },
 
+  // --- one-click unsubscribe (public, HMAC-signed) ---
+  // GET = link click from a mail client/browser, POST = RFC 8058 one-click
+  // from the mailbox provider's unsubscribe button.
+  'GET /api/unsubscribe': (req, res, _id, query) => {
+    const u = (query?.get('u') || '').toLowerCase();
+    const e = (query?.get('e') || '').toLowerCase();
+    const t = query?.get('t') || '';
+    const okToken = u && e && t === unsubToken(u, e);
+    if (okToken) suppressEmail(u, e, 'unsubscribe-link');
+    const title = okToken ? "You've been unsubscribed" : 'Invalid unsubscribe link';
+    const msg = okToken
+      ? `${e} will no longer receive emails from this sender.`
+      : 'This link is invalid or has expired. Ask the sender to remove you manually.';
+    res.writeHead(okToken ? 200 : 400, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+      <style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f7f7f8;color:#0b0c0e}
+      .card{background:#fff;border:1px solid #e4e6ea;border-radius:16px;padding:40px;max-width:420px;text-align:center}</style></head>
+      <body><div class="card"><h1 style="font-size:1.3rem">${title}</h1><p>${msg}</p></div></body></html>`);
+  },
+
+  'POST /api/unsubscribe': async (req, res, _id, query) => {
+    const b = await readBody(req).catch(() => ({}));
+    const u = (query?.get('u') || b.u || '').toLowerCase();
+    const e = (query?.get('e') || b.e || '').toLowerCase();
+    const t = query?.get('t') || b.t || '';
+    if (!u || !e || t !== unsubToken(u, e)) return send(res, 403, { ok: false, error: 'Invalid token' });
+    suppressEmail(u, e, 'one-click');
+    send(res, 200, { ok: true });
+  },
+
+  // --- suppression list management ---
+  'GET /api/app/suppression': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    send(res, 200, { ok: true, suppressed: suppressionList(session.email) });
+  },
+
+  'POST /api/app/suppression': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const b = await readBody(req);
+    const email = (b.email || '').trim().toLowerCase();
+    if (!isEmail(email)) return send(res, 400, { ok: false, error: 'Valid email required.' });
+    suppressEmail(session.email, email, 'manual');
+    send(res, 200, { ok: true, suppressed: suppressionList(session.email) });
+  },
+
+  'DELETE /api/app/suppression/:id': (req, res, id) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const email = decodeURIComponent(id).toLowerCase();
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    if (!user) return send(res, 404, { ok: false });
+    user.suppressed = (user.suppressed || []).filter(s => s.email !== email);
+    save('users', users);
+    send(res, 200, { ok: true });
+  },
+
   // --- app (auth required) ---
   'GET /api/app/overview': (req, res) => {
-    if (!requireAuth(req, res)) return;
+    const session = requireAuth(req, res);
+    if (!session) return;
     const campaigns = load('campaigns');
     const prospects = load('prospects');
-    const events = load('events');
+    const replies = load('replies');
     const tasks = load('tasks');
+    const mine = campaigns.filter(c => c.owner === session.email);
+    const mineIds = new Set(mine.map(c => c.id));
+    const myProspects = mineIds.size ? prospects.filter(p => mineIds.has(p.campaignId)) : prospects;
     send(res, 200, { ok: true, stats: {
-      campaigns: campaigns.length,
-      active: campaigns.filter(c => c.status === 'active').length,
-      prospects: prospects.length,
-      sent: events.filter(e => e.type === 'sent').length,
-      openTasks: tasks.filter(t => !t.done).length,
-      engine: smtpConfigured ? 'smtp' : 'demo',
+      campaigns: mine.length || campaigns.length,
+      active: (mine.length ? mine : campaigns).filter(c => c.status === 'active').length,
+      prospects: myProspects.length,
+      sent: mine.reduce((acc, c) => acc + Number(c.sentCount || 0), 0) || load('events').filter(e => e.type === 'sent').length,
+      replies: replies.filter(r => !r.owner || r.owner === session.email).length,
+      bounces: myProspects.filter(p => p.bounced).length,
+      openTasks: tasks.filter(t => !t.done && (!t.owner || t.owner === session.email)).length,
+      engine: engineMode(session.email),
     } });
   },
 
@@ -774,6 +1036,9 @@ const router = {
     send(res, 200, { ok: true, campaigns: campaigns.map(c => ({
       ...c, prospects: prospects.filter(p => p.campaignId === c.id).length,
       finished: prospects.filter(p => p.campaignId === c.id && p.finished).length,
+      bounced: prospects.filter(p => p.campaignId === c.id && p.bounced).length,
+      sentToday: campaignUsedToday(c),
+      capToday: campaignDailyCap(c),
     })) });
   },
 
@@ -795,10 +1060,30 @@ const router = {
     const campaign = {
       id: crypto.randomUUID(), name: b.name.trim(), status: 'draft', owner: session.email,
       steps: b.steps.map(s => ({ ...s, delayMinutes: Number(s.delayMinutes || 0) })),
+      dailyCap: Math.max(1, Math.min(500, Number(b.dailyCap || 25))),
+      sendWindowStart: Math.max(0, Math.min(23, Number(b.sendWindowStart ?? 9))),
+      sendWindowEnd: Math.max(0, Math.min(23, Number(b.sendWindowEnd ?? 17))),
+      timezone: typeof b.timezone === 'string' && b.timezone ? b.timezone : 'UTC',
+      sentCount: 0, bounceCount: 0,
       createdAt: new Date().toISOString(),
     };
     campaigns.push(campaign); save('campaigns', campaigns);
     send(res, 201, { ok: true, campaign });
+  },
+
+  'PATCH /api/app/campaigns/:id': async (req, res, id) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const campaigns = load('campaigns');
+    const c = campaigns.find(x => x.id === id && x.owner === session.email);
+    if (!c) return send(res, 404, { ok: false, error: 'Not found' });
+    const b = await readBody(req);
+    if (b.dailyCap != null) c.dailyCap = Math.max(1, Math.min(500, Number(b.dailyCap)));
+    if (b.sendWindowStart != null) c.sendWindowStart = Math.max(0, Math.min(23, Number(b.sendWindowStart)));
+    if (b.sendWindowEnd != null) c.sendWindowEnd = Math.max(0, Math.min(23, Number(b.sendWindowEnd)));
+    if (typeof b.timezone === 'string') c.timezone = b.timezone || 'UTC';
+    save('campaigns', campaigns);
+    send(res, 200, { ok: true, campaign: c });
   },
 
   'POST /api/app/campaigns/:id/activate': (req, res, id) => {
@@ -948,9 +1233,12 @@ const router = {
 
     const BUILTIN_COLS = { email: 'email', 'first name': 'firstName', firstname: 'firstName', first_name: 'firstName', 'last name': 'lastName', lastname: 'lastName', last_name: 'lastName', company: 'company' };
 
+    let skippedSuppressed = 0;
     const add = (entry) => {
       const email = (entry.email || '').trim().toLowerCase();
-      if (!isEmail(email) || existing.has(email)) return false;
+      if (!isEmail(email)) return false;
+      if (isSuppressed(session.email, email)) { skippedSuppressed++; return false; }
+      if (existing.has(email)) return false;
       existing.add(email);
       prospects.push({
         id: crypto.randomUUID(), campaignId: b.campaignId, email,
@@ -995,7 +1283,7 @@ const router = {
       }
     }
     save('prospects', prospects);
-    send(res, 200, { ok: true, added, total: existing.size, customVars: [...importedNames] });
+    send(res, 200, { ok: true, added, total: existing.size, customVars: [...importedNames], skippedSuppressed });
   },
 
   'GET /api/app/prospects': (req, res, _id, query) => {
@@ -1016,14 +1304,16 @@ const router = {
   },
 
   'GET /api/app/inbox': (req, res) => {
-    if (!requireAuth(req, res)) return;
-    const replies = load('replies');
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const replies = load('replies').filter(r => !r.owner || r.owner === session.email);
     send(res, 200, { ok: true, replies: replies.slice(0, 100) });
   },
 
   'POST /api/app/inbox/simulate': (req, res) => {
     // Demo/simulated inbound until IMAP/webhook is wired
-    if (!requireAuth(req, res)) return;
+    const session = requireAuth(req, res);
+    if (!session) return;
     const replies = load('replies');
     replies.unshift({
       id: crypto.randomUUID(),
@@ -1032,6 +1322,7 @@ const router = {
       body: 'Thanks for reaching out — this actually looks relevant. Can you send over a short demo link?',
       prospect: 'Sarah Connor',
       campaign: 'Q3 founders',
+      owner: session.email,
       read: false,
       at: new Date().toISOString(),
     });
@@ -1039,19 +1330,40 @@ const router = {
     send(res, 200, { ok: true, message: 'Simulated reply added to inbox.' });
   },
 
-  // Resend inbound webhook (set RESEND_SIGNING_SECRET to verify)
+  // Inbound reply webhook — Resend inbound (set RESEND_SIGNING_SECRET) or any
+  // generic mail hook. A matched reply stops the prospect's sequence.
   'POST /api/email/receive': async (req, res) => {
     const b = await readBody(req).catch(() => ({}));
     const secret = process.env.RESEND_SIGNING_SECRET;
     if (secret && b?.secret && b.secret !== secret) return send(res, 403, { ok: false, error: 'Invalid secret' });
-    const from = b?.from || b?.data?.from || 'unknown@unknown';
+    const fromRaw = b?.from || b?.data?.from || 'unknown@unknown';
+    const from = (fromRaw.match(/[\w.+-]+@[\w-]+\.[\w.]+/) || [fromRaw])[0].toLowerCase();
     const subject = b?.subject || b?.data?.subject || '(no subject)';
     const body = b?.text || b?.data?.text || b?.html?.replace(/<[^>]+>/g, ' ') || '';
+
+    // Match the reply to a prospect and stop their sequence.
+    const campaigns = load('campaigns');
+    const prospects = load('prospects');
+    const prospect = prospects.find(p => p.email === from);
+    let owner = null, campaignName = 'incoming', prospectName = from.split('@')[0];
+    if (prospect) {
+      const campaign = campaigns.find(c => c.id === prospect.campaignId);
+      owner = campaign?.owner || null;
+      campaignName = campaign?.name || 'incoming';
+      prospectName = [prospect.firstName, prospect.lastName].filter(Boolean).join(' ') || prospectName;
+      if (!prospect.replied) {
+        prospect.replied = true;
+        prospect.finished = true;
+        prospect.nextRunAt = null;
+        save('prospects', prospects);
+        logEvent('reply', `${from} replied in “${campaignName}” — sequence stopped`);
+      }
+    }
     const replies = load('replies');
-    replies.unshift({ id: crypto.randomUUID(), from, subject, body, prospect: from.split('@')[0], campaign: 'incoming', read: false, at: new Date().toISOString() });
+    replies.unshift({ id: crypto.randomUUID(), from, subject, body, prospect: prospectName, campaign: campaignName, owner, read: false, at: new Date().toISOString() });
     save('replies', replies);
-    logEvent('received', `Reply from ${from}: ${subject}`);
-    send(res, 200, { received: true });
+    if (!prospect) logEvent('received', `Reply from ${from}: ${subject}`);
+    send(res, 200, { received: true, matched: Boolean(prospect) });
   },
 
   'POST /api/app/inbox/:id/read': (req, res, id) => {
@@ -1070,8 +1382,106 @@ const router = {
   },
 
   'GET /api/app/tasks': (req, res) => {
-    if (!requireAuth(req, res)) return;
-    send(res, 200, { ok: true, tasks: load('tasks') });
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const user = load('users').find(u => u.email === session.email);
+    const now = Date.now();
+    const tasks = load('tasks').filter(t => !t.owner || t.owner === session.email);
+    send(res, 200, {
+      ok: true,
+      tasks,
+      linkedin: {
+        usedToday: linkedinUsedToday(session.email),
+        budget: linkedinBudget(user),
+        dueNow: tasks.filter(t => !t.done && t.kind === 'linkedin' && (!t.dueAt || t.dueAt <= now)).length,
+        scheduled: tasks.filter(t => !t.done && t.kind === 'linkedin' && t.dueAt && t.dueAt > now).length,
+      },
+    });
+  },
+
+  // User-level sending/LinkedIn preferences.
+  'POST /api/app/settings': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const b = await readBody(req);
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    if (!user) return send(res, 404, { ok: false });
+    if (b.linkedinBudget != null) user.linkedinBudget = Math.max(1, Math.min(100, Number(b.linkedinBudget)));
+    save('users', users);
+    send(res, 200, { ok: true, linkedinBudget: linkedinBudget(user) });
+  },
+
+  // --- LinkedIn autopilot bridge ---
+  // Generate/revoke a per-user integration token (shown once, stored hashed).
+  'POST /api/app/integrations/token': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const token = `ovk_${crypto.randomBytes(24).toString('base64url')}`;
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    if (!user) return send(res, 404, { ok: false });
+    user.integrationTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    save('users', users);
+    logEvent('integration', 'LinkedIn autopilot token generated');
+    send(res, 200, { ok: true, token, callbackUrl: `${PUBLIC_URL}/api/integrations/linkedin/callback` });
+  },
+
+  'DELETE /api/app/integrations/token': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    if (user) { delete user.integrationTokenHash; save('users', users); }
+    send(res, 200, { ok: true });
+  },
+
+  'GET /api/app/integrations/status': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const user = load('users').find(u => u.email === session.email);
+    send(res, 200, { ok: true, hasToken: Boolean(user?.integrationTokenHash), callbackUrl: `${PUBLIC_URL}/api/integrations/linkedin/callback` });
+  },
+
+  // Autopilot callback: PhantomBuster/Zapier/etc. report task outcomes.
+  // Auth: x-integration-token header or ?token=. Body:
+  //   { taskId } | { prospect, campaign? }  +  outcome: done|failed|connected|replied, note?
+  'POST /api/integrations/linkedin/callback': async (req, res, _id, query) => {
+    const b = await readBody(req).catch(() => ({}));
+    const token = req.headers['x-integration-token'] || query?.get('token') || b.token;
+    const user = integrationTokenOk(token);
+    if (!user) return send(res, 403, { ok: false, error: 'Invalid integration token' });
+    const outcome = ['done', 'failed', 'connected', 'replied'].includes(b.outcome) ? b.outcome : 'done';
+
+    const tasks = load('tasks');
+    let task = b.taskId
+      ? tasks.find(t => t.id === b.taskId && t.owner === user.email)
+      : tasks.find(t => !t.done && t.owner === user.email && t.prospect === (b.prospect || '').toLowerCase());
+    if (task) {
+      task.done = outcome !== 'failed';
+      task.outcome = outcome;
+      task.doneAt = new Date().toISOString();
+      if (b.note) task.note = `${task.note} — ${String(b.note).slice(0, 200)}`;
+      save('tasks', tasks);
+    }
+
+    // A LinkedIn reply means the prospect engaged — stop their email sequence.
+    const prospectEmail = (b.prospect || task?.prospect || '').toLowerCase();
+    if (outcome === 'replied' && prospectEmail) {
+      const email = prospectEmail;
+      const ownerCampaigns = new Set(load('campaigns').filter(c => c.owner === user.email).map(c => c.id));
+      const prospects = load('prospects');
+      let touched = false;
+      for (const p of prospects) {
+        if (ownerCampaigns.has(p.campaignId) && p.email === email && !p.finished) {
+          p.replied = true; p.finished = true; p.nextRunAt = null; touched = true;
+        }
+      }
+      if (touched) save('prospects', prospects);
+    }
+
+    logEvent('linkedin', `Autopilot: ${outcome}${task ? ` — ${task.prospect}` : b.prospect ? ` — ${b.prospect}` : ''}${b.note ? ` (${String(b.note).slice(0, 120)})` : ''}`);
+    send(res, 200, { ok: true, matched: Boolean(task) });
   },
 
   'POST /api/app/tasks/:id/done': (req, res, id) => {

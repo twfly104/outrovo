@@ -101,3 +101,33 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   Domain health renders it instantly.
 - IMPORTANT: PATCH is an allowed method in the server allowlist — anything
   adding a route with another method must extend the allowlist too.
+
+## Phase 2/3 additions (deliverability ops, compliance, LinkedIn safety)
+- Campaign pacing: `dailyCap` (default 25), `sendWindowStart/End` hours,
+  `timezone` (Intl tz, fallback UTC). Engine defers prospects outside the
+  window or past the cap (CAP_RETRY_MS 1h) — never fails. `sentLog`,
+  `sentCount`, `bounceCount` counters on the campaign record. Caps count
+  in-tick async dispatches (`dispatchedThisTick`) so bursts can't overrun.
+- Unsubscribe: every campaign email gets a footer link + `List-Unsubscribe` /
+  `List-Unsubscribe-Post: One-Click` headers pointing at
+  `GET|POST /api/unsubscribe?u&e&t` (HMAC-SHA256 token from UNSUB_KEY,
+  derived from DATA_KEY/ADMIN_KEY). Per-user `user.suppressed[]` list;
+  suppressing stops in-flight sequences and skips future imports
+  (`skippedSuppressed` in import response). Manage via /api/app/suppression.
+- Bounces: `classifySendError` (HARD_BOUNCE_RE/SOFT_BOUNCE_RE). Hard →
+  prospect.bounced + finished + bounceCount. Soft → same-step retry
+  (stepIndex rewound in the catch — it already advanced), max 3 × 30 min.
+- Replies: POST /api/email/receive matches `from` to a prospect, sets
+  replied/finished (sequence stops), reply records carry `owner`; inbox and
+  tasks endpoints are owner-filtered. Legacy ownerless records stay visible.
+- LinkedIn: task steps have `taskKind` (connect|message|view), tasks carry
+  `owner` + `dueAt` (random within LINKEDIN_SPREAD_HOURS 6h). Daily budget
+  `user.linkedinBudget` (env LINKEDIN_DAILY_BUDGET default 20, cap 100) —
+  over budget defers the prospect. Plan gate: only plans with linkedIn:true.
+- Autopilot bridge: POST /api/app/integrations/token issues `ovk_…` (shown
+  once, sha256 stored). POST /api/integrations/linkedin/callback with
+  `x-integration-token` marks tasks done by taskId or prospect email;
+  outcome=replied also stops the prospect's email sequence (prospect email
+  falls back to the task's own prospect when only taskId is sent).
+- PUBLIC_URL env sets absolute URLs in unsubscribe links/callback examples
+  (defaults to https://outrovo.onrender.com).

@@ -138,6 +138,38 @@
 
             <div id="stepsEditor"></div>
             <button class="btn btn-ghost btn-s" id="addStepBtn">+ Add step</button>
+            <details class="pacing-panel">
+              <summary>Sending pace (daily cap &amp; send window)</summary>
+              <div class="field-row" style="margin-top:12px;">
+                <div class="field">
+                  <label>Daily email cap</label>
+                  <input id="cDailyCap" type="number" value="25" min="1" max="500" />
+                </div>
+                <div class="field">
+                  <label>Window start (hour)</label>
+                  <input id="cWindowStart" type="number" value="9" min="0" max="23" />
+                </div>
+                <div class="field">
+                  <label>Window end (hour)</label>
+                  <input id="cWindowEnd" type="number" value="17" min="0" max="23" />
+                </div>
+              </div>
+              <div class="field">
+                <label>Timezone</label>
+                <select id="cTimezone">
+                  <option value="UTC">UTC</option>
+                  <option value="America/New_York">Eastern (New York)</option>
+                  <option value="America/Chicago">Central (Chicago)</option>
+                  <option value="America/Denver">Mountain (Denver)</option>
+                  <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
+                  <option value="Europe/London">London</option>
+                  <option value="Europe/Berlin">Berlin</option>
+                  <option value="Asia/Singapore">Singapore</option>
+                  <option value="Australia/Sydney">Sydney</option>
+                </select>
+              </div>
+              <p class="settings-note">Emails only go out inside this window, in this timezone, and stop at the daily cap. Queued prospects roll over to the next day automatically.</p>
+            </details>
             <div class="modal-actions">
               <button class="btn btn-primary" id="saveCampaignBtn">Create campaign</button>
             </div>
@@ -199,7 +231,10 @@
       <section class="app-page" id="page-activity" hidden>
         <h1>Activity</h1>
         <div class="app-card-block">
-          <h2>LinkedIn to-dos</h2>
+          <div class="li-meter-head">
+            <h2>LinkedIn to-dos</h2>
+            <span id="liMeter"></span>
+          </div>
           <ul class="event-list" id="taskList"></ul>
         </div>
         <div class="app-card-block">
@@ -270,6 +305,36 @@
             <div class="field"><button class="btn btn-dark btn-s" id="sdAuditBtn" style="margin-top:26px;">Run diagnostic</button></div>
           </div>
           <div class="tool-result" id="sdAuditResult"></div>
+        </div>
+        <div class="app-card-block">
+          <h2>LinkedIn safety</h2>
+          <p class="settings-note">LinkedIn actions are paced to stay inside human-normal limits. The daily budget caps
+          how many tasks the queue surfaces per day; new tasks spread across a 6-hour window instead of appearing all at once.</p>
+          <div class="field-row">
+            <div class="field"><label>Daily LinkedIn action budget</label><input id="liBudget" type="number" value="20" min="1" max="100" /></div>
+            <div class="field"><button class="btn btn-dark btn-s" id="liBudgetBtn" style="margin-top:26px;">Save</button></div>
+          </div>
+          <div class="tool-result" id="liBudgetResult"></div>
+        </div>
+        <div class="app-card-block">
+          <h2>LinkedIn autopilot bridge</h2>
+          <p class="settings-note">Use an external autopilot (PhantomBuster, Zapier, your own scripts) to execute the
+          LinkedIn tasks Outrovo queues. Generate a token, then have the tool POST outcomes back — Outrovo marks tasks
+          done and stops the email sequence when a prospect replies on LinkedIn.</p>
+          <div id="integrationStatus"></div>
+          <button class="btn btn-primary btn-s" id="genTokenBtn">Generate integration token</button>
+          <button class="btn btn-ghost btn-s" id="revokeTokenBtn" hidden>Revoke token</button>
+          <div class="tool-result" id="integrationResult"></div>
+        </div>
+        <div class="app-card-block">
+          <h2>Suppression list</h2>
+          <p class="settings-note">Anyone who unsubscribes lands here and is skipped by every campaign — including future
+          imports. Every email you send carries a one-click unsubscribe link automatically.</p>
+          <div class="field-row">
+            <div class="field"><label>Block an address manually</label><input id="suppEmail" placeholder="ceo@competitor.com" /></div>
+            <div class="field"><button class="btn btn-dark btn-s" id="suppAddBtn" style="margin-top:26px;">Add to list</button></div>
+          </div>
+          <div id="suppList"></div>
         </div>
         <div class="app-card-block">
           <h2>Sending engine</h2>

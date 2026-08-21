@@ -39,6 +39,9 @@ async function init() {
   bindTools();
   bindSenders();
   bindDomainDiag();
+  bindLinkedInSafety();
+  bindIntegration();
+  bindSuppression();
   loadAll();
 }
 
@@ -67,7 +70,7 @@ function showPage(name) {
   if (name === 'prospects') loadProspects();
   if (name === 'activity') loadActivity();
   if (name === 'overview') loadOverview();
-  if (name === 'settings') { loadEngine(); loadSenders(); loadDomainDiag(); }
+  if (name === 'settings') { loadEngine(); loadSenders(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadSuppression(); }
 }
 
 // ---------- logout ----------
@@ -87,7 +90,7 @@ async function loadOverview() {
   const s = data.stats;
   const cards = [
     ['Campaigns', s.campaigns], ['Active', s.active], ['People', s.prospects],
-    ['Emails sent', s.sent], ['To-dos', s.openTasks],
+    ['Emails sent', s.sent], ['Replies', s.replies ?? 0], ['Bounces', s.bounces ?? 0], ['To-dos', s.openTasks],
   ];
   $('statGrid').innerHTML = cards.map(([label, n]) =>
     `<div class="stat-card"><span>${label}</span><strong>${n}</strong></div>`).join('');
@@ -124,7 +127,12 @@ function stepRowHtml(type) {
     fields = `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" />
               <textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}… — variables and {spintax|variants} work here">{Hi|Hello|Hey} {{firstName}}, {{company}} caught my eye — quick idea.</textarea>`;
   } else if (type === 'task') {
-    fields = `<textarea class="note" placeholder="LinkedIn action — e.g. Send connection request to {{firstName}}">Send LinkedIn connection request to {{firstName}} {{lastName}}</textarea>`;
+    fields = `<select class="task-kind">
+        <option value="connect">Connection request</option>
+        <option value="message">Direct message</option>
+        <option value="view">Profile view</option>
+      </select>
+      <textarea class="note" placeholder="LinkedIn action — e.g. Send connection request to {{firstName}}">Send LinkedIn connection request to {{firstName}} {{lastName}}</textarea>`;
   }
   return `<div class="step-row" data-type="${type}">
       <div>
@@ -148,15 +156,16 @@ function addStepRow(type, data = {}) {
   row.querySelector('.remove-step').addEventListener('click', () => row.remove());
   row.querySelector('.step-type').addEventListener('change', e => {
     row.querySelector('.step-fields').innerHTML = e.target.value === 'email'
-      ? `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" /><textarea class="body" placeholder="Hi {{firstName}}, noticed {{company}}…"></textarea>`
+      ? `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" /><textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}…"></textarea>`
       : e.target.value === 'task'
-      ? `<textarea class="note" placeholder="LinkedIn action — e.g. Send connection request to {{firstName}}"></textarea>`
+      ? `<select class="task-kind"><option value="connect">Connection request</option><option value="message">Direct message</option><option value="view">Profile view</option></select><textarea class="note" placeholder="LinkedIn action — e.g. Send connection request to {{firstName}}"></textarea>`
       : '';
   });
   if (data.delayMinutes != null) row.querySelector('.delay').value = data.delayMinutes;
   if (data.subject) row.querySelector('.subject') && (row.querySelector('.subject').value = data.subject);
   if (data.body && row.querySelector('.body')) row.querySelector('.body').value = data.body;
   if (data.note && row.querySelector('.note')) row.querySelector('.note').value = data.note;
+  if (data.taskKind && row.querySelector('.task-kind')) row.querySelector('.task-kind').value = data.taskKind;
 }
 
 function bindAiGenerate() {
@@ -233,11 +242,18 @@ async function saveCampaign() {
     const type = row.querySelector('.step-type').value;
     const delayMinutes = Number(row.querySelector('.delay').value || 0);
     if (type === 'email') return { type, subject: row.querySelector('.subject').value, body: row.querySelector('.body').value, delayMinutes };
-    if (type === 'task') return { type, note: row.querySelector('.note').value, delayMinutes };
+    if (type === 'task') return { type, note: row.querySelector('.note').value, taskKind: row.querySelector('.task-kind')?.value || 'connect', delayMinutes };
     return { type, delayMinutes };
   }).filter(s => (s.type !== 'email' || (s.subject && s.body)) && (s.type !== 'task' || s.note));
 
-  const { data } = await api('POST', '/api/app/campaigns', { name: $('cName').value, steps });
+  const { data } = await api('POST', '/api/app/campaigns', {
+    name: $('cName').value,
+    steps,
+    dailyCap: Number($('cDailyCap').value) || 25,
+    sendWindowStart: Number($('cWindowStart').value ?? 9),
+    sendWindowEnd: Number($('cWindowEnd').value ?? 17),
+    timezone: $('cTimezone').value || 'UTC',
+  });
   if (!data.ok) { alert(data.error || 'Could not create campaign'); return; }
   $('campaignModal').hidden = true;
   $('cName').value = '';
@@ -258,6 +274,7 @@ async function loadCampaigns() {
         <div>
           <h3>${esc(c.name)}</h3>
           <div class="meta">${c.steps.length} steps · ${c.prospects} prospects · ${c.finished} finished</div>
+          <div class="meta">✉️ ${c.sentCount || 0} sent${c.bounced ? ` · ❌ ${c.bounced} bounced` : ''} · today ${c.sentToday ?? 0}/${c.capToday ?? 25}${c.timezone ? ` · ${c.sendWindowStart ?? 9}:00–${c.sendWindowEnd ?? 17}:00 ${esc(c.timezone)}` : ''}</div>
         </div>
         <div class="actions">
           ${c.status === 'active'
@@ -304,7 +321,13 @@ async function loadProspects() {
   const tbody = $('prospectTable').querySelector('tbody');
   tbody.innerHTML = data.prospects.map(p => {
     const v = p.verified?.verdict;
-    const pill = v ? `<span class="v-pill ${v}">${v}</span>` : '<span class="v-pill unverified">not checked</span>';
+    const pill = p.bounced
+      ? '<span class="v-pill undeliverable">bounced</span>'
+      : p.suppressed
+      ? '<span class="v-pill undeliverable">opted out</span>'
+      : p.replied
+      ? '<span class="v-pill deliverable">replied</span>'
+      : v ? `<span class="v-pill ${v}">${v}</span>` : '<span class="v-pill unverified">not checked</span>';
     const step = p.finished ? 'done' : (p.stepIndex != null ? `#${p.stepIndex + 1}` : 'queued');
     return `<tr>
       <td>${esc(p.email)}</td><td>${esc(p.firstName)} ${esc(p.lastName)}</td><td>${esc(p.company)}</td>
@@ -334,7 +357,9 @@ async function importCsv() {
   if (!selectedCampaign) { $('importNote').textContent = 'Pick a campaign first.'; return; }
   const { data } = await api('POST', '/api/app/prospects', { campaignId: selectedCampaign, csv: $('csvInput').value });
   $('importNote').textContent = data.ok
-    ? `Imported ${data.added} (${data.total} total)` + (data.customVars?.length ? ` — custom variables: ${data.customVars.map(v => '{{' + v + '}}').join(' ')}` : '')
+    ? `Imported ${data.added} (${data.total} total)`
+      + (data.customVars?.length ? ` — custom variables: ${data.customVars.map(v => '{{' + v + '}}').join(' ')}` : '')
+      + (data.skippedSuppressed ? ` — ${data.skippedSuppressed} skipped (suppression list)` : '')
     : (data.error || 'Error');
   if (data.ok) $('csvInput').value = '';
   loadProspects();
@@ -375,13 +400,25 @@ async function loadActivity() {
     api('GET', '/api/app/activity'), api('GET', '/api/app/tasks'),
   ]);
   $('eventList').innerHTML = renderEvents(act.events || []);
-  const open = (tasks.tasks || []).filter(t => !t.done);
-  $('taskList').innerHTML = open.length ? open.map(t => `
-    <li>
-      <span class="e-kind task">${esc(t.kind)}</span>
-      <span><strong>${esc(t.prospect)}</strong> — ${esc(t.note)} <em style="color:var(--ink-faint)">(${esc(t.campaign)})</em></span>
+  const li = tasks.linkedin;
+  if (li) {
+    const pct = Math.min(100, Math.round((li.usedToday / Math.max(1, li.budget)) * 100));
+    $('liMeter').innerHTML = `<span class="li-meter-label">${li.usedToday}/${li.budget} actions today${li.scheduled ? ` · ${li.scheduled} scheduled` : ''}</span>
+      <span class="warmup-bar li-bar"><i style="width:${pct}%"></i></span>`;
+  }
+  const now = Date.now();
+  const open = (tasks.tasks || []).filter(t => !t.done)
+    .sort((a, b) => (a.dueAt || 0) - (b.dueAt || 0));
+  $('taskList').innerHTML = open.length ? open.map(t => {
+    const due = t.dueAt && t.dueAt > now
+      ? `<em style="color:var(--ink-faint)">due ${new Date(t.dueAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</em> `
+      : '';
+    return `<li>
+      <span class="e-kind task">${esc(t.taskKind || t.kind)}</span>
+      <span>${due}<strong>${esc(t.prospect)}</strong> — ${esc(t.note)} <em style="color:var(--ink-faint)">(${esc(t.campaign)})</em></span>
       <button class="done-btn" data-done="${t.id}">Mark done</button>
-    </li>`).join('') : '<li class="empty">No open LinkedIn tasks.</li>';
+    </li>`;
+  }).join('') : '<li class="empty">No open LinkedIn tasks.</li>';
   $('taskList').querySelectorAll('[data-done]').forEach(btn => btn.addEventListener('click', async () => {
     await api('POST', `/api/app/tasks/${btn.dataset.done}/done`);
     loadActivity();
@@ -515,6 +552,75 @@ async function loadDomainDiag() {
   const { data } = await api('GET', '/api/app/activity');
   const audit = (data.events || []).find(e => e.type === 'domain-audit' && e.meta?.checks);
   if (audit) renderAudit($('sdAuditResult'), { score: audit.meta.score, checks: audit.meta.checks });
+}
+
+// ---------- LinkedIn safety ----------
+function bindLinkedInSafety() {
+  $('liBudgetBtn').addEventListener('click', async () => {
+    const { data } = await api('POST', '/api/app/settings', { linkedinBudget: Number($('liBudget').value) });
+    $('liBudgetResult').innerHTML = data.ok
+      ? `<span class="ok-tag">✓ Saved</span> — budget is now ${data.linkedinBudget} actions/day.`
+      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
+  });
+}
+
+async function loadLinkedInSafety() {
+  const { data } = await api('GET', '/api/app/tasks');
+  if (data.ok && data.linkedin) $('liBudget').value = data.linkedin.budget;
+}
+
+// ---------- LinkedIn autopilot bridge ----------
+function bindIntegration() {
+  $('genTokenBtn').addEventListener('click', async () => {
+    const out = $('integrationResult');
+    const { data } = await api('POST', '/api/app/integrations/token');
+    if (!data.ok) { out.innerHTML = `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`; return; }
+    out.innerHTML = `
+      <p><span class="ok-tag">✓ Token created</span> — copy it now, it won't be shown again:</p>
+      <p><code class="token-box">${esc(data.token)}</code></p>
+      <p class="settings-note">Callback URL: <code>${esc(data.callbackUrl)}</code><br>
+      Example: <code>curl -X POST ${esc(data.callbackUrl)} -H "x-integration-token: YOUR_TOKEN" -H "Content-Type: application/json" -d '{"prospect":"sarah@acme.io","outcome":"done","note":"request sent"}'</code></p>`;
+    loadIntegrationStatus();
+  });
+  $('revokeTokenBtn').addEventListener('click', async () => {
+    if (!confirm('Revoke the integration token? Connected autopilots will stop working.')) return;
+    await api('DELETE', '/api/app/integrations/token');
+    $('integrationResult').innerHTML = '';
+    loadIntegrationStatus();
+  });
+}
+
+async function loadIntegrationStatus() {
+  const { data } = await api('GET', '/api/app/integrations/status');
+  if (!data.ok) return;
+  $('integrationStatus').innerHTML = data.hasToken
+    ? `<p>🟢 Token active. Callback URL: <code>${esc(data.callbackUrl)}</code></p>`
+    : '<p style="color:var(--ink-faint)">No token yet — generate one to connect an autopilot.</p>';
+  $('revokeTokenBtn').hidden = !data.hasToken;
+}
+
+// ---------- suppression list ----------
+function bindSuppression() {
+  $('suppAddBtn').addEventListener('click', async () => {
+    const { data } = await api('POST', '/api/app/suppression', { email: $('suppEmail').value });
+    if (data.ok) $('suppEmail').value = '';
+    loadSuppression();
+  });
+}
+
+async function loadSuppression() {
+  const { data } = await api('GET', '/api/app/suppression');
+  if (!data.ok) return;
+  $('suppList').innerHTML = data.suppressed.length
+    ? data.suppressed.map(s => `<div class="sender-row">
+        <div class="sender-info"><strong>${esc(s.email)}</strong><span>${esc(s.reason)} · ${fmtTime(s.at)}</span></div>
+        <button class="link" data-unsuppress="${esc(s.email)}">Remove</button>
+      </div>`).join('')
+    : '<p class="settings-note">Nobody blocked — good. Unsubscribes appear here automatically.</p>';
+  $('suppList').querySelectorAll('[data-unsuppress]').forEach(btn => btn.addEventListener('click', async () => {
+    await api('DELETE', `/api/app/suppression/${encodeURIComponent(btn.dataset.unsuppress)}`);
+    loadSuppression();
+  }));
 }
 
 // ---------- settings ----------

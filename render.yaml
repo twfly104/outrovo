@@ -25,6 +25,10 @@ services:
       # connect inboxes — changing it later makes stored passwords unreadable.
       - key: DATA_KEY
         sync: false
+      # Absolute base URL used in List-Unsubscribe links and integration
+      # callback URLs inside outbound emails.
+      - key: PUBLIC_URL
+        value: https://outrovo.onrender.com
       - key: RESEND_API_KEY
         sync: false
       - key: STRIPE_SECRET_KEY
