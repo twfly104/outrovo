@@ -578,19 +578,30 @@ async function apolloSearchLeads(f, perPage) {
 
 async function hunterSearchLeads(f, perPage) {
   const key = process.env.HUNTER_API_KEY;
-  const domain = (f.keywords || '').replace(/^\s*@/, '').trim();
-  if (!domain || !domain.includes('.')) return [];
-  const q = new URLSearchParams({ domain, api_key: key, limit: String(Math.min(100, perPage * 3)) });
-  if (f.title) q.set('seniority', '');
-  const res = await fetch(`https://api.hunter.io/v2/domain-search?${q}`);
-  if (!res.ok) throw new Error(`Hunter search ${res.status}`);
-  const data = (await res.json())?.data || {};
-  return (data.emails || []).map(e => ({
-    email: (e.value || '').trim().toLowerCase(), source: 'hunter',
-    firstName: e.first_name || '', lastName: e.last_name || '',
-    company: data.organization || domain, title: e.position || '',
-    linkedinUrl: e.linkedin || '', emailStatus: e.confidence >= 50 ? 'verified' : '',
-  })).filter(l => isEmail(l.email));
+  // One domain per Hunter call — split multi-domain input into separate calls.
+  const domains = (f.keywords || '')
+    .split(/[,\s]+/).map(s => s.trim().replace(/^@/, '').replace(/^https?:\/\//, '').split('/')[0])
+    .filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)).slice(0, 5);
+  if (!domains.length) return [];
+  const out = [];
+  for (const domain of domains) {
+    // Free plan caps at 10 results per domain search; more is rejected.
+    const q = new URLSearchParams({ domain, api_key: key, limit: String(Math.min(10, perPage)) });
+    const res = await fetch(`https://api.hunter.io/v2/domain-search?${q}`);
+    if (!res.ok) throw new Error(`Hunter search ${res.status}`);
+    const payload = await res.json();
+    if (payload?.errors?.length) throw new Error(`Hunter: ${payload.errors[0].details || 'API error'}`);
+    const data = payload?.data || {};
+    for (const e of data.emails || []) {
+      out.push({
+        email: (e.value || '').trim().toLowerCase(), source: 'hunter',
+        firstName: e.first_name || '', lastName: e.last_name || '',
+        company: data.organization || domain, title: e.position || '',
+        linkedinUrl: e.linkedin || '', emailStatus: e.confidence >= 50 ? 'verified' : '',
+      });
+    }
+  }
+  return out.filter(l => isEmail(l.email));
 }
 
 const GENERIC_LOCALS = new Set(['info', 'contact', 'hello', 'support', 'sales', 'team', 'office', 'mail', 'admin', 'no-reply', 'noreply']);
