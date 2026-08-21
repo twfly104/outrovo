@@ -1077,9 +1077,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .plan .btn { justify-content: center; margin-bottom: 28px; }
 .plan-feats { display: grid; gap: 11px; font-size: 0.92rem; }
 .plan-feats li { display: flex; gap: 10px; align-items: flex-start; color: var(--ink-soft); }
-.plan.featured .plan-feats li { color: #d7e3da; }
 .plan-feats .tick { width: 19px; height: 19px; margin-top: 3px; }
-.plan.featured .plan-feats .tick { background: rgba(246, 241, 231, 0.14); color: var(--sun); }
 .plan-feats .new-flag {
   font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
   color: var(--crest); background: rgba(232, 73, 15, 0.12);
@@ -1172,7 +1170,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   background-image: radial-gradient(rgba(246, 241, 231, 0.05) 1px, transparent 1.4px);
   background-size: 24px 24px;
 }
-.auth-side .logo { color: var(--paper); position: relative; }
+.auth-side .logo { color: var(--ink); position: relative; }
 .auth-quote { margin: auto 0; position: relative; max-width: 420px; }
 .auth-quote blockquote {
   font-family: var(--font-display);
@@ -1197,6 +1195,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 
 .auth-main {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 48px 24px;
