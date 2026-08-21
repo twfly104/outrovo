@@ -1016,6 +1016,10 @@ function extractSiteInfo(html, url) {
     || pick(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i) || '';
   const h1s = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)]
     .map(m => m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 3);
+  // h2–h4 carry most of the positioning copy ("People Data", "For revenue
+  // teams") that the single h1 rarely does.
+  const headings = [...html.matchAll(/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi)]
+    .map(m => m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 12);
   // JSON-LD @type often declares the org's industry (e.g. "FinancialService").
   const ldTypes = [...html.matchAll(/"@type"\s*:\s*"([^"]+)"/gi)]
     .map(m => m[1]).filter(t => !/^(WebSite|WebPage|BreadcrumbList|Article|NewsArticle|FAQPage|Organization|Corporation|LocalBusiness|SearchAction|SiteNavigationElement|ItemList|VideoObject|ImageObject)$/i.test(t))
@@ -1027,7 +1031,7 @@ function extractSiteInfo(html, url) {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 3000);
-  return { url, title, desc, h1s, ldTypes, text };
+  return { url, title, desc, h1s, headings, ldTypes, text };
 }
 
 async function fetchSite(url) {
@@ -1074,13 +1078,154 @@ const BUYER_PERSONAS = [
   { title: 'head of sales', re: /\b(head of sales|sales director|vp sales|chief revenue|sales team|sales leaders|revenue team)s?\b/ },
   { title: 'head of marketing', re: /\b(head of marketing|marketing director|cmo|vp marketing|marketing team|growth team)s?\b/ },
   { title: 'head of product', re: /\b(head of product|product manager|cpo|vp product|product team)s?\b/ },
-  { title: 'head of engineering', re: /\b(head of engineering|cto|vp engineering|engineering manager|engineering team|developer)s?\b/ },
+  { title: 'head of engineering', re: /\b(head of engineering|cto|vp engineering|engineering manager|engineering team|developer|engineers?)\b/ },
   { title: 'head of data', re: /\b(head of data|chief data officer|data team|ml engineers?|ai team|data science)s?\b/ },
   { title: 'head of operations', re: /\b(head of operations|coo|operations team|ops team)s?\b/ },
 ];
 
+// Vague-audience + generic-SaaS words: a phrase made only of these is not a
+// useful lead-search market ("for people and companies", "reliable systems").
+const GENERIC_WORDS = new Set([
+  'teams', 'team', 'companies', 'company', 'businesses', 'business', 'people', 'person',
+  'everyone', 'anyone', 'professionals', 'organizations', 'organisations', 'individuals',
+  'groups', 'users', 'user', 'customers', 'customer', 'sizes', 'world', 'all', 'top',
+  'best', 'leading', 'fast', 'faster', 'fastest', 'new', 'modern', 'your', 'our',
+  'their', 'the', 'a', 'an', 'and', 'of', 'for', 'to', 'in', 'on', 'with', 'by',
+  'at', 'from', 'or', 'you', 'we', 'they', 'it', 'work', 'any', 'every', 'more',
+  'seamlessly', 'easy', 'powerful', 'simple', 'simply', 'better', 'way', 'ways',
+  'types', 'type', 'kind', 'kinds', 'models', 'model', 'accept', 'anything',
+  'everything', 'everybody', 'anywhere', 'everywhere', 'something', 'stuff',
+  'system', 'systems', 'solution', 'solutions', 'platform', 'platforms',
+  'tool', 'tools', 'software', 'service', 'services', 'app', 'apps', 'suite',
+]);
+
+// Token filter for term extraction — grammar words and marketing fluff are
+// removed, but meaningful audience nouns (people, teams, data, customers)
+// stay so heading pairs like "people data" survive.
+const STOPWORDS = new Set([
+  'this', 'that', 'these', 'those', 'there', 'here', 'what', 'when', 'where',
+  'which', 'while', 'how', 'why', 'who', 'whom', 'into', 'over', 'under',
+  'about', 'after', 'before', 'between', 'through', 'during', 'out', 'off',
+  'up', 'down', 'then', 'than', 'so', 'such', 'just', 'also', 'very', 'can',
+  'will', 'would', 'could', 'should', 'has', 'have', 'had', 'are', 'was',
+  'were', 'been', 'being', 'is', 'be', 'do', 'does', 'did', 'get', 'got',
+  'make', 'makes', 'made', 'take', 'takes', 'keep', 'keeps', 'see', 'used',
+  'using', 'use', 'us', 'lets', 'let', 'like', 'want', 'needs', 'need',
+  'helps', 'help', 'helping', 'built', 'build', 'building', 'learn', 'book',
+  'demo', 'login', 'contact', 'about', 'home', 'careers', 'blog', 'docs',
+  'one', 'two', 'first', 'most', 'many', 'much', 'own', 'same',
+  'across', 'around', 'without', 'within', 'never', 'ever', 'still', 'back',
+  'now', 'today', 'again', 'every', 'each', 'other', 'another', 'some',
+  'only', 'both', 'few', 'its', 'no', 'not', 'yes', 'if', 'but', 'as',
+  'try', 'free', 'start', 'started', 'starting',
+  'welcome', 'powering', 'powered', 'learned', 'journey', 'join',
+  'connect', 'connected', 'connecting',
+  // Grammar words — building-token pairs must not pair across them.
+  'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'of', 'and', 'or',
+  'the', 'a', 'an', 'as',
+  // Vague filler adjectives/pronouns.
+  'world', 'worlds', 'all', 'top', 'best', 'leading', 'fast', 'faster',
+  'fastest', 'new', 'modern', 'your', 'yours', 'our', 'ours', 'their',
+  'theirs', 'them', 'they', 'you', 'we', 'it', 'he', 'she', 'any', 'every',
+  'work', 'way', 'ways', 'types', 'type', 'kind', 'kinds', 'models', 'model',
+  'accept', 'anything', 'everything', 'everybody', 'anywhere', 'everywhere',
+  'something', 'stuff', 'trusted', 'love', 'loved',
+  // Marketing action verbs — "grow your revenue", "scale your team" say
+  // nothing about a market.
+  'scale', 'grow', 'growth', 'drive', 'driving', 'move', 'moving', 'focus',
+  'focusing', 'deliver', 'delivering', 'unlock', 'supercharge', 'power',
+  // Nav/footer crumbs and geographic flairs.
+  'internet', 'region', 'regions', 'earth', 'default', 'menu', 'main',
+  'skip', 'content', 'close', 'open', 'icon', 'icons', 'arrow', 'click',
+  'left', 'right', 'ready',
+]);
+
+// Clean a captured phrase: cut at delimiters, cap at 5 words, drop trailing
+// verbs/conjunctions ("teams to win" → "teams").
+function cleanPhrase(p) {
+  let s = String(p || '').split(/[|·•—–]/)[0].replace(/\s+/g, ' ').trim();
+  s = s.replace(/[.,;:!?'"()\[\]{}]/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = s.split(' ').slice(0, 5);
+  const TRAILING = /^(to|and|or|with|for|of|in|on|by|at|as|a|an|the|your|their|our|all|every|any|each|both|no|one|welcome|welcomed|learn|learned|more|here|try|free|now|today|yours|from)$/i;
+  while (words.length && TRAILING.test(words[words.length - 1])) words.pop();
+  while (words.length && /^(your|our|their|the|a|an|every|all|any|each|both|no|one)$/i.test(words[0])) words.shift();
+  return words.join(' ');
+}
+
+function isSpecificPhrase(p) {
+  const words = p.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  return words.some(w => !GENERIC_WORDS.has(w));
+}
+
+// Pull precise market/audience phrases from the site's own copy — far more
+// specific than a canned industry list. Patterns mirror common positioning
+// formulas: "built for X", "platform for Y", "trusted by Z".
+function extractMarketPhrases(highText) {
+  const phrases = [];
+  const seen = new Set();
+  const push = (p, kind) => {
+    p = cleanPhrase(p);
+    if (p && p.length > 3 && p.length <= 60 && isSpecificPhrase(p) && !seen.has(p.toLowerCase())) {
+      seen.add(p.toLowerCase());
+      phrases.push({ phrase: p, kind });
+    }
+  };
+  // Short captures only — spans >25 chars swallow the next sentence.
+  const AUDIENCE = /([a-z][a-z0-9\s&,'-]{2,25}?)(?=[.,;|]|\s+(?:to|that|who|with|so|and\s+(?:the|all|every|more)|from)\b|$)/gi;
+  // "talent" patterns (find/hire/recruit) mean the buyer is a recruiter;
+  // other patterns describe the market segment.
+  const patterns = [
+    { re: /\b(?:built|build|builds|made|designed|crafted|created|creating)\s+for\s+/i, kind: 'market' },
+    { re: /\b(?:platform|tool|tools|solution|solutions|software|engine|app|apps|database|api|layer|workspace|suite|service|services|system)\s+for\s+/i, kind: 'market' },
+    { re: /\b(?:trusted|loved|used|chosen|preferred)\s+by\s+/i, kind: 'market' },
+    { re: /\b(?:help|helps|helping|empower(?:s|ing)?|enable(?:s|ing)?)\s+/i, kind: 'market' },
+    { re: /\b(?:find|hire|hiring|recruit(?:ing)?|source|sourcing)\s+/i, kind: 'talent' },
+  ];
+  for (const { re, kind } of patterns) {
+    const m = re.exec(highText);
+    if (!m) continue;
+    AUDIENCE.lastIndex = 0;
+    const rest = highText.slice(m.index + m[0].length, m.index + m[0].length + 70);
+    const a = AUDIENCE.exec(rest);
+    if (a) push(a[1], kind);
+  }
+  return phrases;
+}
+
+// Terms: bigrams counted PER heading (no cross-heading chains) plus across
+// title/description. A bigram is kept only if seen repeatedly in copy or
+// found in a heading (h-tags are deliberate positioning), and it is dropped
+// when both words are vague ("top teams").
+// Pair only RAW-adjacent words whose tokens both survive the filter —
+// pairing post-filtered sequences creates chains that were never in the
+// copy ("systems critical", "world important"). Both-vague pairs drop.
+function extractSignificantTerms(text, headings, domainName) {
+  const keep = w => w.length > 3 && !STOPWORDS.has(w) && !domainName.includes(w);
+  const bigrams = new Map();
+  const count = (s, heading) => {
+    const raw = s.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter(Boolean);
+    for (let i = 0; i + 1 < raw.length; i++) {
+      const a = raw[i], b = raw[i + 1];
+      if (a === b || !keep(a) || !keep(b)) continue;
+      if (GENERIC_WORDS.has(a) && GENERIC_WORDS.has(b)) continue;
+      const key = `${a} ${b}`;
+      const e = bigrams.get(key) || { c: 0, h: 0 };
+      e.c++; e.h = Math.max(e.h, heading);
+      bigrams.set(key, e);
+    }
+  };
+  count(text, 0);
+  for (const h of headings || []) count(h, 1);
+  return [...bigrams.entries()]
+    .filter(([, v]) => v.c >= 2 || v.h)
+    .sort((a, b) => (b[1].h - a[1].h) || (b[1].c - a[1].c))
+    .slice(0, 3)
+    .map(([k]) => k.replace(/\b\w/g, c => c.toUpperCase()));
+}
+
 function heuristicIcp(info, domain, extraText) {
-  const high = (info.title + ' ' + info.desc + ' ' + info.h1s.join(' ') + ' ' + info.ldTypes.join(' ')).toLowerCase();
+  const headingText = (info.headings || info.h1s || []).join(' ');
+  const high = (info.title + ' ' + info.desc + ' ' + headingText + ' ' + info.ldTypes.join(' ')).toLowerCase();
   const text = (high + ' ' + info.text + ' ' + extraText).toLowerCase();
 
   // Keywords: infer the target market from what the company sells, not the
@@ -1107,19 +1252,50 @@ function heuristicIcp(info, domain, extraText) {
   const seen = new Set();
   const industries = [];
   const pushIndustry = (kw) => { if (!seen.has(kw) && industries.length < 3) { seen.add(kw); industries.push(kw); } };
+
+  // Blend three sources, most specific first: (1) positioning phrases from
+  // the site's own copy ("platform for revenue teams", "find top engineers"),
+  // (2) heading/repeated terms ("people data", "payments"), (3) canned
+  // industry categories as the final backstop.
+  const marketPhrases = extractMarketPhrases(high);
+  const terms = extractSignificantTerms(info.title + ' ' + info.desc, info.headings || info.h1s, domain);
+  for (const { phrase } of marketPhrases) pushIndustry(phrase);
+  for (const t of terms) pushIndustry(t);
+  const cueMatches = [];
+  const seenCues = new Set();
+  const pushCue = (kw) => { if (!seenCues.has(kw)) { seenCues.add(kw); cueMatches.push(kw); } };
   for (const t of info.ldTypes) {
     const spaced = String(t).replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
-    for (const [cue, kw] of INDUSTRY_CUES) if (spaced.includes(cue)) pushIndustry(kw);
+    for (const [cue, kw] of INDUSTRY_CUES) if (spaced.includes(cue)) pushCue(kw);
   }
-  for (const [cue, kw] of INDUSTRY_CUES) if (high.includes(cue)) pushIndustry(kw);
-  for (const [cue, kw] of INDUSTRY_CUES) { if (industries.length >= 2) break; if (text.includes(cue)) pushIndustry(kw); }
+  for (const [cue, kw] of INDUSTRY_CUES) if (high.includes(cue)) pushCue(kw);
+  for (const kw of cueMatches) pushIndustry(kw);
   // Last resort: the scanned domain — builtin/Hunter search treats keywords
   // as domains, and its own employees are still better than an empty form.
   const keywords = industries.join(', ') || domain;
 
-  // Job title: look for who the site sells to, else fall back by company size.
+  // Job title: the audience phrase usually names the buyer ("for revenue
+  // teams" → head of sales). Then persona scan, then size-based fallback.
+  const AUDIENCE_PERSONAS = [
+    { title: 'founder', re: /founder|ceo|executive|owner/ },
+    { title: 'head of sales', re: /sales|revenue|account exec/ },
+    { title: 'head of marketing', re: /market|growth|demand gen/ },
+    { title: 'head of product', re: /product/ },
+    { title: 'head of engineering', re: /engineer|developer|dev\s|tech lead|cto/ },
+    { title: 'recruiter', re: /recruit|talent|hr\s|people ops/ },
+    { title: 'head of data', re: /data|analyst|analytics/ },
+    { title: 'head of operations', re: /operations|ops/ },
+  ];
   let title = '';
-  for (const p of BUYER_PERSONAS) { if (p.re.test(text)) { title = p.title; break; } }
+  if (marketPhrases.length) {
+    const first = marketPhrases[0];
+    if (first.kind === 'talent') title = 'recruiter';
+    else {
+      const p0 = first.phrase.toLowerCase();
+      for (const ap of AUDIENCE_PERSONAS) { if (ap.re.test(p0)) { title = ap.title; break; } }
+    }
+  }
+  if (!title) for (const p of BUYER_PERSONAS) { if (p.re.test(text)) { title = p.title; break; } }
 
   // Company size: explicit language only — inferred before title fallback.
   let size = '';

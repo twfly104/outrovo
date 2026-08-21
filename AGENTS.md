@@ -77,15 +77,20 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   overwrites fields, unlike the non-destructive auto prefill). Both share
   `inferIcpFromSite(domain)` in server.js. `heuristicIcp` (used without an
   LLM, and as the fallback when the LLM echoes the scanned domain back)
-  infers the ICP: keywords come from industry cues in the title/meta
-  description/H1/JSON-LD `@type` (e.g. `AI startups`, `fintech startups`)
-  rather than blindly re-using the scanned domain; title comes from
-  buyer-persona cues (falling back to `founder` for small, `head of sales`
-  for enterprise); location gives the /about · /contact · /company pages'
-  HQ address precedence over homepage claims. The LLM prompt is likewise
-  ICP-focused (fill the target market, never the user's own domain). The
-  builtin crawler no longer truncates pages — `slice(0, 500000)` was
-  cutting off emails past 500KB on sites like stripe.com. Each result row
+  rejects the canned ~30-category list — keywords come from the site's own
+  copy via (1) positioning-formula phrases like "built for X / platform
+  for Y / trusted by Z" (`extractMarketPhrases`), (2) raw-adjacent bigrams
+  that repeat or appear in h1–h4 (`extractSignificantTerms`, gated by
+  STOPWORDS / GENERIC_WORDS / not-both-generic, max 3), (3) canned
+  INDUSTRY_CUES as backstop only; the scanned domain is last resort.
+  `cleanPhrase` caps and cleans each phrase. Title falls from a `talent`
+  phrase (recruiter) or an audience persona map (sales/revenue → head of
+  sales, engineers → head of engineering, data → head of data) before
+  BUYER_PERSONAS. Location reads /about · /contact · /company for the real
+  HQ city over homepage claims. The LLM prompt is likewise ICP-focused
+  (fill the target market, never the user's own domain). The builtin
+  crawler no longer truncates pages — `slice(0, 500000)` was cutting off
+  emails past 500KB. Each result row
   also has a **✦ Intel** column: clicking calls
   `POST /api/app/lead-finder/intel` (`leadIntel()` in server.js; cached in
   memory 1h per domain) which scans the lead's company site and returns
