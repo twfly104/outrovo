@@ -83,9 +83,7 @@ function showPage(name) {
   $('page-' + name).hidden = false;
   if (name === 'inbox') loadInbox();
   if (name === 'campaigns') loadCampaigns();
-  if (name === 'prospects') loadProspects();
-  if (name === 'activity') loadActivity();
-  if (name === 'overview') loadOverview();
+  if (name === 'overview') { loadOverview(); loadActivity(); }
   if (name === 'settings') { loadEngine(); loadSenders(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadSuppression(); loadWebhooks(); }
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
@@ -111,8 +109,6 @@ async function loadOverview() {
   ];
   $('statGrid').innerHTML = cards.map(([label, n]) =>
     `<div class="stat-card"><span>${label}</span><strong>${n}</strong></div>`).join('');
-  const { data: act } = await api('GET', '/api/app/activity');
-  $('overviewEvents').innerHTML = renderEvents(act.events?.slice(0, 8) || []);
 }
 
 function renderEvents(events) {

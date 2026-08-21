@@ -1533,6 +1533,18 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14);
 }
 .page-head select { max-width: 260px; }
+.subhead { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 30px 0 18px; }
+.subhead h2 { margin: 0; }
+.subhead select {
+  max-width: 260px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+  color: var(--ink);
+}
+.subhead select:focus { outline: none; border-color: var(--crest); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14); }
 .app-body .field textarea {
   width: 100%;
   padding: 12px 15px;
