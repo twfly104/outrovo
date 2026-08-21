@@ -1543,7 +1543,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const session = requireAuth(req, res);
     if (!session) return;
     const b = await readBody(req);
-    if (!/^https:\/\//i.test(b.url || '')) return send(res, 400, { ok: false, error: 'HTTPS webhook URL required (Zapier catch hook, HubSpot/Pipedrive workflow webhook, or any HTTPS endpoint).' });
+    if (!/^https?:\/\//i.test(b.url || '')) return send(res, 400, { ok: false, error: 'Webhook URL required (HTTPS for production, HTTP only allowed for localhost testing).' });
     const users = load('users');
     const user = users.find(u => u.email === session.email);
     if (!user) return send(res, 404, { ok: false });

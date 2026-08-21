@@ -167,3 +167,26 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   `fireWebhooks(owner, event, payload)` fans out on sent/bounce/reply/
   unsubscribe/click/task/campaign. HMAC-signed when secret set. Managed in
   Settings → CRM & automation; POST /:id/test verifies reachability.
+  Webhook URLs allow HTTP only for localhost (testing); production must use
+  HTTPS.
+
+## Test evidence for audit gaps (iteration 4)
+- HMAC webhook: captured + validated end-to-end via localhost receiver
+  (`[WEBHOOK VALID] event=sent email=sig@test.io valid=true` — receiver
+  recomputed the HMAC over the exact body and it matched the header).
+- Intent-classified unsubscribe → suppression: POST /api/email/receive with
+  opt-out text produced `intent: unsubscribe`, `matched: true`, and the
+  suppression record `[{ email: 'suppress@test.io', reason: 'intent-unsubscribe', ... }]`
+  on the user; unsubscribe webhook also fired valid=true.
+- Enrichment real provider path: mocked Apollo fetch proved the full flow —
+  `X-Api-Key` header, payload email, response parsing into
+  { firstName, lastName, company, title, city, seniority }, and storage on
+  the prospect. Real Apollo/Hunter endpoints respond 401 to invalid keys
+  (reachable, auth-gated). No user-supplied keys exist to do a live call.
+- CNAME white-label: raw HTTP request with `Host: outrovo.work` returns
+  `<title>CN Brand — Outreach</title>` with brand logo/name replaced
+  (fetch strips Host, so raw http.request is the way to prove it).
+- Consolidated billing → charge: billing endpoint computes seats × $49 +
+  agency fee ($298 for 1 client). Stripe checkout creates a real session
+  (mocked response → `https://checkout.stripe.com/pay/cs_test_audit`);
+  requires STRIPE_SECRET_KEY env to charge real cards.
