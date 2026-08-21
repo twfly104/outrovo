@@ -1444,35 +1444,36 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   align-items: center;
   gap: 11px;
   text-align: left;
-  padding: 10px 12px;
+  padding: 9px 13px;
   border-radius: 999px;
   color: var(--ink-soft);
   font-weight: 550;
-  font-size: 0.92rem;
-  transition: background 0.18s var(--ease-out), color 0.18s, transform 0.18s var(--ease-out);
+  font-size: 0.93rem;
+  transition: background 0.18s var(--ease-out), color 0.18s;
 }
-.app-nav button svg { width: 17px; height: 17px; flex: none; opacity: 0.85; }
+.app-nav button svg { width: 17px; height: 17px; flex: none; opacity: 0.7; transition: opacity 0.18s, color 0.18s; }
 .app-nav button:hover { background: var(--paper-deep); color: var(--ink); }
-.app-nav button.active {
-  background: var(--ink);
-  color: #fff;
-  font-weight: 600;
-  box-shadow: 0 6px 16px rgba(11, 12, 14, 0.18);
-}
-.app-nav button.active svg { opacity: 1; }
+.app-nav button:hover svg { opacity: 1; }
+.app-nav button.active { background: var(--paper-deep); color: var(--ink); font-weight: 650; }
+.app-nav button.active svg { opacity: 1; color: var(--crest); }
 
 .app-upsell {
-  display: block;
-  background: linear-gradient(150deg, rgba(249, 115, 22, 0.1), rgba(249, 115, 22, 0.04));
-  border: 1px solid rgba(249, 115, 22, 0.25);
-  border-radius: var(--radius-m);
-  padding: 14px 16px;
-  margin: 14px 4px 16px;
-  transition: transform 0.2s var(--ease-out), box-shadow 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--crest);
+  color: #fff;
+  border-radius: 999px;
+  padding: 12px 18px;
+  margin: 16px 4px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(249, 115, 22, 0.3);
+  transition: background 0.2s, transform 0.22s var(--ease-out);
 }
-.app-upsell:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(249, 115, 22, 0.16); }
-.app-upsell strong { display: block; font-size: 0.88rem; color: var(--crest-deep); margin-bottom: 2px; }
-.app-upsell span { font-size: 0.78rem; color: var(--ink-soft); }
+.app-upsell:hover { background: var(--crest-deep); transform: translateY(-2px); }
 
 .app-user {
   display: flex;
