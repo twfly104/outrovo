@@ -845,9 +845,84 @@ $('testEmailBtn').addEventListener('click', async () => {
     : `<span class="no-tag">✗ Failed</span> — ${esc(data.error || 'unknown error')}`;
 });
 
+// ---------- lead finder ----------
+let leadFinderLeads = [];
+
+async function loadLeadFinderStatus() {
+  const { data } = await api('GET', '/api/app/lead-finder/status');
+  if (!data.ok) return;
+  const src = data.provider === 'apollo' ? 'via Apollo' : data.provider === 'hunter' ? 'via Hunter' : 'built-in verify';
+  $('leadFinderStatus').textContent = `${data.used}/${data.quota} credits used this month · ${src}`;
+}
+
+function renderLeadResults(leads) {
+  leadFinderLeads = leads;
+  const box = $('leadResults');
+  if (!leads.length) { box.hidden = true; return; }
+  box.hidden = false;
+  $('leadTable').querySelector('tbody').innerHTML = leads.map((l, i) => `
+    <tr>
+      <td><input type="checkbox" data-lead="${i}" checked /></td>
+      <td>${esc(l.email)}</td>
+      <td>${esc([l.firstName, l.lastName].filter(Boolean).join(' ')) || '—'}</td>
+      <td>${esc(l.company) || '—'}</td>
+      <td>${esc(l.title) || '—'}</td>
+      <td>${l.verified === 'valid' ? '<span class="ok-tag">✓ deliverable</span>' : '<span class="warn-tag">unknown</span>'}</td>
+    </tr>`).join('');
+  $('leadEnrollCampaign').innerHTML = campaigns.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+}
+
+function bindLeadFinder() {
+  $('leadFindBtn').addEventListener('click', async () => {
+    const btn = $('leadFindBtn');
+    const note = $('leadFindNote');
+    btn.disabled = true;
+    note.textContent = 'Searching and checking emails…';
+    $('leadResults').hidden = true;
+    const body = {
+      keywords: $('lfKeywords').value.trim(),
+      title: $('lfTitle').value.trim(),
+      size: $('lfSize').value,
+      location: $('lfLocation').value.trim(),
+      limit: 10,
+    };
+    const { status, data } = await api('POST', '/api/app/lead-finder/search', body);
+    btn.disabled = false;
+    if (status !== 200 || !data.ok) {
+      note.textContent = data.error || 'Search failed.';
+      return;
+    }
+    note.textContent = data.leads.length
+      ? `Found ${data.leads.length} — every address is checked before it lands here. (${data.used}/${data.quota} credits)`
+      : 'No leads matched — try broader keywords or a different title.';
+    renderLeadResults(data.leads);
+    loadLeadFinderStatus();
+  });
+
+  $('leadEnrollBtn').addEventListener('click', async () => {
+    const selected = [...document.querySelectorAll('#leadTable input[data-lead]:checked')]
+      .map(cb => leadFinderLeads[Number(cb.dataset.lead)]).filter(Boolean);
+    const campaignId = $('leadEnrollCampaign').value;
+    if (!campaignId) { $('leadFindNote').textContent = 'Pick a campaign to add them to.'; return; }
+    if (!selected.length) { $('leadFindNote').textContent = 'Select at least one lead.'; return; }
+    const { status, data } = await api('POST', '/api/app/lead-finder/enroll', { campaignId, leads: selected });
+    $('leadFindNote').textContent = status === 200 && data.ok
+      ? `✓ Added ${data.added} to “${data.campaignName}”${data.skippedSuppressed ? ` · ${data.skippedSuppressed} suppressed skipped` : ''}.`
+      : (data.error || 'Enroll failed.');
+    if (status === 200 && data.ok) {
+      $('leadResults').hidden = true;
+      leadFinderLeads = [];
+      loadCampaigns();
+      loadProspects();
+    }
+  });
+}
+
 async function loadAll() {
   await Promise.all([loadOverview(), loadCampaigns()]);
   loadActivity();
+  loadLeadFinderStatus();
+  bindLeadFinder();
 }
 
 init();

@@ -491,6 +491,212 @@ async function callEnrichment(email, name = {}) {
 }
 function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
 
+// ---------- lead finder (Apollo / Hunter / builtin guess+verify) ----------
+function leadFinderProvider() {
+  if (process.env.APOLLO_API_KEY) return 'apollo';
+  if (process.env.HUNTER_API_KEY) return 'hunter';
+  return null;
+}
+const LEAD_SOURCES = ['apollo', 'hunter', 'builtin'];
+function leadFinderSourceOrder() {
+  const p = leadFinderProvider();
+  return p ? [p, 'builtin'] : ['builtin'];
+}
+
+async function apolloSearchLeads(f, perPage) {
+  const key = process.env.APOLLO_API_KEY;
+  const pageSize = Math.min(100, Math.max(10, perPage * 3));
+  const body = {
+    page: 1, per_page: pageSize,
+    q_keywords: f.keywords || undefined,
+    person_titles: f.title ? [f.title] : undefined,
+    organization_num_employees_ranges: f.size ? [f.size] : undefined,
+    person_locations: f.location ? [f.location] : undefined,
+    contact_email_status: ['verified'],
+  };
+  const res = await fetch('https://api.apollo.io/api/v1/mixed_people/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'X-Api-Key': key },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Apollo search ${res.status}`);
+  const data = await res.json();
+  const people = [...(data.people || []), ...(data.contacts || [])];
+  const seen = new Set();
+  return people.map(p => {
+    const email = (p.email || '').trim().toLowerCase();
+    return {
+      email, source: 'apollo',
+      firstName: p.first_name || '', lastName: p.last_name || '',
+      company: p.organization?.name || p.organization_name || '',
+      title: p.title || '', linkedinUrl: p.linkedin_url || '',
+      emailStatus: p.email_status || '',
+    };
+  }).filter(l => {
+    if (!isEmail(l.email) || l.emailStatus === 'bounced') return false;
+    if (seen.has(l.email)) return false;
+    seen.add(l.email);
+    return true;
+  });
+}
+
+async function hunterSearchLeads(f, perPage) {
+  const key = process.env.HUNTER_API_KEY;
+  const domain = (f.keywords || '').replace(/^\s*@/, '').trim();
+  if (!domain || !domain.includes('.')) return [];
+  const q = new URLSearchParams({ domain, api_key: key, limit: String(Math.min(100, perPage * 3)) });
+  if (f.title) q.set('seniority', '');
+  const res = await fetch(`https://api.hunter.io/v2/domain-search?${q}`);
+  if (!res.ok) throw new Error(`Hunter search ${res.status}`);
+  const data = (await res.json())?.data || {};
+  return (data.emails || []).map(e => ({
+    email: (e.value || '').trim().toLowerCase(), source: 'hunter',
+    firstName: e.first_name || '', lastName: e.last_name || '',
+    company: data.organization || domain, title: e.position || '',
+    linkedinUrl: e.linkedin || '', emailStatus: e.confidence >= 50 ? 'verified' : '',
+  })).filter(l => isEmail(l.email));
+}
+
+const GENERIC_LOCALS = new Set(['info', 'contact', 'hello', 'support', 'sales', 'team', 'office', 'mail', 'admin', 'no-reply', 'noreply']);
+function guessEmailPatterns(first, last, domain) {
+  const f = (first || '').toLowerCase().replace(/[^a-z]/g, '');
+  const l = (last || '').toLowerCase().replace(/[^a-z]/g, '');
+  const d = (domain || '').toLowerCase().trim();
+  if (!f || !d) return [];
+  const pats = l
+    ? [`${f}@${d}`, `${f}.${l}@${d}`, `${f[0]}${l}@${d}`, `${f}${l}@${d}`, `${f[0]}.${l}@${d}`]
+    : [`${f}@${d}`];
+  return [...new Set(pats)];
+}
+
+async function builtinSearchLeads(f, perPage, sessionEmail) {
+  // Free source: user supplies target domains (e.g. acme.com, orbcall.io);
+  // we crawl the site's public pages for published emails, then MX-verify.
+  const domains = (f.keywords || '')
+    .split(/[,\s]+/).map(s => s.trim().replace(/^@/, '').replace(/^https?:\/\//, '').split('/')[0])
+    .filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)).slice(0, 5);
+  if (!domains.length) return [];
+  const out = [];
+  for (const domain of domains) {
+    const found = new Set();
+    for (const path of ['', '/about', '/contact', '/team']) {
+      if (found.size >= 10) break;
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 6000);
+        const res = await fetch(`https://${domain}${path}`, {
+          signal: ctrl.signal, redirect: 'follow',
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OutrovoLeadFinder/1.0)' },
+        });
+        clearTimeout(timer);
+        if (!res.ok) continue;
+        const html = (await res.text()).slice(0, 500000);
+        const matches = html.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
+        for (const m of matches) {
+          const e = m.toLowerCase();
+          if (!e.endsWith('@' + domain)) continue;
+          if (GENERIC_LOCALS.has(e.split('@')[0])) continue;
+          if (/\.(png|jpg|jpeg|gif|webp|svg|css|js)$/.test(e)) continue;
+          found.add(e);
+        }
+      } catch { /* unreachable site — skip */ }
+    }
+    for (const email of found) {
+      const local = email.split('@')[0];
+      const parts = local.split(/[._-]+/).filter(Boolean);
+      out.push({
+        email, source: 'builtin',
+        firstName: parts.length ? cap(parts[0]) : '', lastName: parts.length > 1 ? cap(parts[1]) : '',
+        company: domain, title: f.title || '', linkedinUrl: '', emailStatus: '',
+      });
+      if (out.length >= perPage * 6) break;
+    }
+    if (out.length >= perPage * 6) break;
+  }
+  return out;
+}
+
+async function verifyLeadBatch(leads, limit) {
+  // MX-verify in small parallel batches; keep deliverables first.
+  const ok = [], unsure = [], bad = [];
+  const queue = leads.slice(0, limit * 3);
+  const workers = Array.from({ length: 6 }, async () => {
+    while (queue.length) {
+      const l = queue.shift();
+      try {
+        const v = await verifyEmail(l.email);
+        const verdict = v.verdict === 'deliverable' ? 'valid' : (v.mx?.length ? 'unknown' : 'invalid');
+        const enriched = { ...l, verified: verdict };
+        if (verdict === 'valid') ok.push(enriched);
+        else if (verdict === 'unknown') unsure.push(enriched);
+        else bad.push(enriched);
+      } catch { unsure.push({ ...l, verified: 'unknown' }); }
+    }
+  });
+  await Promise.all(workers);
+  return [...ok, ...unsure];
+}
+
+async function searchLeads(f, perPage, sessionEmail) {
+  const order = leadFinderSourceOrder();
+  const errors = [];
+  let leads = [];
+  for (const src of order) {
+    try {
+      if (src === 'apollo') leads = await apolloSearchLeads(f, perPage);
+      else if (src === 'hunter') leads = await hunterSearchLeads(f, perPage);
+      else leads = await builtinSearchLeads(f, perPage, sessionEmail);
+      if (leads.length) break;
+    } catch (err) { errors.push(`${src}: ${err.message}`); }
+  }
+  // Filter out emails already in any of this user's campaigns or suppressed
+  const campaigns = load('campaigns').filter(c => c.owner === sessionEmail);
+  const campaignIds = new Set(campaigns.map(c => c.id));
+  const existing = new Set(load('prospects').filter(p => campaignIds.has(p.campaignId)).map(p => p.email));
+  leads = leads.filter(l => !existing.has(l.email) && !isSuppressed(sessionEmail, l.email));
+  leads = leads.filter(l => !GENERIC_LOCALS.has(l.email.split('@')[0]));
+  if (!leads.length) return { leads: [], provider: order[0], errors };
+  const verified = await verifyLeadBatch(leads, perPage);
+  return { leads: verified.slice(0, perPage), provider: leadFinderProvider() || 'builtin', errors };
+}
+
+function leadFinderUsage(user, plan) {
+  const now = new Date();
+  const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+  if (!user.leadFinder || user.leadFinder.month !== monthKey) {
+    user.leadFinder = { month: monthKey, used: 0 };
+  }
+  return { used: user.leadFinder.used, quota: plan.leadFinderCredits ?? 100, month: monthKey };
+}
+
+function enrollLeads(sessionEmail, campaignId, leads) {
+  const campaign = load('campaigns').find(c => c.id === campaignId && c.owner === sessionEmail);
+  if (!campaign) return { error: 'Campaign not found' };
+  const user = load('users').find(u => u.email === sessionEmail);
+  const plan = planOf(user);
+  const prospects = load('prospects');
+  const existing = new Set(prospects.filter(p => p.campaignId === campaignId).map(p => p.email));
+  let added = 0, skippedSuppressed = 0;
+  for (const l of leads) {
+    if (prospects.length >= plan.maxProspects) break;
+    const email = (l.email || '').trim().toLowerCase();
+    if (!isEmail(email) || existing.has(email)) continue;
+    if (isSuppressed(sessionEmail, email)) { skippedSuppressed++; continue; }
+    existing.add(email);
+    prospects.push({
+      id: crypto.randomUUID(), campaignId, email,
+      firstName: l.firstName || '', lastName: l.lastName || '', company: l.company || '',
+      customVars: { title: l.title || '', linkedin: l.linkedinUrl || '', source: `leadfinder:${l.source || 'builtin'}` },
+      stepIndex: null, nextRunAt: null, finished: false,
+      verified: l.verified === 'valid' ? 'valid' : (l.verified || null), addedAt: new Date().toISOString(),
+    });
+    added++;
+  }
+  save('prospects', prospects);
+  logEvent('lead-finder', `${added} Lead Finder prospects added to “${campaign.name}”`, { campaign: campaign.name, added });
+  return { added, skippedSuppressed, campaignName: campaign.name };
+}
+
 // ---------- CRM / automation webhooks ----------
 // user.integrations: [{ url, provider, secret, events[] }]. Events fan out
 // to matching webhooks (Zapier catch hooks, HubSpot/Pipedrive workflow
@@ -801,11 +1007,11 @@ async function aiGenerateSequence(input) {
 // tiers with hard prospect limits. Stripe Checkout when STRIPE_SECRET_KEY is
 // set; otherwise a manual activation path (admin key) keeps the flow usable.
 const PLANS = {
-  trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, linkedIn: false, agency: false, whiteLabel: false },
-  starter: { name: 'Starter', priceMonthly: 29, maxProspects: 2000, maxCampaigns: 3, linkedIn: false, agency: false, whiteLabel: false },
-  growth: { name: 'Growth', priceMonthly: 49, maxProspects: 10000, maxCampaigns: 10, linkedIn: true, agency: false, whiteLabel: false },
-  scale: { name: 'Scale', priceMonthly: 99, maxProspects: Infinity, maxCampaigns: Infinity, linkedIn: true, agency: false, whiteLabel: true },
-  agency: { name: 'Agency', priceMonthly: 249, maxProspects: Infinity, maxCampaigns: Infinity, linkedIn: true, agency: true, whiteLabel: true },
+  trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, leadFinderCredits: 25, linkedIn: false, agency: false, whiteLabel: false },
+  starter: { name: 'Starter', priceMonthly: 29, maxProspects: 2000, maxCampaigns: 3, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false },
+  growth: { name: 'Growth', priceMonthly: 49, maxProspects: 10000, maxCampaigns: 10, leadFinderCredits: 1000, linkedIn: true, agency: false, whiteLabel: false },
+  scale: { name: 'Scale', priceMonthly: 99, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: false, whiteLabel: true },
+  agency: { name: 'Agency', priceMonthly: 249, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: true, whiteLabel: true },
 };
 
 function planOf(user) {
@@ -1591,6 +1797,77 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
   },
 
   // --- app (auth required) ---
+  // --- lead finder ---
+  'GET /api/app/lead-finder/status': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    const plan = planOf(user);
+    const usage = leadFinderUsage(user, plan);
+    const users2 = load('users');
+    const idx = users2.findIndex(u => u.email === session.email);
+    if (idx >= 0) { users2[idx].leadFinder = user.leadFinder; save('users', users2); }
+    send(res, 200, {
+      ok: true, provider: leadFinderProvider() || 'builtin',
+      used: usage.used, quota: usage.quota, month: usage.month,
+    });
+  },
+
+  'POST /api/app/lead-finder/search': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const b = await readBody(req);
+    const limit = Math.min(25, Math.max(1, parseInt(b.limit, 10) || 10));
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    const plan = planOf(user);
+    if (plan.expired) return send(res, 402, { ok: false, error: 'Your trial has ended — upgrade to use Lead Finder.', upgrade: true });
+    const usage = leadFinderUsage(user, plan);
+    if (usage.used >= usage.quota) {
+      return send(res, 402, { ok: false, error: `Lead Finder quota reached (${usage.quota}/month on ${plan.name}). Upgrade for more credits.`, upgrade: true, used: usage.used, quota: usage.quota });
+    }
+    const filters = {
+      keywords: (b.keywords || '').slice(0, 200),
+      title: (b.title || '').slice(0, 120),
+      size: (b.size || '').slice(0, 40),
+      location: (b.location || '').slice(0, 120),
+    };
+    try {
+      const found = await searchLeads(filters, limit, session.email);
+      // Charge one credit per returned lead, capped by remaining quota.
+      const charge = Math.min(found.leads.length, Math.max(0, usage.quota - usage.used));
+      const users2 = load('users');
+      const idx = users2.findIndex(u => u.email === session.email);
+      if (idx >= 0) {
+        const u2 = users2[idx];
+        const usage2 = leadFinderUsage(u2, plan);
+        u2.leadFinder.used = usage2.used + charge;
+        save('users', users2);
+        found.used = u2.leadFinder.used;
+        found.quota = usage2.quota;
+      }
+      send(res, 200, { ok: true, ...found });
+    } catch (err) {
+      send(res, 502, { ok: false, error: `Lead Finder failed: ${err.message}` });
+    }
+  },
+
+  'POST /api/app/lead-finder/enroll': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const b = await readBody(req);
+    if (!b.campaignId || !Array.isArray(b.leads) || !b.leads.length) {
+      return send(res, 400, { ok: false, error: 'campaignId and leads[] required' });
+    }
+    const user = load('users').find(u => u.email === session.email);
+    const plan = planOf(user);
+    if (plan.expired) return send(res, 402, { ok: false, error: 'Your trial has ended — upgrade to keep adding prospects.', upgrade: true });
+    const result = enrollLeads(session.email, b.campaignId, b.leads.slice(0, 100));
+    if (result.error) return send(res, 404, { ok: false, error: result.error });
+    send(res, 200, { ok: true, ...result });
+  },
+
   'GET /api/app/overview': (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;

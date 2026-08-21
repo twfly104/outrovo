@@ -1545,6 +1545,15 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   color: var(--ink);
 }
 .subhead select:focus { outline: none; border-color: var(--crest); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14); }
+.lead-status { font-size: 0.8rem; color: var(--ink-faint); }
+.ok-tag { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #e7f5ee; color: #1a7a4a; font-weight: 700; font-size: 0.78rem; }
+.warn-tag { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #fdf0e3; color: #b45309; font-weight: 700; font-size: 0.78rem; }
+.muted-note { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 16px; }
+.lead-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.lead-actions select { max-width: 280px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font: inherit; }
+.lead-actions select:focus { outline: none; border-color: var(--crest); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14); }
+#leadResults { margin-top: 18px; }
+#leadTable td:first-child, #leadTable th:first-child { width: 34px; }
 .app-body .field textarea {
   width: 100%;
   padding: 12px 15px;

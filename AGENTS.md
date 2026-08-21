@@ -59,6 +59,11 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   (`POST /api/app/tools/test-email` delivered via real SMTP during audit).
 - `STRIPE_SECRET_KEY` (+ `STRIPE_WEBHOOK_SECRET` for webhook activation) —
   otherwise checkout returns manual instructions.
+- `APOLLO_API_KEY` or `HUNTER_API_KEY` — powers Lead Finder search
+  (Campaigns page). Without one, Lead Finder falls back to crawling the
+  target company domains the user types in and MX-verifies what it finds.
+  Quotas per plan: trial 25, starter 100, growth 1,000, scale/agency 10,000
+  credits/month (1 credit per returned lead), tracked on `user.leadFinder`.
 
 ## API
 - `POST /api/signup` — validates, scrypt-hashes password, 409 on duplicate email
@@ -70,7 +75,8 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   `/:id/activate|pause`, DELETE), `/api/app/prospects` (GET/POST single+CSV,
   `/:id/verify`), `/api/app/activity`, `/api/app/tasks` (`/:id/done`),
   `/api/app/tools/verify` (syntax + MX), `/api/app/tools/domain-audit`
-  (MX/SPF/DMARC/DKIM-selector DNS checks), `/api/app/engine`
+  (MX/SPF/DMARC/DKIM-selector DNS checks), `/api/app/lead-finder/status|search|enroll`
+  (ICP/domain search → verify → add to campaign, credit-metered), `/api/app/engine`
 - `/app.html` and `/app.js` redirect to `/login.html` without a session
 
 ## Conventions
