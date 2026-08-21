@@ -893,6 +893,14 @@ async function loadLeadFinderStatus() {
   $('apCampaign').innerHTML = campaigns.map(c => `<option value="${c.id}" ${ap?.campaignId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
   if (ap?.dailyLimit) $('apDailyLimit').value = String(ap.dailyLimit);
   $('autopilotNote').textContent = ap?.enabled && ap.lastNote ? `Last run: ${ap.lastNote}` : '';
+  // Auto-fill the search form from the saved autopilot criteria — only into
+  // fields the user hasn't already typed into, so it never clobbers edits.
+  if (ap) {
+    if (ap.keywords && !$('lfKeywords').value) $('lfKeywords').value = ap.keywords;
+    if (ap.title && !$('lfTitle').value) $('lfTitle').value = ap.title;
+    if (ap.size) $('lfSize').value = ap.size;
+    if (ap.location && !$('lfLocation').value) $('lfLocation').value = ap.location;
+  }
 }
 
 async function saveAutopilot(enabled) {
