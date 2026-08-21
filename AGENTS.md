@@ -6,8 +6,10 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 ## Stack
 - Marketing frontend: `index.html`, `pricing.html`, `signup.html`, `login.html`,
   `styles.css`, `script.js` — no build step.
-- Product app: `app.html` + `app.js` — session-gated dashboard (Overview,
-  Campaigns, Prospects, Activity & tasks, Tools, Settings).
+- Product app: `app.html` + `app.js` — session-gated dashboard with 4 pages:
+  Overview (stats + LinkedIn to-dos + event feed), Campaigns (list + prospect
+  management), Inbox, Settings (incl. verify/domain tools). Agency page is
+  hidden unless the plan has Agency seats.
 - Backend: `server.js` (Node >= 18, one dep: `nodemailer` — `npm install` first).
   Static hosting + JSON API + campaign engine. Persistence in `data/*.json`
   (gitignored). Passwords scrypt-hashed, sessions in httpOnly cookie
