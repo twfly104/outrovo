@@ -140,6 +140,9 @@ document.querySelectorAll('form[id$="Form"]').forEach(form => {
     const payload = Object.fromEntries(
       [...form.querySelectorAll('.field input')].map(i => [i.name, i.value.trim()])
     );
+    // The terms checkbox lives outside .field — send it explicitly; the server
+    // rejects signups without it and records the consent timestamp.
+    if (terms) payload.terms = terms.checked;
 
     try {
       const res = await fetch(endpoint, {

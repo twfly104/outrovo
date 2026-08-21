@@ -32,13 +32,26 @@
         <h1 class="h-l" style="margin:14px 0 30px;">Privacy policy</h1>
         <p class="lead">Last updated: August 2026. This policy explains what Outrovo collects, why, and the control you have over it.</p>
 
+        <h2 class="h-m" style="margin:36px 0 10px;">Who is responsible</h2>
+        <p class="lead" style="font-size:1rem;">The data controller for your account data is Outrovo Inc. For privacy questions or to exercise any right below, email <a href="mailto:privacy@outrovo.com">privacy@outrovo.com</a> — we answer within 30 days.</p>
+
         <h2 class="h-m" style="margin:36px 0 10px;">What we collect</h2>
         <ul class="plist">
-          <li><span class="tick">•</span><span><strong>Account data</strong> — your name, work email and company when you sign up.</span></li>
+          <li><span class="tick">•</span><span><strong>Account data</strong> — your name, work email and company when you sign up, plus your consent record (which terms you accepted and when).</span></li>
           <li><span class="tick">•</span><span><strong>Workspace data</strong> — the prospects, campaigns and sequences you create. This is your data, stored only to run the product.</span></li>
           <li><span class="tick">•</span><span><strong>Usage data</strong> — basic product analytics (pages viewed, features used) so we can improve Outrovo.</span></li>
           <li><span class="tick">•</span><span><strong>Billing data</strong> — processed by our payment provider (Stripe). We never see or store full card numbers.</span></li>
         </ul>
+
+        <h2 class="h-m" style="margin:36px 0 10px;">Legal bases (GDPR)</h2>
+        <ul class="plist">
+          <li><span class="tick">•</span><span><strong>Contract</strong> — account and workspace data, to provide the service you signed up for.</span></li>
+          <li><span class="tick">•</span><span><strong>Consent</strong> — your acceptance of the terms and this policy at signup, recorded with a timestamp.</span></li>
+          <li><span class="tick">•</span><span><strong>Legitimate interest</strong> — usage analytics and security logging, balanced against your rights.</span></li>
+        </ul>
+
+        <h2 class="h-m" style="margin:36px 0 10px;">Your prospects' data</h2>
+        <p class="lead" style="font-size:1rem;">When you upload prospect lists, <strong>you</strong> are the data controller and Outrovo acts as your <strong>processor</strong>, handling that data only on your instructions. You are responsible for having a lawful basis to contact your prospects and for honoring their opt-outs — the product enforces one-click unsubscribe and a suppression list automatically. A data processing addendum (DPA) is available on request at <a href="mailto:privacy@outrovo.com">privacy@outrovo.com</a>.</p>
 
         <h2 class="h-m" style="margin:36px 0 10px;">What we never do</h2>
         <ul class="plist">
@@ -48,14 +61,40 @@
         </ul>
 
         <h2 class="h-m" style="margin:36px 0 10px;">How we protect it</h2>
-        <p class="lead" style="font-size:1rem;">Passwords are salted and hashed (scrypt) — never stored in plain text. Sessions use httpOnly cookies. Data in transit is encrypted with TLS. Access to production data is limited to the engineers who operate the service.</p>
+        <p class="lead" style="font-size:1rem;">Passwords are salted and hashed (scrypt) — never stored in plain text. Connected inbox passwords are encrypted at rest (AES-256-GCM). Sessions use httpOnly cookies. Data in transit is encrypted with TLS. Access to production data is limited to the engineers who operate the service.</p>
 
-        <h2 class="h-m" style="margin:36px 0 10px;">Your controls</h2>
-        <p class="lead" style="font-size:1rem;">You can export or delete your prospects at any time from the app. To delete your account and all associated data, contact us and we will remove it within 30 days.</p>
+        <h2 class="h-m" style="margin:36px 0 10px;">How long we keep it</h2>
+        <ul class="plist">
+          <li><span class="tick">•</span><span><strong>Account &amp; workspace data</strong> — kept while your account is active; erased immediately when you delete your account.</span></li>
+          <li><span class="tick">•</span><span><strong>Sessions</strong> — expire after 7 days.</span></li>
+          <li><span class="tick">•</span><span><strong>Activity logs</strong> — rolling 500-event operational log, kept for security and debugging.</span></li>
+          <li><span class="tick">•</span><span><strong>Suppression records</strong> — kept after deletion only where a customer asks us to keep honoring an opt-out.</span></li>
+        </ul>
+
+        <h2 class="h-m" style="margin:36px 0 10px;">Who processes it</h2>
+        <ul class="plist">
+          <li><span class="tick">•</span><span><strong>Stripe</strong> — payment processing.</span></li>
+          <li><span class="tick">•</span><span><strong>Hosting provider</strong> — infrastructure (Render/Vercel).</span></li>
+          <li><span class="tick">•</span><span><strong>Email delivery</strong> — Resend or your own connected inbox (SMTP), only to send campaigns you start.</span></li>
+        </ul>
+        <p class="lead" style="font-size:1rem;">Where these providers process data outside the EEA, transfers rely on standard contractual clauses or an equivalent safeguard.</p>
+
+        <h2 class="h-m" style="margin:36px 0 10px;">Your rights</h2>
+        <p class="lead" style="font-size:1rem;">You can exercise every one of these from the app, today, without contacting us:</p>
+        <ul class="plist">
+          <li><span class="tick">•</span><span><strong>Access &amp; portability</strong> — Settings → Account → <em>Export my data</em> downloads everything your account holds as JSON.</span></li>
+          <li><span class="tick">•</span><span><strong>Rectification</strong> — edit your prospects, campaigns and profile in the app.</span></li>
+          <li><span class="tick">•</span><span><strong>Erasure</strong> — Settings → Account → <em>Delete account</em> removes the account and all its data immediately.</span></li>
+          <li><span class="tick">•</span><span><strong>Objection &amp; restriction</strong> — email <a href="mailto:privacy@outrovo.com">privacy@outrovo.com</a>.</span></li>
+        </ul>
+        <p class="lead" style="font-size:1rem;">You also have the right to lodge a complaint with your local data protection supervisory authority.</p>
+
+        <h2 class="h-m" style="margin:36px 0 10px;">Cookies</h2>
+        <p class="lead" style="font-size:1rem;">We use one strictly-necessary cookie (<code>outrovo_session</code>, httpOnly, 7 days) to keep you signed in. No advertising or third-party tracking cookies.</p>
 
         <h2 class="h-m" style="margin:36px 0 10px;">Contact</h2>
-        <p class="lead" style="font-size:1rem;">Questions about this policy? Reach us via the <a href="signup.html">demo booking page</a> and we will get back to you.</p>
-        <p style="color:var(--ink3);font-size:.85rem;margin-top:40px;">This is a template policy provided for launch readiness — have it reviewed by your legal advisor before operating at scale.</p>
+        <p class="lead" style="font-size:1rem;">Questions about this policy? Email <a href="mailto:privacy@outrovo.com">privacy@outrovo.com</a> and we will get back to you.</p>
+        <p style="color:var(--ink3);font-size:.85rem;margin-top:40px;">This is a template policy provided for launch readiness — have it reviewed by your legal advisor before operating at scale, and replace the contact address with your own.</p>
       </div>
     </section>
   </main>

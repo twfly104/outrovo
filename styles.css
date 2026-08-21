@@ -1568,7 +1568,16 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .intel-angle h4 { font-size: 0.74rem; letter-spacing: .04em; text-transform: uppercase; color: var(--crest-deep); margin: 0 0 4px; }
 .intel-angle p { font-size: 0.85rem; color: var(--ink); margin: 0; }
 .muted-note { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 16px; }
-.lead-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+
+/* Lead finder — two-step layout (offer → target customer) */
+.lf-group { border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px 22px; margin: 0 0 18px; background: #fff; }
+.lf-group .field { margin-bottom: 14px; }
+.lf-group .field-row:last-of-type .field { margin-bottom: 4px; }
+.lf-group-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.lf-group-head h3 { font-size: 0.98rem; margin: 0; color: var(--ink); }
+.lf-group-hint { font-size: 0.78rem; color: var(--ink-faint); }
+.lf-step { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--crest, #f97316); color: #fff; font-size: 0.72rem; font-weight: 800; flex: none; }
+.lead-actions { display: flex; align-items: flex-end; gap: 14px; margin-top: 16px; flex-wrap: wrap; }
 .lead-actions select { max-width: 280px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font: inherit; }
 .lead-actions select:focus { outline: none; border-color: var(--crest); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14); }
 

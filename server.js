@@ -91,7 +91,7 @@ function readBody(req) {
   });
 }
 const isEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
-const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company, owner: u.owner || null, whiteLabel: u.whiteLabel || null });
+const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company, owner: u.owner || null, whiteLabel: u.whiteLabel || null, mailingAddress: u.mailingAddress || '' });
 const newToken = () => crypto.randomBytes(24).toString('hex');
 
 function getSession(req) {
@@ -227,6 +227,8 @@ function recordSend(sender) {
 // Each user carries a suppression list; every campaign email gets a
 // List-Unsubscribe header + footer link signed with an HMAC token.
 const PUBLIC_URL = (process.env.PUBLIC_URL || 'https://outrovo.onrender.com').replace(/\/$/, '');
+// Bump when terms.html / privacy.html change materially — recorded on each signup.
+const TERMS_VERSION = '2026-08';
 const UNSUB_KEY = crypto.createHash('sha256')
   .update(`${process.env.DATA_KEY || ADMIN_KEY}:outrovo-unsub`)
   .digest();
@@ -920,8 +922,16 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
   // (skipped for the test-email tool, which passes campaign.id undefined).
   const withUnsub = Boolean(campaign.id && campaign.owner);
   const link = withUnsub ? unsubUrl(campaign.owner, prospect.email) : null;
-  const body = personalize(variant.body, prospect)
-    + (withUnsub ? `\n\n—\nDon't want these emails? Unsubscribe: ${link}` : '');
+  // CAN-SPAM §7704(a)(5): every commercial email must carry the sender's valid
+  // physical postal address plus a working opt-out — both go in the footer.
+  const ownerAddr = withUnsub
+    ? (load('users').find(u => u.email === campaign.owner)?.mailingAddress || '').trim()
+    : '';
+  const footer = [
+    ...(ownerAddr ? [ownerAddr] : []),
+    `Don't want these emails? Unsubscribe: ${link}`,
+  ].join('\n');
+  const body = personalize(variant.body, prospect) + (withUnsub ? `\n\n—\n${footer}` : '');
   const unsubHeaders = withUnsub ? {
     'List-Unsubscribe': `<${link}>`,
     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
@@ -1024,14 +1034,18 @@ function extractSiteInfo(html, url) {
   const ldTypes = [...html.matchAll(/"@type"\s*:\s*"([^"]+)"/gi)]
     .map(m => m[1]).filter(t => !/^(WebSite|WebPage|BreadcrumbList|Article|NewsArticle|FAQPage|Organization|Corporation|LocalBusiness|SearchAction|SiteNavigationElement|ItemList|VideoObject|ImageObject)$/i.test(t))
     .slice(0, 3);
-  const text = html
+  const fullText = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script\b[^>]*>[\s\S]*$/i, ' ') // truncated by the html cap
+    .replace(/<style\b[^>]*>[\s\S]*$/i, ' ')  // (unclosed trailing block)
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 3000);
-  return { url, title, desc, h1s, headings, ldTypes, text };
+    .trim();
+  // Footers (HQ address, legal) live past the body cap — keep the tail too.
+  const text = fullText.slice(0, 12000);
+  const tail = fullText.length > 12000 ? fullText.slice(-8000) : '';
+  return { url, title, desc, h1s, headings, ldTypes, text, tail };
 }
 
 async function fetchSite(url, attempt = 0) {
@@ -1048,7 +1062,7 @@ async function fetchSite(url, attempt = 0) {
       redirect: 'follow',
     });
     if (!res.ok) throw new Error(`Site returned ${res.status}`);
-    const html = (await res.text()).slice(0, 200000);
+    const html = (await res.text()).slice(0, 600000); // heavy builders (Framer/Webflow) exceed 200k
     return extractSiteInfo(html, target);
   } finally {
     clearTimeout(timer);
@@ -1277,13 +1291,34 @@ function heuristicIcp(info, domain, extraText) {
   // priority (most specific) match wins, ties go to the first match.
   const candidates = [];
   for (const cue of INDUSTRY_CUES) if (high.includes(cue.cue)) candidates.push(cue);
+  // CJK sites cannot match the English cue list — map common Taiwan/JP
+  // market terms to the same buyer buckets.
+  const CJK_INDUSTRY_CUES = [
+    { cue: "電商", kw: "ecommerce brands", title: "founder", pri: 4 },
+    { cue: "電子商務", kw: "ecommerce brands", title: "founder", pri: 4 },
+    { cue: "品牌", kw: "consumer brands", title: "founder", pri: 3 },
+    { cue: "餐飲", kw: "restaurants", title: "owner", pri: 4 },
+    { cue: "製造", kw: "manufacturers", title: "general manager", pri: 4 },
+    { cue: "診所", kw: "clinics", title: "owner", pri: 4 },
+    { cue: "醫美", kw: "aesthetic clinics", title: "owner", pri: 4 },
+    { cue: "不動產", kw: "real estate agencies", title: "owner", pri: 4 },
+    { cue: "房仲", kw: "real estate agencies", title: "owner", pri: 4 },
+    { cue: "旅遊", kw: "travel agencies", title: "owner", pri: 4 },
+    { cue: "教育", kw: "education companies", title: "head of operations", pri: 3 },
+    { cue: "金融", kw: "financial services", title: "head of sales", pri: 3 },
+    { cue: "行銷", kw: "marketing agencies", title: "head of marketing", pri: 2 },
+  ];
+  for (const cue of CJK_INDUSTRY_CUES) if (high.includes(cue.cue)) candidates.push(cue);
   const seenCues = new Set();
   for (const t of info.ldTypes) {
     const spaced = String(t).replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
     for (const cue of INDUSTRY_CUES) if (spaced.includes(cue.cue)) candidates.push(cue);
   }
   for (const cue of candidates) { if (!seenCues.has(cue.kw)) { seenCues.add(cue.kw); pushIndustry(cue.kw); } }
-  const keywords = industries.join(', ') || domain;
+  // Never echo the scanned domain — searching it returns the user's own
+  // employees, and the field misleads them into thinking that's the target.
+  // Empty means "we couldn't infer — the form asks them to type it".
+  const keywords = industries.join(', ');
 
   let title = '';
   if (candidates.length) {
@@ -1315,29 +1350,81 @@ function heuristicIcp(info, domain, extraText) {
   let size = '';
   if (/\b(enterprise|fortune ?500|global enterprises?|multinational|enterprise-grade|corporations?|c-suite)\b/.test(text)) size = '1001,10000';
   else if (/\b(solo|freelance|indie|bootstrap|solopreneur|self-employed)s?\b/.test(text)) size = '1,10';
-  else if (/\b(mid-market|smb|small business|startup|scale-up|early-stage|integration|workflow|plug[- ]?in)s?\b/.test(text)) size = '11,50';
+  // Weak tokens like "integration"/"workflow" were dropped — they are
+  // product vocabulary, not target-size signals, and produced bogus sizes.
+  else if (/\b(mid-market|smb|small business|startup|scale-up|early-stage)s?\b/.test(text)) size = '11,50';
 
   if (!title) title = size === '1001,10000' ? 'head of sales' : 'founder';
 
-  // Location: contact/about pages carry the real HQ city; the rest falls
-  // from the strongest signal in homepage copy (hq city > country claims).
-  const G = [
-    { re: /\b(new york|san francisco|silicon valley|austin|boston|chicago|los angeles|seattle|miami|denver|atlanta|united states|usa|america)\b/, loc: 'United States' },
-    { re: /\b(london|manchester|edinburgh|united kingdom|britain|uk\b)\b/, loc: 'United Kingdom' },
-    { re: /\b(canada|toronto|vancouver|montreal|ontario)\b/, loc: 'Canada' },
-    { re: /\b(peru|colombia|mexico|chile|argentina|brazil|latin america|south america)\b/, loc: 'South America' },
-    { re: /\b(berlin|paris|amsterdam|dublin|barcelona|stockholm|lisbon|madrid|hamburg|munich|london|europe|german|france|spain|italy|norway|sweden|denmark|finland|belgium|switzerland|austria|poland|netherlands)\b/, loc: 'Europe' },
-    { re: /\b(taiwan|taipei|hong kong|macau|singapore|tokyo|japan|korea|seoul|sydney|australia|bangalore|bengaluru|mumbai|delhi|india|malaysia|thailand|philippines|indonesia|vietnam|new zealand)\b/, loc: 'Asia' },
-    { re: /\b(dubai|abu dhabi|saudi|uae|emirates|qatar|israel|tel aviv|middle east)\b/, loc: 'Middle East' },
-    { re: /\b(nigeria|kenya|south africa|ghana|egypt|morocco|africa)\b/, loc: 'Africa' },
+  // Location: scored across sources — contact/about pages weigh heaviest,
+  // then title/headings, then body. Specific countries beat regions, and
+  // native-script names (台灣, 日本, 德國…) count just like English ones.
+  // This stops a stray "USA clients" mention from overriding a 台灣 HQ.
+  const LOCATION_BUCKETS = [
+    { loc: 'Taiwan', re: /(taiwan|taipei|taichung|kaohsiung|台灣|臺灣|台湾|台北|臺北|桃園|桃园|新竹|台中|臺中|高雄)/ },
+    { loc: 'Japan', re: /\b(tokyo|japan|osaka)\b|(日本|東京|大阪)/ },
+    { loc: 'South Korea', re: /\b(korea|seoul)\b|(韓國|韩国|首爾|首尔)/ },
+    { loc: 'China', re: /\b(china|shanghai|beijing|shenzhen|guangzhou|hangzhou)\b|(中國|中国|上海|北京|深圳|广州|廣州|杭州)/ },
+    { loc: 'Hong Kong', re: /\b(hong kong|macau)\b|(香港|澳門|澳门)/ },
+    { loc: 'Singapore', re: /\bsingapore\b|(新加坡)/ },
+    { loc: 'Thailand', re: /\b(thailand|bangkok)\b|(泰國|泰国|曼谷)/ },
+    { loc: 'Vietnam', re: /\b(vietnam|hanoi|ho chi minh)\b|(越南|河內|河内|胡志明)/ },
+    { loc: 'Malaysia', re: /\b(malaysia|kuala lumpur)\b|(馬來西亞|马来西亚|吉隆坡)/ },
+    { loc: 'Indonesia', re: /\b(indonesia|jakarta)\b|(印尼|雅加達|雅加达)/ },
+    { loc: 'Philippines', re: /\b(philippines|manila)\b|(菲律賓|菲律宾|馬尼拉|马尼拉)/ },
+    { loc: 'India', re: /\b(india|bangalore|bengaluru|mumbai|delhi)\b|(印度|孟買|孟买|德里)/ },
+    { loc: 'Australia', re: /\b(australia|sydney|melbourne)\b|(澳洲|澳大利亞|澳大利亚|雪梨|悉尼|墨爾本|墨尔本)/ },
+    { loc: 'New Zealand', re: /\b(new zealand|auckland)\b|(新西蘭|新西兰|奧克蘭|奥克兰)/ },
+    { loc: 'United States', re: /\b(new york|san francisco|silicon valley|austin|boston|chicago|los angeles|seattle|miami|denver|atlanta|united states|usa|u\.s\.|america)\b|(美國|美国|紐約|纽约|舊金山|旧金山|洛杉磯|洛杉矶|芝加哥|波士頓|波士顿|西雅圖|西雅图)/ },
+    { loc: 'Canada', re: /\b(canada|toronto|vancouver|montreal|ontario)\b|(加拿大|多倫多|多伦多|溫哥華|温哥华|蒙特利爾|蒙特利尔)/ },
+    { loc: 'Mexico', re: /\b(mexico)\b|(墨西哥)/ },
+    { loc: 'Brazil', re: /\b(brazil|sao paulo)\b|(巴西|聖保羅|圣保罗)/ },
+    { loc: 'United Kingdom', re: /\b(london|manchester|edinburgh|united kingdom|britain)\b|(英國|英国|倫敦|伦敦|曼徹斯特|曼彻斯特)/ },
+    { loc: 'Germany', re: /\b(germany|berlin|hamburg|munich)\b|(德國|德国|柏林|慕尼黑)/ },
+    { loc: 'France', re: /\b(france|paris)\b|(法國|法国|巴黎)/ },
+    { loc: 'Netherlands', re: /\b(netherlands|amsterdam)\b|(荷蘭|荷兰|阿姆斯特丹)/ },
+    { loc: 'Spain', re: /\b(spain|madrid|barcelona)\b|(西班牙|馬德里|马德里|巴塞隆納|巴塞罗那)/ },
+    { loc: 'Italy', re: /\b(italy|milan|rome)\b|(義大利|意大利|米蘭|米兰|羅馬|罗马)/ },
+    { loc: 'Middle East', re: /\b(dubai|abu dhabi|saudi|uae|emirates|qatar|israel|tel aviv|middle east)\b|(迪拜|阿聯酋|阿联酋|以色列)/ },
+    { loc: 'South America', re: /\b(peru|colombia|chile|argentina|latin america|south america)\b|(秘魯|秘鲁|智利|阿根廷|哥倫比亞|哥伦比亚)/ },
+    { loc: 'Europe', re: /\b(europe|stockholm|lisbon|dublin|norway|sweden|denmark|finland|belgium|switzerland|austria|poland)\b|(歐洲|欧洲|瑞典|挪威|瑞士|波蘭|波兰)/ },
+    { loc: 'Asia', re: /\basia\b|(亞洲|亚洲)/ },
+    { loc: 'Africa', re: /\b(nigeria|kenya|south africa|ghana|egypt|morocco|africa)\b|(非洲|奈及利亞|尼日利亚|肯亞|肯尼亚|埃及|南非|摩洛哥|迦納|加纳)/ },
+  ];
+  const sources = [
+    [String(extraText || '').toLowerCase(), 4],
+    [(info.title + ' ' + (info.headings || info.h1s || []).join(' ')).toLowerCase(), 2],
+    [(String(info.text || '') + ' ' + String(info.tail || '')).toLowerCase(), 1],
   ];
   let location = '';
-  for (const src of [extraText, text]) {
-    for (const g of G) { if (g.re.test(src)) { location = g.loc; break; } }
-    if (location) break;
+  let best = 0;
+  for (const { loc, re } of LOCATION_BUCKETS) {
+    let score = 0;
+    for (const [src, w] of sources) if (re.test(src)) score += w;
+    if (score > best) { best = score; location = loc; }
   }
 
-  return { keywords, title, size, location };
+  // What the company sells + why buyers pick it — fills the form's "Your
+  // offer" group and doubles as the ✦ Intel sender angle's pitch context.
+  // shortText (not cleanPhrase): descriptions need more than 5 words.
+  const shortText = (s, max) => {
+    const t = String(s || '').replace(/\s+/g, ' ').trim();
+    return t.length > max ? t.slice(0, max).replace(/[\s,，、]\S*$/, '').trim() : t;
+  };
+  const service = shortText(
+    String(info.title || '').split(/\s*[|—–]\s*/)[0]
+    || String(info.desc || '').split(/[.。!！?？]/)[0], 120);
+  // First substantive heading wins — skip greetings/modal boilerplate like
+  // 「親愛的訪客您好」 that Framer sites inject before the real hero copy.
+  const boilerplate = /^(親愛的|您好|歡迎|哈囉|感謝|謝謝|hello\b|welcome\b|hi\b|dear\b|thank)/i;
+  const valueProp = shortText(
+    (info.h1s || []).concat(info.headings || [])
+      .map(h => String(h).trim())
+      .filter(h => h.length >= 8 && !boilerplate.test(h))
+      .find(h => h !== service)
+    || String(info.desc || '').split(/[.。!！?？]/).filter(Boolean).slice(0, 2).join('. '), 140);
+
+  return { keywords, title, size, location, service, valueProp };
 }
 
 // Fetch /about and /contact (best-effort) for HQ address and team-size cues
@@ -1347,10 +1434,10 @@ async function fetchAboutContactText(domain) {
   for (const p of ['/about', '/contact', '/company']) {
     try {
       const extra = await fetchSite(`https://${domain}${p}`);
-      parts.push(extra.title + ' ' + extra.desc + ' ' + extra.text);
+      parts.push(extra.title + ' ' + extra.desc + ' ' + extra.text + ' ' + (extra.tail || ''));
     } catch { /* page missing — skip */ }
   }
-  return parts.join(' ').toLowerCase().slice(0, 6000);
+  return parts.join(' ').toLowerCase().slice(0, 60000);
 }
 
 // Retry Cloudflare-class antibot short-circuits at least once — the JSDOM
@@ -1384,7 +1471,7 @@ async function inferIcpFromSite(domain) {
           model,
           response_format: { type: 'json_object' },
           messages: [
-            { role: 'system', content: 'You help sales teams find their ideal customer profile (ICP). Given a company website, infer who the company SELLS TO — its customers, not the company itself. Fill lead-finder fields: keywords (the target market, industry, or complementary companies to search — NEVER the company\'s own domain), title (typical buyer job title), size (typical customer company size bucket like "11-50" or "1001-10000"), location (typical geography). Return ONLY JSON: {"keywords":"...","title":"...","size":"...","location":"..."} — each a short phrase, no sentences. Keep keywords to 2-4 words.' },
+            { role: 'system', content: 'You help sales teams find their ideal customer profile (ICP). Given a company website, infer: (a) what the company sells — "service" (5-12 words), (b) its core value proposition — "valueProp" (5-15 words), and (c) WHO IT SELLS TO — its customers, never the company itself: "keywords" (target market or industry to search, 2-4 words, NEVER the company\'s own domain), "title" (typical buyer job title), "size" (typical customer company size bucket like "11-50" or "1001-10000"), "location" (customer geography — for non-English sites read native-script address/country names: 台灣→Taiwan, 日本→Japan etc; never default to United States without evidence). Return ONLY JSON: {"service":"...","valueProp":"...","keywords":"...","title":"...","size":"...","location":"..."} — short phrases, no sentences.' },
             { role: 'user', content: JSON.stringify({ url: info.url, title: info.title, description: info.desc, headings: info.h1s, types: info.ldTypes, text: info.text.slice(0, 2000) }) },
           ],
           temperature: 0.3, max_tokens: 120,
@@ -1396,6 +1483,8 @@ async function inferIcpFromSite(domain) {
       const raw = llmData.choices?.[0]?.message?.content || '{}';
       const parsed = JSON.parse(raw);
       const prefill = {
+        service: (parsed.service || '').slice(0, 120),
+        valueProp: (parsed.valueProp || '').slice(0, 140),
         keywords: (parsed.keywords || '').slice(0, 200),
         title: (parsed.title || '').slice(0, 120),
         size: normSize(parsed.size),
@@ -1406,7 +1495,9 @@ async function inferIcpFromSite(domain) {
       const bareDomain = String(domain).toLowerCase().replace(/^www\./, '');
       const kwNorm = prefill.keywords.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '').trim();
       if (kwNorm === bareDomain) prefill.keywords = '';
-      if (prefill.keywords) return { prefill, source: 'llm', siteTitle: info.title };
+      // Accept whenever ANY field landed — a keywordless but service-rich
+      // answer (non-English site) is still a useful fill.
+      if (prefill.keywords || prefill.service || prefill.valueProp) return { prefill, source: 'llm', siteTitle: info.title };
     } catch { /* LLM failed — fall through to heuristic */ }
   }
 
@@ -1871,13 +1962,16 @@ const router = {
     if (!isEmail(b.email)) errors.email = 'invalid';
     if (!b.company?.trim()) errors.company = 'required';
     if (!b.password || b.password.length < 8) errors.password = 'min 8 chars';
+    if (b.terms !== true) errors.terms = 'required';
     if (Object.keys(errors).length) return send(res, 400, { ok: false, errors });
     const users = load('users');
     const email = b.email.trim().toLowerCase();
     if (users.some(u => u.email === email)) return send(res, 409, { ok: false, error: 'An account with this email already exists.' });
     const { salt, hash } = hashPassword(b.password);
     const trialEnds = new Date(Date.now() + 14 * 864e5).toISOString();
-    const user = { id: crypto.randomUUID(), firstName: b.firstName.trim(), lastName: b.lastName.trim(), email, company: b.company.trim(), salt, hash, plan: 'trial', trialEnds, createdAt: new Date().toISOString() };
+    // GDPR Art. 7: consent must be demonstrable — record what was agreed to and when.
+    const consent = { termsVersion: TERMS_VERSION, privacyVersion: TERMS_VERSION, at: new Date().toISOString() };
+    const user = { id: crypto.randomUUID(), firstName: b.firstName.trim(), lastName: b.lastName.trim(), email, company: b.company.trim(), salt, hash, plan: 'trial', trialEnds, consent, createdAt: new Date().toISOString() };
     users.push(user); save('users', users);
     // Onboarding diagnostic: audit the signup domain right away so the first
     // settings visit shows a ready result instead of a spinner.
@@ -2379,12 +2473,12 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const users2 = load('users');
     const idx = users2.findIndex(u => u.email === session.email);
     if (idx >= 0) { users2[idx].leadFinder = user.leadFinder; save('users', users2); }
-    // Seed the form: the signup domain audit (hunter.io / company website)
-    // is reused as a "search my own market" hint when autopilot hasn't been
-    // configured yet.
+    // Seed the form: prefill the scan box with the signup email domain so
+    // Scan & fill is one click. Never seed target keywords with the user's
+    // own domain — that searches for the user, not their customers.
     const seed = user.leadFinderAutopilot?.keywords
       ? null
-      : { keywords: (session.email.split('@')[1] || '').slice(0, 120) };
+      : { website: (session.email.split('@')[1] || '').slice(0, 120) };
     send(res, 200, {
       ok: true, provider: leadFinderProvider() || 'builtin',
       used: usage.used, quota: usage.quota, month: usage.month,
@@ -2417,7 +2511,8 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     }
     try {
       const result = await inferIcpFromSite(domain);
-      if (!result || !result.prefill?.keywords) {
+      const p = result?.prefill;
+      if (!p || !(p.keywords || p.service || p.valueProp || p.location || p.title)) {
         return send(res, 502, { ok: false, error: 'Could not read that site — check the URL or fill manually.' });
       }
       send(res, 200, { ok: true, ...result });
@@ -2950,8 +3045,58 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const user = users.find(u => u.email === session.email);
     if (!user) return send(res, 404, { ok: false });
     if (b.linkedinBudget != null) user.linkedinBudget = Math.max(1, Math.min(100, Number(b.linkedinBudget)));
+    if (b.mailingAddress != null) user.mailingAddress = String(b.mailingAddress).trim().slice(0, 300);
     save('users', users);
-    send(res, 200, { ok: true, linkedinBudget: linkedinBudget(user) });
+    send(res, 200, { ok: true, linkedinBudget: linkedinBudget(user), mailingAddress: user.mailingAddress || '' });
+  },
+
+  // --- GDPR data rights (Arts. 15/17/20) ---
+  // Full self-serve export of everything the account owns, secrets stripped.
+  'GET /api/app/export': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const email = session.email;
+    const user = load('users').find(u => u.email === email);
+    if (!user) return send(res, 404, { ok: false, error: 'User not found' });
+    const { salt, hash, integrationTokenHash, ...account } = user;
+    const campaignIds = new Set(load('campaigns').filter(c => c.owner === email).map(c => c.id));
+    const data = {
+      exportedAt: new Date().toISOString(),
+      account,
+      campaigns: load('campaigns').filter(c => c.owner === email),
+      prospects: load('prospects').filter(p => campaignIds.has(p.campaignId)),
+      replies: load('replies').filter(r => r.owner === email),
+      tasks: load('tasks').filter(t => t.owner === email),
+      senders: load('senders').filter(s => s.owner === email).map(({ encPass, ...s }) => s),
+    };
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="outrovo-export-${email.replace(/[^a-z0-9]/gi, '_')}.json"`,
+    });
+    res.end(JSON.stringify(data, null, 2));
+  },
+
+  // Erasure: password-confirmed, removes the account and every record it owns.
+  'DELETE /api/app/account': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const b = await readBody(req).catch(() => ({}));
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    if (!user || !verifyPassword(b.password || '', user.salt, user.hash)) {
+      return send(res, 403, { ok: false, error: 'Password confirmation failed — account not deleted.' });
+    }
+    const email = user.email;
+    const campaignIds = new Set(load('campaigns').filter(c => c.owner === email).map(c => c.id));
+    save('campaigns', load('campaigns').filter(c => c.owner !== email));
+    save('prospects', load('prospects').filter(p => !campaignIds.has(p.campaignId)));
+    save('replies', load('replies').filter(r => r.owner !== email));
+    save('tasks', load('tasks').filter(t => t.owner !== email));
+    save('senders', load('senders').filter(s => s.owner !== email));
+    save('sessions', load('sessions').filter(s => s.email !== email));
+    save('users', users.filter(u => u.email !== email));
+    logEvent('account', `Account self-deleted (GDPR erasure): ${email}`);
+    send(res, 200, { ok: true }, { 'Set-Cookie': 'outrovo_session=; HttpOnly; Path=/; Max-Age=0' });
   },
 
   // --- LinkedIn autopilot bridge ---

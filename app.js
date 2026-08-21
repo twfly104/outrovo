@@ -38,6 +38,10 @@ async function init() {
     ? `Plan: ${data.plan.name}${data.plan.id === 'trial' && data.plan.trialEnds ? ` (trial ends ${new Date(data.plan.trialEnds).toLocaleDateString()})` : ''}`
     : '';
   $('accountInfo').textContent = (me ? `${me.firstName} ${me.lastName} — ${me.email} (${me.company})` : '') + (planLine ? ` · ${planLine}` : '');
+  $('mailAddr').value = me?.mailingAddress || '';
+  if (!me?.mailingAddress) {
+    $('mailAddrResult').innerHTML = '<span class="no-tag">⚠ No mailing address saved</span> — one is legally required (CAN-SPAM) in every campaign email you send.';
+  }
   if (data.plan?.expired) {
     const banner = $('engineBanner');
     banner.hidden = false;
@@ -52,6 +56,7 @@ async function init() {
   bindTools();
   bindSenders();
   bindDomainDiag();
+  bindAccount();
   bindLinkedInSafety();
   bindIntegration();
   bindSuppression();
@@ -647,6 +652,27 @@ async function loadDomainDiag() {
   if (audit) renderAudit($('sdAuditResult'), { score: audit.meta.score, checks: audit.meta.checks });
 }
 
+// ---------- Compliance & account data rights ----------
+function bindAccount() {
+  $('mailAddrBtn').addEventListener('click', async () => {
+    const { data } = await api('POST', '/api/app/settings', { mailingAddress: $('mailAddr').value });
+    $('mailAddrResult').innerHTML = data.ok
+      ? (data.mailingAddress
+        ? '<span class="ok-tag">✓ Saved</span> — this address now appears in every campaign email footer.'
+        : '<span class="no-tag">⚠ Address cleared</span> — CAN-SPAM requires a postal address in every campaign email.')
+      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
+  });
+  $('exportBtn').addEventListener('click', () => { window.location.href = '/api/app/export'; });
+  $('deleteAccountBtn').addEventListener('click', async () => {
+    if (!confirm('Delete your account and ALL campaigns, prospects, replies, tasks and inboxes? This cannot be undone.')) return;
+    const password = prompt('Confirm with your password:');
+    if (password == null) return;
+    const { data } = await api('DELETE', '/api/app/account', { password });
+    if (data.ok) { window.location.href = '/index.html'; return; }
+    $('accountResult').innerHTML = `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
+  });
+}
+
 // ---------- LinkedIn safety ----------
 function bindLinkedInSafety() {
   $('liBudgetBtn').addEventListener('click', async () => {
@@ -908,7 +934,7 @@ async function loadLeadFinderStatus() {
 
   // Any field still empty → website-scan prefill fills what's left
   // (each field fills non-destructively, so user edits are never clobbered).
-  if (data.seed?.keywords && !$('lfScanUrl').value) $('lfScanUrl').value = data.seed.keywords;
+  if (data.seed?.website && !$('lfScanUrl').value) $('lfScanUrl').value = data.seed.website;
   const anyEmpty = !$('lfKeywords').value || !$('lfTitle').value || !$('lfSize').value || !$('lfLocation').value;
   if (anyEmpty && !applyLeadFinderPrefill.done) {
     applyLeadFinderPrefill.done = true;
@@ -935,15 +961,18 @@ function bindLeadFinderScan() {
       const { data } = await api('POST', '/api/app/lead-finder/scan-fill', { url });
       if (!data.ok || !data.prefill) throw new Error(data.error || 'Scan failed');
       const p = data.prefill;
+      if (p.service) $('lfService').value = p.service;
+      if (p.valueProp) $('lfValue').value = p.valueProp;
       if (p.keywords) $('lfKeywords').value = p.keywords;
       if (p.title) $('lfTitle').value = p.title;
       if (p.size) $('lfSize').value = p.size;
       if (p.location) $('lfLocation').value = p.location;
-      servicePitch = data.siteTitle || url;
+      servicePitch = p.service || data.siteTitle || url;
       status.className = 'ai-status ok';
-      status.textContent = data.source === 'llm'
+      const gaps = !p.keywords ? ' Could not infer the target industry — type it in step 2.' : '';
+      status.textContent = (data.source === 'llm'
         ? `✦ Filled from ${url} — review, then hit ✦ Find leads.`
-        : `✦ Filled from ${url} (heuristic — set LLM_API_KEY for AI-quality fills).`;
+        : `✦ Filled from ${url} (heuristic — set LLM_API_KEY for AI-quality fills).`) + gaps;
     } catch (err) {
       status.className = 'ai-status err';
       status.textContent = `✕ ${err.message || 'Could not scan that site — fill manually.'}`;
@@ -961,11 +990,13 @@ async function applyLeadFinderPrefill() {
     const p = d.prefill;
     let filled = 0;
     const fill = (id, val) => { const el = $(id); if (el && !el.value && val) { el.value = val; filled++; } };
+    fill('lfService', p.service);
+    fill('lfValue', p.valueProp);
     fill('lfKeywords', p.keywords);
     fill('lfTitle', p.title);
     fill('lfSize', p.size);
     fill('lfLocation', p.location);
-    servicePitch = d.siteTitle || $('lfScanUrl').value || servicePitch;
+    servicePitch = p.service || d.siteTitle || $('lfScanUrl').value || servicePitch;
     if (filled > 0 && $('lfPrefillNote')) {
       $('lfPrefillNote').textContent = `✨ Pre-filled from your website — tweak anything before searching.`;
     }
@@ -1092,8 +1123,9 @@ function bindLeadFinder() {
       title: $('lfTitle').value.trim(),
       size: $('lfSize').value,
       location: $('lfLocation').value.trim(),
-      limit: 10,
+      limit: Number($('lfCount').value || 10),
     };
+    if ($('lfService').value.trim()) servicePitch = $('lfService').value.trim();
     const { status, data } = await api('POST', '/api/app/lead-finder/search', body);
     btn.disabled = false;
     if (status !== 200 || !data.ok) {

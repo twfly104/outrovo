@@ -188,38 +188,57 @@
             <h2>✦ Find new leads</h2>
             <span id="leadFinderStatus" class="lead-status"></span>
           </div>
-          <p class="muted-note">Describe your ideal customer — we find verified contacts, check every email before you send, then research each company: what they do, their services &amp; features, how they compare, and why buyers choose them — so every message lands with context. Without a data key, enter target company domains (e.g. acme.com, orbcall.io) and we pull published emails from their sites.</p>
-          <div class="ai-scan-row" style="margin-bottom:14px;">
-            <div class="field" style="flex:1;margin-bottom:0;">
-              <label>Your company website</label>
-              <input id="lfScanUrl" placeholder="yourcompany.com — we infer your ideal customer from it" />
+          <p class="muted-note">Describe your offer and your ideal customer — we find verified contacts, check every email before you send, then research each company: what they do, their services &amp; features, how they compare, and why buyers choose them — so every message lands with context. Without a data key, enter target company domains (e.g. acme.com, orbcall.io) and we pull published emails from their sites.</p>
+
+          <div class="lf-group">
+            <div class="lf-group-head"><span class="lf-step">1</span><h3>Your offer</h3><span class="lf-group-hint">auto-filled from your website</span></div>
+            <div class="ai-scan-row">
+              <div class="field">
+                <label>Your company website</label>
+                <input id="lfScanUrl" placeholder="yourcompany.com — we infer everything below from it" />
+              </div>
+              <button class="btn btn-ghost btn-s" id="lfScanBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Scan &amp; fill</button>
             </div>
-            <button class="btn btn-ghost btn-s" id="lfScanBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Scan &amp; fill</button>
-          </div>
-          <div class="ai-status" id="lfScanStatus"></div>
-          <div class="field-row">
-            <div class="field"><label>Keywords / domains</label><input id="lfKeywords" placeholder="saas, fintech or acme.com, orbcall.io" /></div>
-            <div class="field"><label>Job title</label><input id="lfTitle" placeholder="founder, head of sales…" /></div>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Company size</label>
-              <select id="lfSize">
-                <option value="">Any size</option>
-                <option value="1,10">1–10</option>
-                <option value="11,50">11–50</option>
-                <option value="51,200">51–200</option>
-                <option value="201,500">201–500</option>
-                <option value="501,1000">501–1,000</option>
-                <option value="1001,10000">1,000+</option>
-              </select>
+            <div class="ai-status" id="lfScanStatus"></div>
+            <div class="field-row">
+              <div class="field"><label>Service description — what you sell</label><input id="lfService" placeholder="brand &amp; ecommerce marketing services…" /></div>
+              <div class="field"><label>Key value proposition</label><input id="lfValue" placeholder="integrated campaigns that grow brand revenue…" /></div>
             </div>
-            <div class="field"><label>Location</label><input id="lfLocation" placeholder="United States, London…" /></div>
           </div>
-          <div class="lead-actions">
-            <button class="btn btn-dark btn-s" id="leadFindBtn">✦ Find leads</button>
-            <span id="leadFindNote" class="import-note"></span>
+
+          <div class="lf-group">
+            <div class="lf-group-head"><span class="lf-step">2</span><h3>Your target customer</h3><span class="lf-group-hint">these describe your ideal customer — not your own company</span></div>
+            <div class="field-row">
+              <div class="field"><label>Target industry / keywords</label><input id="lfKeywords" placeholder="ecommerce brands, saas, fintech…" /></div>
+              <div class="field"><label>Target job title</label><input id="lfTitle" placeholder="founder, head of marketing…" /></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Target company size</label>
+                <select id="lfSize">
+                  <option value="">Any size</option>
+                  <option value="1,10">1–10</option>
+                  <option value="11,50">11–50</option>
+                  <option value="51,200">51–200</option>
+                  <option value="201,500">201–500</option>
+                  <option value="501,1000">501–1,000</option>
+                  <option value="1001,10000">1,000+</option>
+                </select>
+              </div>
+              <div class="field"><label>Target location</label><input id="lfLocation" placeholder="Taiwan, United States, Europe…" /></div>
+            </div>
+            <div class="lead-actions">
+              <button class="btn btn-dark btn-s" id="leadFindBtn">✦ Find leads</button>
+              <div class="field" style="margin:0;width:160px;"><label style="margin:0;">Leads to find</label>
+                <select id="lfCount">
+                  <option value="5">5</option>
+                  <option value="10" selected>10</option>
+                  <option value="25">25</option>
+                </select>
+              </div>
+              <span id="leadFindNote" class="import-note"></span>
+            </div>
+            <span id="lfPrefillNote" class="import-note"></span>
           </div>
-          <span id="lfPrefillNote" class="import-note"></span>
           <div class="autopilot-row">
             <label class="autopilot-toggle">
               <input type="checkbox" id="autopilotEnabled" />
@@ -485,9 +504,26 @@
           (<code>SMTP_HOST</code>/<code>SMTP_PORT</code>/<code>SMTP_USER</code>/<code>SMTP_PASS</code>/<code>SMTP_FROM</code>). With neither, sends are logged as demos.</p>
         </div>
         <div class="app-card-block">
+          <h2>Compliance</h2>
+          <p class="settings-note">CAN-SPAM requires your valid physical postal address in every campaign email.
+          Whatever you save here is added to the footer of every email you send, above the unsubscribe link.</p>
+          <div class="field-row">
+            <div class="field"><label>Your mailing address</label><input id="mailAddr" placeholder="Acme Inc., 123 Main St, Springfield, IL 62701, USA" /></div>
+            <div class="field"><button class="btn btn-dark btn-s" id="mailAddrBtn" style="margin-top:26px;">Save address</button></div>
+          </div>
+          <div class="tool-result" id="mailAddrResult"></div>
+        </div>
+        <div class="app-card-block">
           <h2>Account</h2>
           <p id="accountInfo"></p>
-          <button class="btn btn-ghost btn-s" id="logoutBtn2">Log out</button>
+          <p class="settings-note">GDPR data rights: download everything your account holds, or erase the account and
+          all its campaigns, prospects, replies, tasks and inboxes. Erasure is immediate and cannot be undone.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
+            <button class="btn btn-ghost btn-s" id="logoutBtn2">Log out</button>
+            <button class="btn btn-dark btn-s" id="exportBtn">Export my data (JSON)</button>
+            <button class="btn btn-ghost btn-s" id="deleteAccountBtn" style="color:#d93025;border-color:#d93025;">Delete account…</button>
+          </div>
+          <div class="tool-result" id="accountResult"></div>
         </div>
       
         
@@ -496,6 +532,7 @@
         </div>
       
       </section>
+      <p style="text-align:center;font-size:0.8rem;color:#6b7280;margin:32px 0 8px;">© 2026 Outrovo Inc. · <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a></p>
     </main>
   </div>
 

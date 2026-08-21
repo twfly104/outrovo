@@ -65,13 +65,15 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   target company domains the user types in and MX-verifies what it finds.
   Quotas per plan: trial 25, starter 100, growth 1,000, scale/agency 10,000
   credits/month (1 credit per returned lead), tracked on `user.leadFinder`.
-  `GET /api/app/lead-finder/status` also returns `seed` (the signup email's
-  domain) when autopilot has no saved criteria; the form auto-fills from
-  `autopilot` first, then `seed`, then `GET /api/app/lead-finder/prefill`
-  (scans the signup domain's site to infer keywords/title/size/location;
-  uses LLM when `LLM_API_KEY` is set, heuristic regexes otherwise; fetches
-  with `Accept-Language: en` to localize consistent results; sizes returned
-  match the UI select options exactly, e.g. `11,50`). The card also has an
+  `GET /api/app/lead-finder/status` also returns `seed = { website }` (the
+  signup email's domain, scan box only — never target keywords, so the user
+  never ends up searching for themselves) when autopilot has no saved
+  criteria; the form auto-fills from `autopilot` first, then `seed`, then
+  `GET /api/app/lead-finder/prefill` (scans the signup domain's site to
+  infer keywords/title/size/location; uses LLM when `LLM_API_KEY` is set,
+  heuristic regexes otherwise; fetches with `Accept-Language: en` to
+  localize consistent results; sizes returned match the UI select options
+  exactly, e.g. `11,50`). The card also has an
   explicit **Your company website + Scan & fill** control posting to
   `POST /api/app/lead-finder/scan-fill` (same inference on an arbitrary URL;
   overwrites fields, unlike the non-destructive auto prefill). Both share
@@ -90,7 +92,22 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   HQ city over homepage claims. The LLM prompt is likewise ICP-focused
   (fill the target market, never the user's own domain). The builtin
   crawler no longer truncates pages — `slice(0, 500000)` was cutting off
-  emails past 500KB. Each result row
+  emails past 500KB.
+- ICP inference gotchas (learned from a Taiwanese agency site,
+  si.sgidigi.com, whose location was misdetected as "United States"):
+  `fetchSite` returns full page text + a separate `tail` (last 25KB) because
+  heavy builders (Framer/Webflow) put the footer past the 600KB fetch cap —
+  never run location regexes against a head-truncated body. Location cues
+  include CJK tokens (亞洲/台湾/台灣/台北…), ranked extraText > headings >
+  body. `CJK_INDUSTRY_CUES` maps Chinese industry terms (電商/電子商務 →
+  "ecommerce brands", 品牌 → "consumer brands", 餐飲 → "restaurants", …)
+  into keyword/title candidates. valueProp skips greeting/thank-you
+  headings (親愛的/感謝/hello/welcome…) — Framer modals inject those before
+  the real hero copy. Size inference must NOT match weak product words
+  ("integration", "workflow") — they are vocabulary, not target-size
+  signals, and produced bogus "11–50" fills. Regression checks: hunter.io →
+  United States/founder; stripe.com → United States/head of sales;
+  example.com → empty keywords (no domain echo). Each result row
   also has a **✦ Intel** column: clicking calls
   `POST /api/app/lead-finder/intel` (`leadIntel()` in server.js; cached in
   memory 1h per domain) which scans the lead's company site and returns
@@ -232,6 +249,35 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   Settings → CRM & automation; POST /:id/test verifies reachability.
   Webhook URLs allow HTTP only for localhost (testing); production must use
   HTTPS.
+
+## Statutory & customer-protection audit (Aug 2026)
+- Signup consent is now server-enforced: `POST /api/signup` rejects with
+  `{terms:'required'}` unless `terms === true`, and stores
+  `user.consent = { termsVersion, privacyVersion, at }` (GDPR Art. 7 record).
+  `TERMS_VERSION` const in server.js — bump whenever terms.html/privacy.html
+  change materially. Frontend sends the flag explicitly (`script.js`).
+- CAN-SPAM footer: every campaign email footer now carries the sender's
+  postal address (`user.mailingAddress`, set in Settings → Compliance card,
+  saved via POST /api/app/settings) above the unsubscribe link. Verified
+  end-to-end through a local SMTP sink: headers include
+  `List-Unsubscribe` + `List-Unsubscribe-Post: One-Click`, body includes
+  address + HMAC-signed one-click link.
+- Data rights (GDPR Arts. 15/17/20), all session-gated and tested:
+  `GET /api/app/export` → full JSON download of account (salt/hash/token-hash
+  stripped), campaigns, prospects, replies, tasks, senders (encPass stripped);
+  `DELETE /api/app/account` → password-confirmed erasure of the user +
+  campaigns + prospects + replies + tasks + senders + sessions, clears the
+  cookie. Wrong password → 403; unauthenticated → 401.
+- Legal pages: privacy.html rewritten (controller identity + privacy@ contact,
+  legal bases, controller/processor split for prospect data + DPA note,
+  retention schedule, sub-processors, SCC transfer note, full rights list,
+  cookie disclosure, supervisory-authority right). terms.html gained a
+  governing-law section (Delaware). login.html + app.html footers now link
+  Terms/Privacy (previously missing).
+- Test harness used: `DATA_DIR=/tmp/... PORT=xxxx SMTP_HOST=127.0.0.1
+  SMTP_PORT=2525` against a hand-rolled net.Server SMTP sink that captures
+  DATA payloads — is the reliable way to verify real sends without touching
+  production data/ or external mail.
 
 ## Test evidence for audit gaps (iteration 4)
 - HMAC webhook: captured + validated end-to-end via localhost receiver
