@@ -6,6 +6,16 @@ const api = (method, path, body) =>
     body: body ? JSON.stringify(body) : undefined,
   }).then(r => r.json().then(d => ({ status: r.status, data: d })));
 
+// Non-blocking toast notifications (replaces alert()).
+function toast(msg, kind = 'ok') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${kind}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 3500);
+}
+
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtTime = t => new Date(t).toLocaleString();
@@ -97,7 +107,7 @@ async function loadOverview() {
   const s = data.stats;
   const cards = [
     ['Campaigns', s.campaigns], ['Active', s.active], ['People', s.prospects],
-    ['Emails sent', s.sent], ['Replies', s.replies ?? 0], ['Bounces', s.bounces ?? 0], ['To-dos', s.openTasks],
+    ['Emails sent', s.sent], ['Replies', s.replies ?? 0], ['Bounces', s.bounces ?? 0], ['Open to-dos', s.openTasks],
   ];
   $('statGrid').innerHTML = cards.map(([label, n]) =>
     `<div class="stat-card"><span>${label}</span><strong>${n}</strong></div>`).join('');
@@ -106,7 +116,7 @@ async function loadOverview() {
 }
 
 function renderEvents(events) {
-  if (!events.length) return '<li class="empty">No activity yet — activate a campaign to get going.</li>';
+  if (!events.length) return '<li class="empty">Nothing here yet — start a campaign and everything you do lands in this feed.</li>';
   return events.map(e => `
     <li>
       <span class="e-kind ${esc(e.type)}">${esc(e.type)}</span>
@@ -121,6 +131,8 @@ function bindCampaignModal() {
     $('campaignModal').hidden = false;
     $('stepsEditor').innerHTML = '';
     addStepRow('email');
+    // Pre-fill timezone from the browser so the send window makes sense.
+    try { $('cTimezone').value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch {}
   });
   $('closeCampaignModal').addEventListener('click', () => $('campaignModal').hidden = true);
   $('addStepBtn').addEventListener('click', () => addStepRow('email'));
@@ -281,7 +293,7 @@ async function saveCampaign() {
     sendWindowEnd: Number($('cWindowEnd').value ?? 17),
     timezone: $('cTimezone').value || 'UTC',
   });
-  if (!data.ok) { alert(data.error || 'Could not create campaign'); return; }
+  if (!data.ok) { toast(data.error || 'Could not create campaign', 'err'); return; }
   $('campaignModal').hidden = true;
   $('cName').value = '';
   loadCampaigns();
@@ -293,7 +305,7 @@ async function loadCampaigns() {
   campaigns = data.campaigns;
   const list = $('campaignList');
   if (!campaigns.length) {
-    list.innerHTML = '<div class="app-card-block" style="color:var(--ink-faint)">No campaigns yet. Create your first one — the engine does the rest.</div>';
+    list.innerHTML = '<div class="app-card-block" style="color:var(--ink-faint)">No campaigns yet — press <strong>New campaign</strong> above and the step builder opens. Emails go out automatically once you hit Run.</div>';
   } else {
     list.innerHTML = campaigns.map(c => `
       <div class="campaign-item">
@@ -367,7 +379,7 @@ async function loadProspects() {
         <button class="link" data-enrich="${p.id}">Enrich</button>
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" style="color:var(--ink-faint)">No prospects in this campaign yet.</td></tr>';
+  }).join('') || '<tr><td colspan="6" style="color:var(--ink-faint)">Pick a campaign above and add people below — they\'ll appear here.</td></tr>';
   tbody.querySelectorAll('[data-verify]').forEach(btn => btn.addEventListener('click', async () => {
     btn.textContent = '…';
     await api('POST', `/api/app/prospects/${btn.dataset.verify}/verify`);
@@ -423,7 +435,7 @@ async function loadInbox() {
         <button class="link" data-draft="${r.id}">✦ AI draft</button>
       </div>
       ${r.draft ? `<div class="draft-box"><em>AI draft (${esc(r.draft.source)}):</em><br>${esc(r.draft.text).replace(/\n/g, '<br>')}</div>` : `<div class="draft-box" id="draft-${r.id}" hidden></div>`}
-    </li>`).join('') : '<li class="empty">No replies yet — the unified inbox catches everything here.</li>';
+    </li>`).join('') : '<li class="empty">No replies yet — when someone answers a campaign, their message lands here.</li>';
   list.querySelectorAll('[data-read]').forEach(btn => btn.addEventListener('click', async () => {
     await api('POST', `/api/app/inbox/${btn.dataset.read}/read`);
     loadInbox();
@@ -432,7 +444,7 @@ async function loadInbox() {
     btn.textContent = '… drafting';
     const { data: d } = await api('POST', `/api/app/inbox/${btn.dataset.draft}/draft`, {});
     if (d.ok) loadInbox();
-    else { btn.textContent = '✦ AI draft'; alert(d.error || 'Draft failed'); }
+    else { btn.textContent = '✦ AI draft'; toast(d.error || 'Draft failed', 'err'); }
   }));
   if (!$('simulateReplyBtn').hasListener) {
     $('simulateReplyBtn').hasListener = true;
