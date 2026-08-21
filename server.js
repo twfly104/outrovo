@@ -1016,6 +1016,10 @@ function extractSiteInfo(html, url) {
     || pick(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i) || '';
   const h1s = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)]
     .map(m => m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 3);
+  // JSON-LD @type often declares the org's industry (e.g. "FinancialService").
+  const ldTypes = [...html.matchAll(/"@type"\s*:\s*"([^"]+)"/gi)]
+    .map(m => m[1]).filter(t => !/^(WebSite|WebPage|BreadcrumbList|Article|NewsArticle|FAQPage|Organization|Corporation|LocalBusiness|SearchAction|SiteNavigationElement|ItemList|VideoObject|ImageObject)$/i.test(t))
+    .slice(0, 3);
   const text = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -1023,7 +1027,7 @@ function extractSiteInfo(html, url) {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 3000);
-  return { url, title, desc, h1s, text };
+  return { url, title, desc, h1s, ldTypes, text };
 }
 
 async function fetchSite(url) {
@@ -1049,24 +1053,125 @@ async function fetchSite(url) {
 // Infer an ideal-customer profile (ICP) from a company website. LLM when
 // configured, heuristic regexes otherwise. Size values match the lead-finder
 // form's select options exactly (e.g. '11,50') or the select ignores them.
+
+// Company size must match the UI select's option values exactly
+// (e.g. "11,50") or the select ignores it.
+function normSize(s) {
+  const n = parseInt(String(s || '').replace(/[^\d]/g, '').slice(-4), 10);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  if (n <= 10) return '1,10';
+  if (n <= 50) return '11,50';
+  if (n <= 200) return '51,200';
+  if (n <= 500) return '201,500';
+  if (n <= 1000) return '501,1000';
+  return '1001,10000';
+}
+
+// Buyer-persona guesses for the heuristic ICP scan, ordered by ICP value.
+// The persona actually buying depends on company size: founders buy at small
+// companies, functional heads at larger ones.
+const BUYER_PERSONAS = [
+  { title: 'head of sales', re: /\b(head of sales|sales director|vp sales|chief revenue|sales team|sales leaders|revenue team)s?\b/ },
+  { title: 'head of marketing', re: /\b(head of marketing|marketing director|cmo|vp marketing|marketing team|growth team)s?\b/ },
+  { title: 'head of product', re: /\b(head of product|product manager|cpo|vp product|product team)s?\b/ },
+  { title: 'head of engineering', re: /\b(head of engineering|cto|vp engineering|engineering manager|engineering team|developer)s?\b/ },
+  { title: 'head of data', re: /\b(head of data|chief data officer|data team|ml engineers?|ai team|data science)s?\b/ },
+  { title: 'head of operations', re: /\b(head of operations|coo|operations team|ops team)s?\b/ },
+];
+
+function heuristicIcp(info, domain, extraText) {
+  const high = (info.title + ' ' + info.desc + ' ' + info.h1s.join(' ') + ' ' + info.ldTypes.join(' ')).toLowerCase();
+  const text = (high + ' ' + info.text + ' ' + extraText).toLowerCase();
+
+  // Keywords: infer the target market from what the company sells, not the
+  // company's own domain (searching scale.com would return the user's own
+  // employees, not their customers). Specific cues (security, fintech,
+  // ecommerce…) are listed before generic ones (saas, software, marketing)
+  // so specificity wins. JSON-LD @type often names the industry outright.
+  const INDUSTRY_CUES = [
+    ['generative ai', 'AI startups'], ['artificial intelligence', 'AI startups'],
+    ['machine learning', 'AI startups'], ['llm', 'AI startups'],
+    ['data labeling', 'AI startups'],
+    ['fintech', 'fintech startups'], ['payments', 'fintech startups'],
+    ['banking', 'fintech startups'], ['insurance', 'insurance companies'],
+    ['ecommerce', 'ecommerce brands'], ['e-commerce', 'ecommerce brands'],
+    ['retail', 'ecommerce brands'], ['logistics', 'logistics companies'],
+    ['security', 'cybersecurity companies'], ['health', 'healthcare companies'],
+    ['medical', 'healthcare companies'], ['real estate', 'real estate agencies'],
+    ['legal', 'law firms'], ['recruit', 'recruiting agencies'],
+    ['staffing', 'recruiting agencies'], ['education', 'education companies'],
+    ['saas', 'SaaS startups'], ['software', 'SaaS startups'],
+    ['marketing', 'marketing agencies'], ['agency', 'marketing agencies'],
+    ['ai ', 'AI startups'],
+  ];
+  const seen = new Set();
+  const industries = [];
+  const pushIndustry = (kw) => { if (!seen.has(kw) && industries.length < 3) { seen.add(kw); industries.push(kw); } };
+  for (const t of info.ldTypes) {
+    const spaced = String(t).replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+    for (const [cue, kw] of INDUSTRY_CUES) if (spaced.includes(cue)) pushIndustry(kw);
+  }
+  for (const [cue, kw] of INDUSTRY_CUES) if (high.includes(cue)) pushIndustry(kw);
+  for (const [cue, kw] of INDUSTRY_CUES) { if (industries.length >= 2) break; if (text.includes(cue)) pushIndustry(kw); }
+  // Last resort: the scanned domain — builtin/Hunter search treats keywords
+  // as domains, and its own employees are still better than an empty form.
+  const keywords = industries.join(', ') || domain;
+
+  // Job title: look for who the site sells to, else fall back by company size.
+  let title = '';
+  for (const p of BUYER_PERSONAS) { if (p.re.test(text)) { title = p.title; break; } }
+
+  // Company size: explicit language only — inferred before title fallback.
+  let size = '';
+  if (/\b(enterprise|fortune 500|global enterprises|multinational|enterprise-grade)\b/.test(text)) size = '1001,10000';
+  else if (/\b(solo|freelance|indie|bootstrap|solopreneur)s?\b/.test(text)) size = '1,10';
+  else if (/\b(mid-market|smb|small business|startup|scale-up|early-stage)s?\b/.test(text)) size = '11,50';
+  if (!title) title = size === '1001,10000' ? 'head of sales' : 'founder';
+
+  // Location: contact/about pages carry the real HQ city; homepage claims
+  // like "trusted worldwide" must not win over an actual address.
+  const US_CITY = /\b(new york|san francisco|silicon valley|austin|boston|chicago|los angeles|seattle|miami|denver|atlanta)\b/;
+  const UK_CITY = /\b(london|manchester|edinburgh)\b/;
+  const EU_CITY = /\b(berlin|paris|amsterdam|dublin|barcelona|stockholm|lisbon|madrid)\b/;
+  const ASIA_CITY = /\b(singapore|hong kong|tokyo|sydney|bangalore|bengaluru|mumbai|delhi)\b/;
+  let location = '';
+  if (US_CITY.test(extraText)) location = 'United States';
+  else if (UK_CITY.test(extraText)) location = 'United Kingdom';
+  else if (EU_CITY.test(extraText)) location = 'Europe';
+  else if (ASIA_CITY.test(extraText)) location = 'Asia';
+  else if (/\b(united states|us-based|u\.s\.|america)\b/.test(extraText)) location = 'United States';
+  else if (US_CITY.test(text)) location = 'United States';
+  else if (/\b(uk|united kingdom|britain)\b/.test(extraText) || UK_CITY.test(text)) location = 'United Kingdom';
+  else if (EU_CITY.test(text) || /\beurope\b/.test(extraText)) location = 'Europe';
+  else if (ASIA_CITY.test(text) || /\b(asia|apac|japan|australia|india)\b/.test(extraText)) location = 'Asia';
+
+  return { keywords, title, size, location };
+}
+
+// Fetch /about and /contact (best-effort) for HQ address and team-size cues
+// the homepage rarely carries. Merged lowercase text, '' on failure.
+async function fetchAboutContactText(domain) {
+  const parts = [];
+  for (const p of ['/about', '/contact', '/company']) {
+    try {
+      const extra = await fetchSite(`https://${domain}${p}`);
+      parts.push(extra.title + ' ' + extra.desc + ' ' + extra.text);
+    } catch { /* page missing — skip */ }
+  }
+  return parts.join(' ').toLowerCase().slice(0, 6000);
+}
+
 async function inferIcpFromSite(domain) {
-  // Company size must match the UI select's option values exactly
-  // (e.g. "11,50") or the select ignores it.
-  const normSize = (s) => {
-    const n = parseInt(String(s || '').replace(/[^\d]/g, '').slice(-4), 10);
-    if (!Number.isFinite(n) || n <= 0) return '';
-    if (n <= 10) return '1,10';
-    if (n <= 50) return '11,50';
-    if (n <= 200) return '51,200';
-    if (n <= 500) return '201,500';
-    if (n <= 1000) return '501,1000';
-    return '1001,10000';
-  };
+  let info;
+  try {
+    info = await fetchSite(domain);
+  } catch {
+    return null;
+  }
 
   const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
   if (key) {
     try {
-      const info = await fetchSite(domain);
       const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
       const model = process.env.LLM_MODEL || 'gpt-4o-mini';
       const llmRes = await fetch(`${base}/chat/completions`, {
@@ -1076,13 +1181,14 @@ async function inferIcpFromSite(domain) {
           model,
           response_format: { type: 'json_object' },
           messages: [
-            { role: 'system', content: 'You help sales teams find their ideal customer profile (ICP). Given a company website, infer the ICP fields for a lead-finder tool: keywords (target market or complementary companies to search), title (typical buyer job title), size (typical company size bucket), location (typical geography). Return ONLY JSON: {"keywords":"...","title":"...","size":"...","location":"..."} — each a short phrase, no sentences. Keep keywords to 2-4 words or domains.' },
-            { role: 'user', content: JSON.stringify({ url: info.url, title: info.title, description: info.desc, headings: info.h1s, text: info.text.slice(0, 2000) }) },
+            { role: 'system', content: 'You help sales teams find their ideal customer profile (ICP). Given a company website, infer who the company SELLS TO — its customers, not the company itself. Fill lead-finder fields: keywords (the target market, industry, or complementary companies to search — NEVER the company\'s own domain), title (typical buyer job title), size (typical customer company size bucket like "11-50" or "1001-10000"), location (typical geography). Return ONLY JSON: {"keywords":"...","title":"...","size":"...","location":"..."} — each a short phrase, no sentences. Keep keywords to 2-4 words.' },
+            { role: 'user', content: JSON.stringify({ url: info.url, title: info.title, description: info.desc, headings: info.h1s, types: info.ldTypes, text: info.text.slice(0, 2000) }) },
           ],
           temperature: 0.3, max_tokens: 120,
         }),
         signal: AbortSignal.timeout(25000),
       });
+      if (!llmRes.ok) throw new Error(`LLM ${llmRes.status}`);
       const llmData = await llmRes.json();
       const raw = llmData.choices?.[0]?.message?.content || '{}';
       const parsed = JSON.parse(raw);
@@ -1092,34 +1198,18 @@ async function inferIcpFromSite(domain) {
         size: normSize(parsed.size),
         location: (parsed.location || '').slice(0, 120),
       };
+      // Reject an LLM fill that just echoes the scanned site — searching it
+      // would return the user's own employees instead of their customers.
+      const bareDomain = String(domain).toLowerCase().replace(/^www\./, '');
+      const kwNorm = prefill.keywords.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '').trim();
+      if (kwNorm === bareDomain) prefill.keywords = '';
       if (prefill.keywords) return { prefill, source: 'llm', siteTitle: info.title };
     } catch { /* LLM failed — fall through to heuristic */ }
   }
 
   try {
-    const info = await fetchSite(domain);
-    const text = (info.title + ' ' + info.desc + ' ' + info.text).toLowerCase();
-    const prefill = { keywords: domain, title: '', size: '', location: '' };
-
-    // Infer job title from common B2B buyer personas mentioned on the site
-    if (/\bfounder|ceo|co-founder|chief executive\b/.test(text)) prefill.title = 'founder';
-    else if (/\bhead of sales|sales director|vp sales|chief revenue\b/.test(text)) prefill.title = 'head of sales';
-    else if (/\bhead of marketing|marketing director|cmo|vp marketing\b/.test(text)) prefill.title = 'head of marketing';
-    else if (/\bhead of product|product manager|cpo|vp product\b/.test(text)) prefill.title = 'head of product';
-    else if (/\bhead of engineering|cto|vp engineering|engineering manager\b/.test(text)) prefill.title = 'head of engineering';
-
-    // Infer company size from language (values match the UI select options)
-    if (/\benterprise|fortune 500|global|multinational|enterprise-grade\b/.test(text)) prefill.size = '1001,10000';
-    else if (/\bsolo|freelance|indie|bootstrap|solopreneur\b/.test(text)) prefill.size = '1,10';
-    else if (/\bmid-market|smb|small business|startup|scale-up|growth|early-stage|micro\b/.test(text)) prefill.size = '11,50';
-
-    // Infer location from common markets
-    if (/\bunited states|us-based|america|new york|san francisco|silicon valley|austin|boston|chicago|los angeles|seattle|miami\b/.test(text)) prefill.location = 'United States';
-    else if (/\blondon|uk|united kingdom|britain\b/.test(text)) prefill.location = 'United Kingdom';
-    else if (/\beurope|berlin|paris|amsterdam|dublin|barcelona|stockholm\b/.test(text)) prefill.location = 'Europe';
-    else if (/\bsingapore|hong kong|tokyo|japan|asia|apac|sydney|australia|bangalore|india\b/.test(text)) prefill.location = 'Asia';
-
-    return { prefill, source: 'heuristic', siteTitle: info.title };
+    const extraText = await fetchAboutContactText(domain);
+    return { prefill: heuristicIcp(info, domain, extraText), source: 'heuristic', siteTitle: info.title };
   } catch {
     return null;
   }

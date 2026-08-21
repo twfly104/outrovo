@@ -75,9 +75,17 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   explicit **Your company website + Scan & fill** control posting to
   `POST /api/app/lead-finder/scan-fill` (same inference on an arbitrary URL;
   overwrites fields, unlike the non-destructive auto prefill). Both share
-  `inferIcpFromSite(domain)` in server.js. The builtin crawler no longer
-  truncates pages — `slice(0, 500000)` was cutting off emails past 500KB on
-  sites like stripe.com.
+  `inferIcpFromSite(domain)` in server.js. `heuristicIcp` (used without an
+  LLM, and as the fallback when the LLM echoes the scanned domain back)
+  infers the ICP: keywords come from industry cues in the title/meta
+  description/H1/JSON-LD `@type` (e.g. `AI startups`, `fintech startups`)
+  rather than blindly re-using the scanned domain; title comes from
+  buyer-persona cues (falling back to `founder` for small, `head of sales`
+  for enterprise); location gives the /about · /contact · /company pages'
+  HQ address precedence over homepage claims. The LLM prompt is likewise
+  ICP-focused (fill the target market, never the user's own domain). The
+  builtin crawler no longer truncates pages — `slice(0, 500000)` was
+  cutting off emails past 500KB on sites like stripe.com.
 - `LLM_API_KEY` (or `OPENAI_API_KEY`; optional `LLM_BASE_URL`, `LLM_MODEL`) —
   upgrades the AI sequence writer, site-scan prefill, reply-intent
   classification, and AI reply drafts to a real LLM. Without it all four run
