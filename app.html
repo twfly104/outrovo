@@ -14,16 +14,21 @@
   <div class="app-shell">
     <aside class="app-sidebar">
       <a class="logo" href="index.html"><img src="logo.svg" class="logo-img" alt="Outrovo logo"> Outrovo</a>
+      <p class="app-nav-label">Workspace</p>
       <nav class="app-nav" id="appNav">
-        <button data-page="overview" class="active">Overview</button>
-        <button data-page="inbox">Inbox</button>
-        <button data-page="campaigns">Campaigns</button>
-        <button data-page="prospects">Prospects</button>
-        <button data-page="activity">Activity</button>
-        <button data-page="tools">Tools</button>
-        <button data-page="agency" id="agencyNavBtn" hidden>Agency</button>
-        <button data-page="settings">Settings</button>
+        <button data-page="overview" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg><span>Overview</span></button>
+        <button data-page="inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-5l-2 3h-6l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/></svg><span>Inbox</span></button>
+        <button data-page="campaigns"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg><span>Campaigns</span></button>
+        <button data-page="prospects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Prospects</span></button>
+        <button data-page="activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span>Activity</span></button>
+        <button data-page="tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7 9 18l-5-5"/></svg><span>Tools</span></button>
+        <button data-page="agency" id="agencyNavBtn" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><span>Agency</span></button>
+        <button data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
       </nav>
+      <a class="app-upsell" href="pricing.html">
+        <strong>✦ Need more sends?</strong>
+        <span>Compare plans and upgrade →</span>
+      </a>
       <div class="app-user">
         <span class="avatar" id="userAvatar">–</span>
         <div>
@@ -46,19 +51,19 @@
         <h1>What do you want to do?</h1>
         <div class="action-grid">
           <button class="action-card" data-goto="campaigns">
-            <span class="a-ico">✉️</span>
+            <span class="a-ico"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></span>
             <strong>Send emails</strong>
             <span>Build a sequence, add people, hit run.</span>
             <span class="a-link">Go to campaigns →</span>
           </button>
           <button class="action-card" data-goto="inbox">
-            <span class="a-ico">📥</span>
+            <span class="a-ico"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-5l-2 3h-6l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/></svg></span>
             <strong>Check replies</strong>
             <span>Every reply lands here in one place.</span>
             <span class="a-link">Open inbox →</span>
           </button>
           <button class="action-card" data-goto="tools">
-            <span class="a-ico">✓</span>
+            <span class="a-ico"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7 9 18l-5-5"/></svg></span>
             <strong>Check my email</strong>
             <span>Verify emails and audit your domain.</span>
             <span class="a-link">Open tools →</span>
@@ -104,7 +109,7 @@
                   <label>Your company website</label>
                   <input id="aiSiteUrl" placeholder="yourcompany.com" />
                 </div>
-                <button class="btn btn-ghost btn-s" id="aiScanBtn">🔍 Scan &amp; fill</button>
+                <button class="btn btn-ghost btn-s" id="aiScanBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Scan &amp; fill</button>
               </div>
               <div class="ai-status" id="aiScanStatus"></div>
               <div class="field">

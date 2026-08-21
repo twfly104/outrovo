@@ -313,7 +313,7 @@ async function loadCampaigns() {
         <div>
           <h3>${esc(c.name)}</h3>
           <div class="meta">${c.steps.length} steps · ${c.prospects} prospects · ${c.finished} finished</div>
-          <div class="meta">✉️ ${c.sentCount || 0} sent${c.bounced ? ` · ❌ ${c.bounced} bounced` : ''} · today ${c.sentToday ?? 0}/${c.capToday ?? 25}${c.timezone ? ` · ${c.sendWindowStart ?? 9}:00–${c.sendWindowEnd ?? 17}:00 ${esc(c.timezone)}` : ''}</div>
+          <div class="meta">${c.sentCount || 0} sent${c.bounced ? ` · ${c.bounced} bounced` : ''} · today ${c.sentToday ?? 0}/${c.capToday ?? 25}${c.timezone ? ` · ${c.sendWindowStart ?? 9}:00–${c.sendWindowEnd ?? 17}:00 ${esc(c.timezone)}` : ''}</div>
         </div>
         <div class="actions">
           ${c.status === 'active'
@@ -492,7 +492,7 @@ function bindTools() {
     const { data } = await api('POST', '/api/app/tools/verify', { email: $('vEmail').value });
     const r = data.result;
     $('verifyResult').innerHTML = r && `
-      <div class="score">${r.verdict === 'deliverable' ? '✅' : '❌'} ${esc(r.verdict)}</div>
+      <div class="score ${r.verdict === 'deliverable' ? 'ok-tag' : 'no-tag'}">${esc(r.verdict)}</div>
       <ul>
         <li><span class="${r.syntax ? 'ok-tag' : 'no-tag'}">${r.syntax ? '✓' : '✗'}</span> Syntax valid</li>
         <li><span class="${r.mx?.length ? 'ok-tag' : 'no-tag'}">${r.mx?.length ? '✓' : '✗'}</span> MX records ${r.mx?.length ? esc(r.mx.join(', ')) : 'none'}</li>

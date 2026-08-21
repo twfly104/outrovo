@@ -21,6 +21,10 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   (+ optional `LLM_BASE_URL`, `LLM_MODEL`) it calls an OpenAI-compatible
   chat API; otherwise it uses the built-in copywriting engine
   (`localSequence`) — the UI labels which mode answered.
+- The app dashboard CSS (bottom of `styles.css`, "App dashboard" section) mirrors the
+  landing page: `.app-body` re-declares the tokens to the styles-lite values
+  (paper #f7f7f8, crest #f97316, ink #0b0c0e) so the product feels identical
+  to the marketing site. Nav/action icons are inline SVGs, not emoji.
 - Logo lives in `logo.svg` (vector bird mark) referenced as `.logo-img`
   across pages — update the file once to rebrand everywhere.
 
