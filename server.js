@@ -745,7 +745,7 @@ async function autopilotRun() {
       // the sender's domain reputation on unknown/invalid addresses.
       const validOnly = found.leads.filter(l => l.verified === 'valid');
       const result = validOnly.length ? enrollLeads(user.email, ap.campaignId, validOnly) : { added: 0 };
-      ap.lastNote = `${result.added || 0} new lead${result.added === 1 ? '' : 's'} auto-enrolled from ${found.leads.length} found into "${result.campaignName || 'campaign'}"`;
+      ap.lastNote = `${result.added || 0} new lead${result.added === 1 ? '' : 's'} auto-enrolled from ${found.leads.length} found into "${result.campaignName || 'your campaign'}"`;
       if (!result.added) logEvent('lead-finder', `Autopilot: ${ap.lastNote}`, { owner: user.email });
       // Wake new prospects immediately if the campaign is already active.
       const camp = load('campaigns').find(c => c.id === ap.campaignId && c.owner === user.email);
