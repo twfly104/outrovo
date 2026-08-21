@@ -894,11 +894,28 @@ function engineTick() {
           changed = true;
           continue;
         }
-        // Replied prospects exit immediately (pre-branch).
-        if (prospect.replied) {
+        // Replied prospects: exit the sequence UNLESS this step explicitly
+        // routes replies into a hot-follow-up branch (event-driven). The
+        // reroute consumes the event, then re-checks the sequence continues
+        // from the routed position (not an infinite hot-step loop).
+        if (prospect.replied && !prospect.branchConsumedReply) {
+          const hotLabel = step.branchNext?.onReplied;
+          const hotIdx = hotLabel ? campaign.steps.findIndex(s => s.label === hotLabel) : -1;
+          if (hotIdx >= 0) {
+            prospect.stepIndex = hotIdx;
+            prospect.branchConsumedReply = true;
+            prospect.nextRunAt = now;
+            changed = true;
+            continue;
+          }
           prospect.finished = true; prospect.nextRunAt = null;
           changed = true;
           continue;
+        }
+        if (prospect.replied && prospect.branchConsumedReply) {
+          // After the hot step, treat replies the same as no-reply for
+          // subsequent routing — otherwise every later step exits early.
+          prospect.replied = false;
         }
         // Campaign pacing: outside the send window or past the daily cap →
         // defer, don't fail.
@@ -2183,8 +2200,22 @@ function serveStatic(req, res, url) {
       res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
       return res.end('<h1>404 — page not found</h1><p><a href="/">Back to homepage</a></p>');
     }
+    // Custom-domain white-label: when the request arrives on a CNAME that
+    // belongs to a user, rebrand the HTML shell on the fly (title, logo,
+    // brand name) so agencies can serve the whole app from their domain.
+    let body = content;
+    const host = (req.headers.host || '').split(':')[0];
+    const brand = pathname.endsWith('.html')
+      ? load('users').find(u => u.whiteLabel?.cname === host)
+      : null;
+    if (brand) {
+      body = content.toString()
+        .replace(/<title>[^<]*<\/title>/, `<title>${brand.whiteLabel.brandName || brand.company} — Outreach</title>`)
+        .replace(/Outrovo<\/a>/, `${brand.whiteLabel.brandName || brand.company}</a>`)
+        .replace(/logo\.svg/g, brand.whiteLabel.logoUrl || 'logo.svg');
+    }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-    res.end(content);
+    res.end(body);
   });
 }
 
