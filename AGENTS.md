@@ -299,3 +299,26 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   agency fee ($298 for 1 client). Stripe checkout creates a real session
   (mocked response → `https://checkout.stripe.com/pay/cs_test_audit`);
   requires STRIPE_SECRET_KEY env to charge real cards.
+
+## Iteration 5 — landing↔workspace alignment (commit 03a79fb)
+- Demo-mode engine stall fixed: `demoSender()` fallback in engineTick; sendEmail
+  records sim sends via recordCampaign stats + 'sent' event so the workspace
+  shows progress without any inbox configured.
+- Trial plan now has linkedIn: true (FAQ promised full features). Import route
+  auto-verifies the fresh batch in the background (verifyProspectsInBackground,
+  4 workers; re-reads fresh state before each save — engine tick races with
+  stale copies otherwise).
+- Signup now sets the session cookie (same as login) and signup.html success
+  CTA opens app.html directly.
+- Tenant isolation: events now carry an `owner` field; /api/app/activity,
+  overview, campaigns, prospects, inbox filter to (ownerless || mine).
+  activate/pause/delete/import/verify/verify-all/inbox-read enforce ownership.
+- pricing.html truth pass: Scale = high-volume teams (agency features belong
+  to the separate $249/mo Agency plan), LinkedIn "Included" on Growth,
+  deliverability + API rows unlocked for Starter.
+- Test harness: PORT=12001 DATA_DIR=/tmp/otest ENGINE_INTERVAL_MS=5000 node server.js
+  gives a fast tick loop; engine defers email sends outside the send window
+  (default 9–17 UTC) — set window 0–0 via PATCH to test freely.
+- Deploy layout: source /workspace/outrovo (git, main), live copy /tmp/outrovo
+  (port 12000, persistent data/), test copy port 12001 (DATA_DIR=/tmp/otest).
+  Kill node by PID (ps aux | grep "node server.js"), restart with same env.
