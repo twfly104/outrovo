@@ -895,12 +895,13 @@ async function loadLeadFinderStatus() {
   $('autopilotNote').textContent = ap?.enabled && ap.lastNote ? `Last run: ${ap.lastNote}` : '';
   // Auto-fill the search form from the saved autopilot criteria — only into
   // fields the user hasn't already typed into, so it never clobbers edits.
-  if (ap) {
-    if (ap.keywords && !$('lfKeywords').value) $('lfKeywords').value = ap.keywords;
-    if (ap.title && !$('lfTitle').value) $('lfTitle').value = ap.title;
-    if (ap.size) $('lfSize').value = ap.size;
-    if (ap.location && !$('lfLocation').value) $('lfLocation').value = ap.location;
-  }
+  const fill = (src) => {
+    if (src?.keywords && !$('lfKeywords').value) $('lfKeywords').value = src.keywords;
+    if (src?.title && !$('lfTitle').value) $('lfTitle').value = src.title;
+    if (src?.size) $('lfSize').value = src.size;
+    if (src?.location && !$('lfLocation').value) $('lfLocation').value = src.location;
+  };
+  fill(ap || data.seed);
 }
 
 async function saveAutopilot(enabled) {

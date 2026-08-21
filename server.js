@@ -1915,10 +1915,16 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const users2 = load('users');
     const idx = users2.findIndex(u => u.email === session.email);
     if (idx >= 0) { users2[idx].leadFinder = user.leadFinder; save('users', users2); }
+    // Seed the form: the signup domain audit (hunter.io / company website)
+    // is reused as a "search my own market" hint when autopilot hasn't been
+    // configured yet.
+    const seed = user.leadFinderAutopilot?.keywords
+      ? null
+      : { keywords: (session.email.split('@')[1] || '').slice(0, 120) };
     send(res, 200, {
       ok: true, provider: leadFinderProvider() || 'builtin',
       used: usage.used, quota: usage.quota, month: usage.month,
-      autopilot: user.leadFinderAutopilot || null,
+      autopilot: user.leadFinderAutopilot || null, seed,
     });
   },
 
