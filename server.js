@@ -691,9 +691,9 @@ async function searchLeads(f, perPage, sessionEmail) {
   const existing = new Set(load('prospects').filter(p => campaignIds.has(p.campaignId)).map(p => p.email));
   leads = leads.filter(l => !existing.has(l.email) && !isSuppressed(sessionEmail, l.email));
   leads = leads.filter(l => !GENERIC_LOCALS.has(l.email.split('@')[0]));
-  if (!leads.length) return { leads: [], provider: order[0], errors };
+  if (!leads.length) return { leads: [], provider: null, errors };
   const verified = await verifyLeadBatch(leads, perPage);
-  return { leads: verified.slice(0, perPage), provider: leadFinderProvider() || 'builtin', errors };
+  return { leads: verified.slice(0, perPage), provider: leads[0].source, errors };
 }
 
 function leadFinderUsage(user, plan) {
