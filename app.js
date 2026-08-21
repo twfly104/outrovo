@@ -903,10 +903,10 @@ async function loadLeadFinderStatus() {
   };
   fill(ap || data.seed);
 
-  // If the form is still fully empty, fetch the website-scan prefill —
-  // derived from the user's own domain's site content.
-  const stillEmpty = !$('lfKeywords').value && !$('lfTitle').value;
-  if (stillEmpty && !applyLeadFinderPrefill.done) {
+  // Any field still empty → ask the website-scan prefill to fill what's left
+  // (each field is filled non-destructively, so user edits are never clobbered).
+  const anyEmpty = !$('lfKeywords').value || !$('lfTitle').value || !$('lfSize').value || !$('lfLocation').value;
+  if (anyEmpty && !applyLeadFinderPrefill.done) {
     applyLeadFinderPrefill.done = true;
     applyLeadFinderPrefill();
   }
@@ -914,14 +914,19 @@ async function loadLeadFinderStatus() {
 
 async function applyLeadFinderPrefill() {
   try {
-    const d = await api('/api/app/lead-finder/prefill');
+    const { data } = await api('GET', '/api/app/lead-finder/prefill');
+    const d = data;
     if (!d?.prefill) return;
     const p = d.prefill;
-    const fill = (id, val) => { const el = $(id); if (el && !el.value) el.value = val; };
+    let filled = 0;
+    const fill = (id, val) => { const el = $(id); if (el && !el.value && val) { el.value = val; filled++; } };
     fill('lfKeywords', p.keywords);
     fill('lfTitle', p.title);
     fill('lfSize', p.size);
     fill('lfLocation', p.location);
+    if (filled > 0 && $('lfPrefillNote')) {
+      $('lfPrefillNote').textContent = `✨ Pre-filled from your website — tweak anything before searching.`;
+    }
   } catch {}
 }
 

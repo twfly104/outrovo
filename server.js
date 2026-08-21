@@ -1033,7 +1033,10 @@ async function fetchSite(url) {
   try {
     const res = await fetch(target, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OutrovoBot/1.0; +https://github.com/twfly104/outrovo)' },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; OutrovoBot/1.0; +https://github.com/twfly104/outrovo)',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
       redirect: 'follow',
     });
     if (!res.ok) throw new Error(`Site returned ${res.status}`);
@@ -1937,6 +1940,19 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const domain = session.email.split('@')[1] || '';
     if (!domain) return send(res, 200, { ok: true, prefill: null });
 
+    // Company size must match the UI select's option values exactly
+    // (e.g. "11,50") or the select ignores it.
+    const normSize = (s) => {
+      const n = parseInt(String(s || '').replace(/[^\d]/g, '').slice(-4), 10);
+      if (!Number.isFinite(n) || n <= 0) return '';
+      if (n <= 10) return '1,10';
+      if (n <= 50) return '11,50';
+      if (n <= 200) return '51,200';
+      if (n <= 500) return '201,500';
+      if (n <= 1000) return '501,1000';
+      return '1001,10000';
+    };
+
     // --- Try LLM-powered inference first ---
     const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
     if (key) {
@@ -1964,7 +1980,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
         const prefill = {
           keywords: (parsed.keywords || '').slice(0, 200),
           title: (parsed.title || '').slice(0, 120),
-          size: (parsed.size || '').slice(0, 40),
+          size: normSize(parsed.size),
           location: (parsed.location || '').slice(0, 120),
         };
         if (prefill.keywords) {
@@ -1986,10 +2002,10 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       else if (/\bhead of product|product manager|cpo|vp product\b/.test(text)) prefill.title = 'head of product';
       else if (/\bhead of engineering|cto|vp engineering|engineering manager\b/.test(text)) prefill.title = 'head of engineering';
 
-      // Infer company size from language
-      if (/\benterprise|fortune 500|global|multinational|enterprise-grade\b/.test(text)) prefill.size = '1000+';
-      else if (/\bsolo|freelance|indie|bootstrap|solopreneur\b/.test(text)) prefill.size = '1-10';
-      else if (/\bmid-market|smb|small business|startup|scale-up|growth|early-stage|micro\b/.test(text)) prefill.size = '11-50';
+      // Infer company size from language (values match the UI select options)
+      if (/\benterprise|fortune 500|global|multinational|enterprise-grade\b/.test(text)) prefill.size = '1001,10000';
+      else if (/\bsolo|freelance|indie|bootstrap|solopreneur\b/.test(text)) prefill.size = '1,10';
+      else if (/\bmid-market|smb|small business|startup|scale-up|growth|early-stage|micro\b/.test(text)) prefill.size = '11,50';
 
       // Infer location from common markets
       if (/\bunited states|us-based|america|new york|san francisco|silicon valley|austin|boston|chicago|los angeles|seattle|miami\b/.test(text)) prefill.location = 'United States';
