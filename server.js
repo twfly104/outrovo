@@ -1034,7 +1034,7 @@ function extractSiteInfo(html, url) {
   return { url, title, desc, h1s, headings, ldTypes, text };
 }
 
-async function fetchSite(url) {
+async function fetchSite(url, attempt = 0) {
   const target = /^https?:\/\//i.test(url) ? url : `https://${url}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10000);
@@ -1230,96 +1230,112 @@ function heuristicIcp(info, domain, extraText) {
 
   // Keywords: infer the target market from what the company sells, not the
   // company's own domain (searching scale.com would return the user's own
-  // employees, not their customers). Specific cues (security, fintech,
-  // ecommerce…) are listed before generic ones (saas, software, marketing)
-  // so specificity wins. JSON-LD @type often names the industry outright.
+  // employees, not their customers). Each cue also yields the typical
+  // buyer (target) and its priority (specific beats generic).
   const INDUSTRY_CUES = [
-    ['generative ai', 'AI startups'], ['artificial intelligence', 'AI startups'],
-    ['machine learning', 'AI startups'], ['llm', 'AI startups'],
-    ['data labeling', 'AI startups'],
-    ['fintech', 'fintech startups'], ['payments', 'fintech startups'],
-    ['banking', 'fintech startups'], ['insurance', 'insurance companies'],
-    ['ecommerce', 'ecommerce brands'], ['e-commerce', 'ecommerce brands'],
-    ['retail', 'ecommerce brands'], ['logistics', 'logistics companies'],
-    ['security', 'cybersecurity companies'], ['health', 'healthcare companies'],
-    ['medical', 'healthcare companies'], ['real estate', 'real estate agencies'],
-    ['legal', 'law firms'], ['recruit', 'recruiting agencies'],
-    ['staffing', 'recruiting agencies'], ['education', 'education companies'],
-    ['saas', 'SaaS startups'], ['software', 'SaaS startups'],
-    ['marketing', 'marketing agencies'], ['agency', 'marketing agencies'],
-    ['ai ', 'AI startups'],
+    { cue: 'generative ai', kw: 'AI startups', title: 'founder', pri: 4 },
+    { cue: 'artificial intelligence', kw: 'AI startups', title: 'founder', pri: 4 },
+    { cue: 'machine learning', kw: 'AI startups', title: 'founder', pri: 4 },
+    { cue: 'llm', kw: 'AI startups', title: 'founder', pri: 4 },
+    { cue: 'data labeling', kw: 'AI startups', title: 'founder', pri: 4 },
+    { cue: 'fintech', kw: 'fintech startups', title: 'founder', pri: 4 },
+    { cue: 'payments', kw: 'fintech startups', title: 'head of sales', pri: 4 },
+    { cue: 'banking', kw: 'fintech startups', title: 'head of sales', pri: 4 },
+    { cue: 'insurance', kw: 'insurance companies', title: 'head of operations', pri: 4 },
+    { cue: 'ecommerce', kw: 'ecommerce brands', title: 'founder', pri: 4 },
+    { cue: 'e-commerce', kw: 'ecommerce brands', title: 'founder', pri: 4 },
+    { cue: 'retail', kw: 'ecommerce brands', title: 'founder', pri: 4 },
+    { cue: 'logistics', kw: 'logistics companies', title: 'head of operations', pri: 4 },
+    { cue: 'security', kw: 'cybersecurity companies', title: 'head of engineering', pri: 4 },
+    { cue: 'health', kw: 'healthcare companies', title: 'head of operations', pri: 4 },
+    { cue: 'medical', kw: 'healthcare companies', title: 'head of operations', pri: 4 },
+    { cue: 'real estate', kw: 'real estate agencies', title: 'founder', pri: 4 },
+    { cue: 'legal', kw: 'law firms', title: 'founder', pri: 4 },
+    { cue: 'recruit', kw: 'recruiting agencies', title: 'recruiter', pri: 4 },
+    { cue: 'talent', kw: 'recruiting agencies', title: 'recruiter', pri: 4 },
+    { cue: 'staffing', kw: 'recruiting agencies', title: 'recruiter', pri: 4 },
+    { cue: 'education', kw: 'education companies', title: 'head of operations', pri: 4 },
+    { cue: 'brand', kw: 'marketing agencies', title: 'head of marketing', pri: 4 },
+    { cue: 'advertis', kw: 'marketing agencies', title: 'head of marketing', pri: 4 },
+    { cue: 'marketin', kw: 'marketing agencies', title: 'head of marketing', pri: 4 },
+    { cue: 'marketing', kw: 'marketing agencies', title: 'head of marketing', pri: 4 },
+    { cue: 'saas', kw: 'SaaS startups', title: 'founder', pri: 2 },
+    { cue: 'software', kw: 'SaaS startups', title: 'founder', pri: 2 },
+    { cue: 'agency', kw: 'marketing agencies', title: 'head of marketing', pri: 3 },
+    { cue: ' ai ', kw: 'AI startups', title: 'founder', pri: 2 },
   ];
   const seen = new Set();
   const industries = [];
   const pushIndustry = (kw) => { if (!seen.has(kw) && industries.length < 3) { seen.add(kw); industries.push(kw); } };
 
-  // Blend three sources, most specific first: (1) positioning phrases from
-  // the site's own copy ("platform for revenue teams", "find top engineers"),
-  // (2) heading/repeated terms ("people data", "payments"), (3) canned
-  // industry categories as the final backstop.
   const marketPhrases = extractMarketPhrases(high);
   const terms = extractSignificantTerms(info.title + ' ' + info.desc, info.headings || info.h1s, domain);
   for (const { phrase } of marketPhrases) pushIndustry(phrase);
   for (const t of terms) pushIndustry(t);
-  const cueMatches = [];
+
+  // Cue matching feeds BOTH keywords and the buyer title — the highest-
+  // priority (most specific) match wins, ties go to the first match.
+  const candidates = [];
+  for (const cue of INDUSTRY_CUES) if (high.includes(cue.cue)) candidates.push(cue);
   const seenCues = new Set();
-  const pushCue = (kw) => { if (!seenCues.has(kw)) { seenCues.add(kw); cueMatches.push(kw); } };
   for (const t of info.ldTypes) {
     const spaced = String(t).replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
-    for (const [cue, kw] of INDUSTRY_CUES) if (spaced.includes(cue)) pushCue(kw);
+    for (const cue of INDUSTRY_CUES) if (spaced.includes(cue.cue)) candidates.push(cue);
   }
-  for (const [cue, kw] of INDUSTRY_CUES) if (high.includes(cue)) pushCue(kw);
-  for (const kw of cueMatches) pushIndustry(kw);
-  // Last resort: the scanned domain — builtin/Hunter search treats keywords
-  // as domains, and its own employees are still better than an empty form.
+  for (const cue of candidates) { if (!seenCues.has(cue.kw)) { seenCues.add(cue.kw); pushIndustry(cue.kw); } }
   const keywords = industries.join(', ') || domain;
 
-  // Job title: the audience phrase usually names the buyer ("for revenue
-  // teams" → head of sales). Then persona scan, then size-based fallback.
-  const AUDIENCE_PERSONAS = [
-    { title: 'founder', re: /founder|ceo|executive|owner/ },
-    { title: 'head of sales', re: /sales|revenue|account exec/ },
-    { title: 'head of marketing', re: /market|growth|demand gen/ },
-    { title: 'head of product', re: /product/ },
-    { title: 'head of engineering', re: /engineer|developer|dev\s|tech lead|cto/ },
-    { title: 'recruiter', re: /recruit|talent|hr\s|people ops/ },
-    { title: 'head of data', re: /data|analyst|analytics/ },
-    { title: 'head of operations', re: /operations|ops/ },
-  ];
   let title = '';
-  if (marketPhrases.length) {
+  if (candidates.length) {
+    candidates.sort((a, b) => b.pri - a.pri);
+    title = candidates[0].title;
+  }
+  if (!title && marketPhrases.length) {
     const first = marketPhrases[0];
     if (first.kind === 'talent') title = 'recruiter';
     else {
+      const AUDIENCE_PERSONAS = [
+        { t: 'founder', re: /founder|ceo|executive|owner|c-?suite/ },
+        { t: 'head of sales', re: /sales|revenue|account exec|pipeline/ },
+        { t: 'head of marketing', re: /market|growth|demand gen|advertis/ },
+        { t: 'head of product', re: /product/ },
+        { t: 'head of engineering', re: /engineer|developer|dev\s|tech lead|cto/ },
+        { t: 'recruiter', re: /recruit|talent|hr\s|people ops/ },
+        { t: 'head of data', re: /data|analyst|analytics|bi\s/ },
+        { t: 'head of operations', re: /operations|ops\s|logistic|supply/ },
+      ];
       const p0 = first.phrase.toLowerCase();
-      for (const ap of AUDIENCE_PERSONAS) { if (ap.re.test(p0)) { title = ap.title; break; } }
+      for (const ap of AUDIENCE_PERSONAS) { if (ap.re.test(p0)) { title = ap.t; break; } }
     }
   }
   if (!title) for (const p of BUYER_PERSONAS) { if (p.re.test(text)) { title = p.title; break; } }
 
-  // Company size: explicit language only — inferred before title fallback.
+  // Company size: explicit language, else the service's implied deployment
+  // tier (enterprise suites → large orgs, integrations/tools → SMB).
   let size = '';
-  if (/\b(enterprise|fortune 500|global enterprises|multinational|enterprise-grade)\b/.test(text)) size = '1001,10000';
-  else if (/\b(solo|freelance|indie|bootstrap|solopreneur)s?\b/.test(text)) size = '1,10';
-  else if (/\b(mid-market|smb|small business|startup|scale-up|early-stage)s?\b/.test(text)) size = '11,50';
+  if (/\b(enterprise|fortune ?500|global enterprises?|multinational|enterprise-grade|corporations?|c-suite)\b/.test(text)) size = '1001,10000';
+  else if (/\b(solo|freelance|indie|bootstrap|solopreneur|self-employed)s?\b/.test(text)) size = '1,10';
+  else if (/\b(mid-market|smb|small business|startup|scale-up|early-stage|integration|workflow|plug[- ]?in)s?\b/.test(text)) size = '11,50';
+
   if (!title) title = size === '1001,10000' ? 'head of sales' : 'founder';
 
-  // Location: contact/about pages carry the real HQ city; homepage claims
-  // like "trusted worldwide" must not win over an actual address.
-  const US_CITY = /\b(new york|san francisco|silicon valley|austin|boston|chicago|los angeles|seattle|miami|denver|atlanta)\b/;
-  const UK_CITY = /\b(london|manchester|edinburgh)\b/;
-  const EU_CITY = /\b(berlin|paris|amsterdam|dublin|barcelona|stockholm|lisbon|madrid)\b/;
-  const ASIA_CITY = /\b(singapore|hong kong|tokyo|sydney|bangalore|bengaluru|mumbai|delhi)\b/;
+  // Location: contact/about pages carry the real HQ city; the rest falls
+  // from the strongest signal in homepage copy (hq city > country claims).
+  const G = [
+    { re: /\b(new york|san francisco|silicon valley|austin|boston|chicago|los angeles|seattle|miami|denver|atlanta|united states|usa|america)\b/, loc: 'United States' },
+    { re: /\b(london|manchester|edinburgh|united kingdom|britain|uk\b)\b/, loc: 'United Kingdom' },
+    { re: /\b(canada|toronto|vancouver|montreal|ontario)\b/, loc: 'Canada' },
+    { re: /\b(peru|colombia|mexico|chile|argentina|brazil|latin america|south america)\b/, loc: 'South America' },
+    { re: /\b(berlin|paris|amsterdam|dublin|barcelona|stockholm|lisbon|madrid|hamburg|munich|london|europe|german|france|spain|italy|norway|sweden|denmark|finland|belgium|switzerland|austria|poland|netherlands)\b/, loc: 'Europe' },
+    { re: /\b(taiwan|taipei|hong kong|macau|singapore|tokyo|japan|korea|seoul|sydney|australia|bangalore|bengaluru|mumbai|delhi|india|malaysia|thailand|philippines|indonesia|vietnam|new zealand)\b/, loc: 'Asia' },
+    { re: /\b(dubai|abu dhabi|saudi|uae|emirates|qatar|israel|tel aviv|middle east)\b/, loc: 'Middle East' },
+    { re: /\b(nigeria|kenya|south africa|ghana|egypt|morocco|africa)\b/, loc: 'Africa' },
+  ];
   let location = '';
-  if (US_CITY.test(extraText)) location = 'United States';
-  else if (UK_CITY.test(extraText)) location = 'United Kingdom';
-  else if (EU_CITY.test(extraText)) location = 'Europe';
-  else if (ASIA_CITY.test(extraText)) location = 'Asia';
-  else if (/\b(united states|us-based|u\.s\.|america)\b/.test(extraText)) location = 'United States';
-  else if (US_CITY.test(text)) location = 'United States';
-  else if (/\b(uk|united kingdom|britain)\b/.test(extraText) || UK_CITY.test(text)) location = 'United Kingdom';
-  else if (EU_CITY.test(text) || /\beurope\b/.test(extraText)) location = 'Europe';
-  else if (ASIA_CITY.test(text) || /\b(asia|apac|japan|australia|india)\b/.test(extraText)) location = 'Asia';
+  for (const src of [extraText, text]) {
+    for (const g of G) { if (g.re.test(src)) { location = g.loc; break; } }
+    if (location) break;
+  }
 
   return { keywords, title, size, location };
 }
@@ -1337,10 +1353,21 @@ async function fetchAboutContactText(domain) {
   return parts.join(' ').toLowerCase().slice(0, 6000);
 }
 
+// Retry Cloudflare-class antibot short-circuits at least once — the JSDOM
+// challenge page sometimes wins the first visit and 200s pass.
+async function fetchWithRetry(url) {
+  let last;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { return await fetchSite(url); } catch (e) { console.error('[fetchWithRetry]', url, e?.message || e); last = e; }
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  throw last;
+}
+
 async function inferIcpFromSite(domain) {
   let info;
   try {
-    info = await fetchSite(domain);
+    info = await fetchWithRetry(domain);
   } catch {
     return null;
   }
@@ -1385,8 +1412,11 @@ async function inferIcpFromSite(domain) {
 
   try {
     const extraText = await fetchAboutContactText(domain);
-    return { prefill: heuristicIcp(info, domain, extraText), source: 'heuristic', siteTitle: info.title };
-  } catch {
+    const prefill = heuristicIcp(info, domain, extraText);
+    if (!prefill) console.error('[inferIcp] heuristic returned nothing for', domain);
+    return { prefill, source: 'heuristic', siteTitle: info.title };
+  } catch (e) {
+    console.error('[inferIcp] heuristic failed for', domain, e?.message || e);
     return null;
   }
 }
