@@ -1046,6 +1046,86 @@ async function fetchSite(url) {
     clearTimeout(timer);
   }
 }
+// Infer an ideal-customer profile (ICP) from a company website. LLM when
+// configured, heuristic regexes otherwise. Size values match the lead-finder
+// form's select options exactly (e.g. '11,50') or the select ignores them.
+async function inferIcpFromSite(domain) {
+  // Company size must match the UI select's option values exactly
+  // (e.g. "11,50") or the select ignores it.
+  const normSize = (s) => {
+    const n = parseInt(String(s || '').replace(/[^\d]/g, '').slice(-4), 10);
+    if (!Number.isFinite(n) || n <= 0) return '';
+    if (n <= 10) return '1,10';
+    if (n <= 50) return '11,50';
+    if (n <= 200) return '51,200';
+    if (n <= 500) return '201,500';
+    if (n <= 1000) return '501,1000';
+    return '1001,10000';
+  };
+
+  const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+  if (key) {
+    try {
+      const info = await fetchSite(domain);
+      const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+      const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+      const llmRes = await fetch(`${base}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: 'You help sales teams find their ideal customer profile (ICP). Given a company website, infer the ICP fields for a lead-finder tool: keywords (target market or complementary companies to search), title (typical buyer job title), size (typical company size bucket), location (typical geography). Return ONLY JSON: {"keywords":"...","title":"...","size":"...","location":"..."} — each a short phrase, no sentences. Keep keywords to 2-4 words or domains.' },
+            { role: 'user', content: JSON.stringify({ url: info.url, title: info.title, description: info.desc, headings: info.h1s, text: info.text.slice(0, 2000) }) },
+          ],
+          temperature: 0.3, max_tokens: 120,
+        }),
+        signal: AbortSignal.timeout(25000),
+      });
+      const llmData = await llmRes.json();
+      const raw = llmData.choices?.[0]?.message?.content || '{}';
+      const parsed = JSON.parse(raw);
+      const prefill = {
+        keywords: (parsed.keywords || '').slice(0, 200),
+        title: (parsed.title || '').slice(0, 120),
+        size: normSize(parsed.size),
+        location: (parsed.location || '').slice(0, 120),
+      };
+      if (prefill.keywords) return { prefill, source: 'llm', siteTitle: info.title };
+    } catch { /* LLM failed — fall through to heuristic */ }
+  }
+
+  try {
+    const info = await fetchSite(domain);
+    const text = (info.title + ' ' + info.desc + ' ' + info.text).toLowerCase();
+    const prefill = { keywords: domain, title: '', size: '', location: '' };
+
+    // Infer job title from common B2B buyer personas mentioned on the site
+    if (/\bfounder|ceo|co-founder|chief executive\b/.test(text)) prefill.title = 'founder';
+    else if (/\bhead of sales|sales director|vp sales|chief revenue\b/.test(text)) prefill.title = 'head of sales';
+    else if (/\bhead of marketing|marketing director|cmo|vp marketing\b/.test(text)) prefill.title = 'head of marketing';
+    else if (/\bhead of product|product manager|cpo|vp product\b/.test(text)) prefill.title = 'head of product';
+    else if (/\bhead of engineering|cto|vp engineering|engineering manager\b/.test(text)) prefill.title = 'head of engineering';
+
+    // Infer company size from language (values match the UI select options)
+    if (/\benterprise|fortune 500|global|multinational|enterprise-grade\b/.test(text)) prefill.size = '1001,10000';
+    else if (/\bsolo|freelance|indie|bootstrap|solopreneur\b/.test(text)) prefill.size = '1,10';
+    else if (/\bmid-market|smb|small business|startup|scale-up|growth|early-stage|micro\b/.test(text)) prefill.size = '11,50';
+
+    // Infer location from common markets
+    if (/\bunited states|us-based|america|new york|san francisco|silicon valley|austin|boston|chicago|los angeles|seattle|miami\b/.test(text)) prefill.location = 'United States';
+    else if (/\blondon|uk|united kingdom|britain\b/.test(text)) prefill.location = 'United Kingdom';
+    else if (/\beurope|berlin|paris|amsterdam|dublin|barcelona|stockholm\b/.test(text)) prefill.location = 'Europe';
+    else if (/\bsingapore|hong kong|tokyo|japan|asia|apac|sydney|australia|bangalore|india\b/.test(text)) prefill.location = 'Asia';
+
+    return { prefill, source: 'heuristic', siteTitle: info.title };
+  } catch {
+    return null;
+  }
+}
+
+
 
 async function analyzeSite(info) {
   const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
@@ -1932,90 +2012,36 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
   },
 
   // Scan the user's own website (from their signup email domain) and infer
-  // their ICP: keywords, job title, company size, location. Uses the LLM
-  // when configured, otherwise falls back to a keyword heuristic.
+  // their ICP: keywords, job title, company size, location.
   'GET /api/app/lead-finder/prefill': async (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const domain = session.email.split('@')[1] || '';
     if (!domain) return send(res, 200, { ok: true, prefill: null });
+    const result = await inferIcpFromSite(domain);
+    send(res, 200, { ok: true, ...(result || { prefill: null }) });
+  },
 
-    // Company size must match the UI select's option values exactly
-    // (e.g. "11,50") or the select ignores it.
-    const normSize = (s) => {
-      const n = parseInt(String(s || '').replace(/[^\d]/g, '').slice(-4), 10);
-      if (!Number.isFinite(n) || n <= 0) return '';
-      if (n <= 10) return '1,10';
-      if (n <= 50) return '11,50';
-      if (n <= 200) return '51,200';
-      if (n <= 500) return '201,500';
-      if (n <= 1000) return '501,1000';
-      return '1001,10000';
-    };
-
-    // --- Try LLM-powered inference first ---
-    const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
-    if (key) {
-      try {
-        const info = await fetchSite(domain);
-        const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-        const model = process.env.LLM_MODEL || 'gpt-4o-mini';
-        const llmRes = await fetch(`${base}/chat/completions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-          body: JSON.stringify({
-            model,
-            response_format: { type: 'json_object' },
-            messages: [
-              { role: 'system', content: 'You help sales teams find their ideal customer profile (ICP). Given a company website, infer the ICP fields for a lead-finder tool: keywords (target market or complementary companies to search), title (typical buyer job title), size (typical company size bucket), location (typical geography). Return ONLY JSON: {"keywords":"...","title":"...","size":"...","location":"..."} — each a short phrase, no sentences. Keep keywords to 2-4 words or domains.' },
-              { role: 'user', content: JSON.stringify({ url: info.url, title: info.title, description: info.desc, headings: info.h1s, text: info.text.slice(0, 2000) }) },
-            ],
-            temperature: 0.3, max_tokens: 120,
-          }),
-          signal: AbortSignal.timeout(25000),
-        });
-        const llmData = await llmRes.json();
-        const raw = llmData.choices?.[0]?.message?.content || '{}';
-        const parsed = JSON.parse(raw);
-        const prefill = {
-          keywords: (parsed.keywords || '').slice(0, 200),
-          title: (parsed.title || '').slice(0, 120),
-          size: normSize(parsed.size),
-          location: (parsed.location || '').slice(0, 120),
-        };
-        if (prefill.keywords) {
-          return send(res, 200, { ok: true, prefill, source: 'llm', siteTitle: info.title });
-        }
-      } catch { /* LLM failed — fall through to heuristic */ }
+  // Same inference, but for an arbitrary URL the user pastes into the
+  // "Your company website" field next to ✦ Scan & fill in Lead Finder.
+  'POST /api/app/lead-finder/scan-fill': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const body = await readBody(req);
+    const rawUrl = String(body?.url || '').trim().slice(0, 300);
+    if (!rawUrl) return send(res, 400, { ok: false, error: 'Enter your company website first.' });
+    const domain = rawUrl.replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+    if (!/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(domain)) {
+      return send(res, 400, { ok: false, error: 'That does not look like a website — try yourcompany.com' });
     }
-
-    // --- Heuristic fallback ---
     try {
-      const info = await fetchSite(domain);
-      const text = (info.title + ' ' + info.desc + ' ' + info.text).toLowerCase();
-      const prefill = { keywords: domain, title: '', size: '', location: '' };
-
-      // Infer job title from common B2B buyer personas mentioned on the site
-      if (/\bfounder|ceo|co-founder|chief executive\b/.test(text)) prefill.title = 'founder';
-      else if (/\bhead of sales|sales director|vp sales|chief revenue\b/.test(text)) prefill.title = 'head of sales';
-      else if (/\bhead of marketing|marketing director|cmo|vp marketing\b/.test(text)) prefill.title = 'head of marketing';
-      else if (/\bhead of product|product manager|cpo|vp product\b/.test(text)) prefill.title = 'head of product';
-      else if (/\bhead of engineering|cto|vp engineering|engineering manager\b/.test(text)) prefill.title = 'head of engineering';
-
-      // Infer company size from language (values match the UI select options)
-      if (/\benterprise|fortune 500|global|multinational|enterprise-grade\b/.test(text)) prefill.size = '1001,10000';
-      else if (/\bsolo|freelance|indie|bootstrap|solopreneur\b/.test(text)) prefill.size = '1,10';
-      else if (/\bmid-market|smb|small business|startup|scale-up|growth|early-stage|micro\b/.test(text)) prefill.size = '11,50';
-
-      // Infer location from common markets
-      if (/\bunited states|us-based|america|new york|san francisco|silicon valley|austin|boston|chicago|los angeles|seattle|miami\b/.test(text)) prefill.location = 'United States';
-      else if (/\blondon|uk|united kingdom|britain\b/.test(text)) prefill.location = 'United Kingdom';
-      else if (/\beurope|berlin|paris|amsterdam|dublin|barcelona|stockholm\b/.test(text)) prefill.location = 'Europe';
-      else if (/\bsingapore|hong kong|tokyo|japan|asia|apac|sydney|australia|bangalore|india\b/.test(text)) prefill.location = 'Asia';
-
-      return send(res, 200, { ok: true, prefill, source: 'heuristic', siteTitle: info.title });
+      const result = await inferIcpFromSite(domain);
+      if (!result || !result.prefill?.keywords) {
+        return send(res, 502, { ok: false, error: 'Could not read that site — check the URL or fill manually.' });
+      }
+      send(res, 200, { ok: true, ...result });
     } catch {
-      return send(res, 200, { ok: true, prefill: null });
+      send(res, 502, { ok: false, error: 'Could not read that site — check the URL or fill manually.' });
     }
   },
 

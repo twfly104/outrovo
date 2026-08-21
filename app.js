@@ -903,13 +903,50 @@ async function loadLeadFinderStatus() {
   };
   fill(ap || data.seed);
 
-  // Any field still empty → ask the website-scan prefill to fill what's left
-  // (each field is filled non-destructively, so user edits are never clobbered).
+  // Any field still empty → website-scan prefill fills what's left
+  // (each field fills non-destructively, so user edits are never clobbered).
+  if (data.seed?.keywords && !$('lfScanUrl').value) $('lfScanUrl').value = data.seed.keywords;
   const anyEmpty = !$('lfKeywords').value || !$('lfTitle').value || !$('lfSize').value || !$('lfLocation').value;
   if (anyEmpty && !applyLeadFinderPrefill.done) {
     applyLeadFinderPrefill.done = true;
     applyLeadFinderPrefill();
   }
+}
+
+// Scan & fill — explicit user action, so it OVERWRITES filled fields
+// (unlike the auto prefill, which only fills empty ones).
+function bindLeadFinderScan() {
+  $('lfScanBtn').addEventListener('click', async () => {
+    const status = $('lfScanStatus');
+    const url = $('lfScanUrl').value.trim();
+    if (!url) {
+      status.className = 'ai-status err';
+      status.textContent = 'Enter your company website first (e.g. yourcompany.com).';
+      return;
+    }
+    const btn = $('lfScanBtn');
+    btn.disabled = true;
+    status.className = 'ai-status loading';
+    status.textContent = '🔍 Reading your site…';
+    try {
+      const { data } = await api('POST', '/api/app/lead-finder/scan-fill', { url });
+      if (!data.ok || !data.prefill) throw new Error(data.error || 'Scan failed');
+      const p = data.prefill;
+      if (p.keywords) $('lfKeywords').value = p.keywords;
+      if (p.title) $('lfTitle').value = p.title;
+      if (p.size) $('lfSize').value = p.size;
+      if (p.location) $('lfLocation').value = p.location;
+      status.className = 'ai-status ok';
+      status.textContent = data.source === 'llm'
+        ? `✦ Filled from ${url} — review, then hit ✦ Find leads.`
+        : `✦ Filled from ${url} (heuristic — set LLM_API_KEY for AI-quality fills).`;
+    } catch (err) {
+      status.className = 'ai-status err';
+      status.textContent = `✕ ${err.message || 'Could not scan that site — fill manually.'}`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 
 async function applyLeadFinderPrefill() {
@@ -1029,6 +1066,7 @@ async function loadAll() {
   loadActivity();
   loadLeadFinderStatus();
   bindLeadFinder();
+  bindLeadFinderScan();
 }
 
 init();

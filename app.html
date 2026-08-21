@@ -189,6 +189,14 @@
             <span id="leadFinderStatus" class="lead-status"></span>
           </div>
           <p class="muted-note">Describe your ideal customer — we search verified contacts, check every email before you send, and add them straight into the campaign you pick. Without a data key, enter target company domains (e.g. acme.com, orbcall.io) and we pull published emails from their sites.</p>
+          <div class="ai-scan-row" style="margin-bottom:14px;">
+            <div class="field" style="flex:1;margin-bottom:0;">
+              <label>Your company website</label>
+              <input id="lfScanUrl" placeholder="yourcompany.com — we infer your ideal customer from it" />
+            </div>
+            <button class="btn btn-ghost btn-s" id="lfScanBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Scan &amp; fill</button>
+          </div>
+          <div class="ai-status" id="lfScanStatus"></div>
           <div class="field-row">
             <div class="field"><label>Keywords / domains</label><input id="lfKeywords" placeholder="saas, fintech or acme.com, orbcall.io" /></div>
             <div class="field"><label>Job title</label><input id="lfTitle" placeholder="founder, head of sales…" /></div>
