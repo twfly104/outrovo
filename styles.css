@@ -1548,6 +1548,25 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .lead-status { font-size: 0.8rem; color: var(--ink-faint); }
 .ok-tag { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #e7f5ee; color: #1a7a4a; font-weight: 700; font-size: 0.78rem; }
 .warn-tag { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #fdf0e3; color: #b45309; font-weight: 700; font-size: 0.78rem; }
+.btn-xs { padding: 4px 12px; font-size: 0.78rem; }
+
+/* Lead intelligence card (✦ Intel) */
+.intel-card { background: linear-gradient(135deg, #fffdf8, #fdf8ee); border: 1px solid rgba(249, 115, 22, .25); border-radius: 14px; padding: 18px 20px; margin: 6px 0; box-shadow: 0 2px 10px rgba(249, 115, 22, .06); }
+.intel-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.intel-head strong { color: var(--ink); font-size: 0.95rem; }
+.intel-head a { color: var(--crest-deep); font-size: 0.8rem; text-decoration: none; }
+.intel-head a:hover { text-decoration: underline; }
+.intel-src { margin-left: auto; font-size: 0.72rem; font-weight: 700; color: var(--crest-deep); background: rgba(249, 115, 22, .12); border-radius: 999px; padding: 2px 10px; }
+.intel-summary { color: var(--ink-soft); font-size: 0.88rem; margin: 4px 0 12px; }
+.intel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.intel-sec { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.intel-sec h4 { font-size: 0.74rem; letter-spacing: .04em; text-transform: uppercase; color: var(--forest); margin: 0 0 6px; }
+.intel-sec ul { margin: 0; padding-left: 16px; }
+.intel-sec li { font-size: 0.8rem; color: var(--ink-soft); margin-bottom: 3px; }
+.intel-empty { font-size: 0.8rem; color: var(--ink-soft); opacity: .75; margin: 0; }
+.intel-angle { margin-top: 12px; border-left: 3px solid var(--crest); background: rgba(249, 115, 22, .08); border-radius: 8px; padding: 10px 12px; }
+.intel-angle h4 { font-size: 0.74rem; letter-spacing: .04em; text-transform: uppercase; color: var(--crest-deep); margin: 0 0 4px; }
+.intel-angle p { font-size: 0.85rem; color: var(--ink); margin: 0; }
 .muted-note { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 16px; }
 .lead-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
 .lead-actions select { max-width: 280px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font: inherit; }

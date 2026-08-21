@@ -1215,6 +1215,91 @@ async function inferIcpFromSite(domain) {
   }
 }
 
+// ---------- lead intelligence (prospect research) ----------
+const intelCache = new Map();
+const INTEL_TTL = 3600e3;
+
+function emailDomain(email) {
+  const d = String(email || '').split('@')[1];
+  return /^[a-z0-9.-]+$/i.test(d || '') ? d.toLowerCase().replace(/^www\./, '') : '';
+}
+
+// Build buyer-facing intel for a lead's company: what they do, key
+// services/features, how they compare, why buyers choose them, plus a
+// sender-specific outreach angle. LLM when configured, heuristic otherwise.
+async function leadIntel(domain, { pitch = '', title = '' } = {}) {
+  domain = String(domain || '').toLowerCase().replace(/^www\./, '');
+  if (!domain) return null;
+  const cacheKey = `${domain}|${pitch}|${title}`;
+  const hit = intelCache.get(cacheKey);
+  if (hit && Date.now() - hit.time < INTEL_TTL) return { ...hit.intel, source: hit.source };
+
+  let info;
+  try {
+    info = await fetchSite(domain);
+  } catch {
+    return null;
+  }
+  const text = info.text.slice(0, 2500);
+
+  const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+  if (key) {
+    try {
+      const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+      const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+      const res = await fetch(`${base}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: 'You research B2B prospects for sales outreach. From a company\'s website, extract: summary (one sentence — what they do), features (≤5 short phrases — their key services/features), vsOthers (≤2 phrases — what makes them different from alternatives / their compare-us claim), whyChoose (≤2 phrases — proof points like stats, logos, guarantees: why buyers choose them), angle (one sentence — how the sender\'s pitch helps this prospect; make it specific, not generic). Return ONLY JSON: {"summary":"...","features":[...],"vsOthers":[...],"whyChoose":[...],"angle":"..."}' },
+            { role: 'user', content: JSON.stringify({ url: info.url, title_: info.title, desc: info.desc, headings: info.h1s, text: text.slice(0, 2000), senderPitch: pitch, buyerTitle: title }) },
+          ],
+          temperature: 0.4, max_tokens: 300,
+        }),
+        signal: AbortSignal.timeout(25000),
+      });
+      if (!res.ok) throw new Error(`LLM ${res.status}`);
+      const data = await res.json();
+      const parsed = JSON.parse(data.choices?.[0]?.message?.content || '{}');
+      const intel = {
+        domain,
+        summary: String(parsed.summary || info.desc || info.title).slice(0, 300),
+        features: (Array.isArray(parsed.features) ? parsed.features : []).map(f => String(f).slice(0, 100)).filter(Boolean).slice(0, 6),
+        vsOthers: (Array.isArray(parsed.vsOthers) ? parsed.vsOthers : []).map(f => String(f).slice(0, 160)).filter(Boolean).slice(0, 3),
+        whyChoose: (Array.isArray(parsed.whyChoose) ? parsed.whyChoose : []).map(f => String(f).slice(0, 160)).filter(Boolean).slice(0, 3),
+        angle: String(parsed.angle || '').slice(0, 300),
+      };
+      if (intel.summary) {
+        intelCache.set(cacheKey, { intel, source: 'llm', time: Date.now() });
+        return { ...intel, source: 'llm' };
+      }
+    } catch { /* fall through to heuristic */ }
+  }
+
+  const sentences = text.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+/).map(s => s.trim());
+  const pickSentences = (re, max = 3) => sentences.filter(s => re.test(s)).slice(0, max).map(s => s.slice(0, 180));
+  const FEATURE_CUE = /integrat|autom|analytic|real-time|monitor|onboard|workflow|collaborat|api|platform|insight|scalab|secur|optim/i;
+  const COMPARE_CUE = /unlike|instead of|no more|rather than|better than|faster than|vs\.|versus|alternat/i;
+  const WHY_CUE = /\d+x|%\s*(increase|reduction|faster)|trusted by|customers? (choose|love)|believe|guarantee|award|leading|world'?s? (first|largest|most)/i;
+
+  const heuDesc = info.desc || info.h1s[0] || info.title;
+  const intel = {
+    domain,
+    summary: String(heuDesc).slice(0, 300),
+    features: pickSentences(FEATURE_CUE, 4),
+    vsOthers: pickSentences(COMPARE_CUE, 2),
+    whyChoose: pickSentences(WHY_CUE, 2),
+    angle: pitch
+      ? `Lead with how ${pitch} helps ${title ? `a ${title}` : 'their team'} — then prove relevance with what ${domain} does (“${String(heuDesc).slice(0, 120)}”).`
+      : `Open with what ${domain} does — “${String(heuDesc).slice(0, 120)}” — and frame your offer against it.`
+  };
+  intelCache.set(cacheKey, { intel, source: 'heuristic', time: Date.now() });
+  return { ...intel, source: 'heuristic' };
+}
+
 
 
 async function analyzeSite(info) {
@@ -2217,6 +2302,28 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const result = enrollLeads(session.email, b.campaignId, b.leads.slice(0, 100));
     if (result.error) return send(res, 404, { ok: false, error: result.error });
     send(res, 200, { ok: true, ...result });
+  },
+
+  // Prospect research: what a lead's company does, key services/features,
+  // how they compare, why buyers choose them — plus a sender angle.
+  'POST /api/app/lead-finder/intel': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const b = await readBody(req);
+    const company = String(b.company || '').toLowerCase().replace(/^www\./, '');
+    const domain = /^[a-z0-9.-]+\.[a-z]{2,}$/.test(company) ? company : emailDomain(b.email);
+    if (!domain) {
+      return send(res, 400, { ok: false, error: 'No website for this lead — try a lead with a company domain.' });
+    }
+    const pitch = String(b.pitch || '').slice(0, 200);
+    const title = String(b.title || '').slice(0, 80);
+    try {
+      const intel = await leadIntel(domain, { pitch, title });
+      if (!intel) return send(res, 502, { ok: false, error: `Could not read ${domain} — the site may be down or block crawlers.` });
+      send(res, 200, { ok: true, ...intel });
+    } catch (err) {
+      send(res, 502, { ok: false, error: `Lead intel failed: ${err.message}` });
+    }
   },
 
   'GET /api/app/overview': (req, res) => {

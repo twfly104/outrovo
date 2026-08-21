@@ -85,7 +85,15 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   HQ address precedence over homepage claims. The LLM prompt is likewise
   ICP-focused (fill the target market, never the user's own domain). The
   builtin crawler no longer truncates pages — `slice(0, 500000)` was
-  cutting off emails past 500KB on sites like stripe.com.
+  cutting off emails past 500KB on sites like stripe.com. Each result row
+  also has a **✦ Intel** column: clicking calls
+  `POST /api/app/lead-finder/intel` (`leadIntel()` in server.js; cached in
+  memory 1h per domain) which scans the lead's company site and returns
+  summary / services & features / how they compare / why buyers choose
+  them / a sender angle (LLM when configured, heuristic sentence-picker
+  otherwise; resolves the company field first, falls back to the email's
+  domain). The frontend keeps the last scanned site title (`servicePitch`)
+  and passes it as `pitch`, personalizing the angle.
 - `LLM_API_KEY` (or `OPENAI_API_KEY`; optional `LLM_BASE_URL`, `LLM_MODEL`) —
   upgrades the AI sequence writer, site-scan prefill, reply-intent
   classification, and AI reply drafts to a real LLM. Without it all four run

@@ -21,6 +21,9 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const fmtTime = t => new Date(t).toLocaleString();
 
 let me, campaigns = [], selectedCampaign = null;
+// Remembered from the last successful Scan & fill / prefill — used to
+// personalize each lead's ✦ Intel research angle.
+let servicePitch = '';
 
 // ---------- auth gate ----------
 async function init() {
@@ -936,6 +939,7 @@ function bindLeadFinderScan() {
       if (p.title) $('lfTitle').value = p.title;
       if (p.size) $('lfSize').value = p.size;
       if (p.location) $('lfLocation').value = p.location;
+      servicePitch = data.siteTitle || url;
       status.className = 'ai-status ok';
       status.textContent = data.source === 'llm'
         ? `✦ Filled from ${url} — review, then hit ✦ Find leads.`
@@ -961,6 +965,7 @@ async function applyLeadFinderPrefill() {
     fill('lfTitle', p.title);
     fill('lfSize', p.size);
     fill('lfLocation', p.location);
+    servicePitch = d.siteTitle || $('lfScanUrl').value || servicePitch;
     if (filled > 0 && $('lfPrefillNote')) {
       $('lfPrefillNote').textContent = `✨ Pre-filled from your website — tweak anything before searching.`;
     }
@@ -991,12 +996,67 @@ async function saveAutopilot(enabled) {
   loadLeadFinderStatus();
 }
 
+function intelCardHtml(d) {
+  const list = (items, empty) => items && items.length
+    ? `<ul>${items.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : `<p class="intel-empty">${empty}</p>`;
+  return `
+    <div class="intel-card">
+      <div class="intel-head">
+        <strong>${esc(d.domain)}</strong>
+        <a href="https://${esc(d.domain)}" target="_blank" rel="noopener">visit site ↗</a>
+        <span class="intel-src">${d.source === 'llm' ? '✦ AI research' : 'site scan'}</span>
+      </div>
+      <p class="intel-summary">${esc(d.summary)}</p>
+      <div class="intel-grid">
+        <div class="intel-sec">
+          <h4>Services &amp; features</h4>
+          ${list(d.features, 'No clear feature statements found on the site.')}
+        </div>
+        <div class="intel-sec">
+          <h4>How they compare</h4>
+          ${list(d.vsOthers, 'No explicit comparison claims found.')}
+        </div>
+        <div class="intel-sec">
+          <h4>Why buyers choose them</h4>
+          ${list(d.whyChoose, 'No proof points found on the site.')}
+        </div>
+      </div>
+      <div class="intel-angle">
+        <h4>✦ Your angle</h4>
+        <p>${esc(d.angle)}</p>
+      </div>
+    </div>`;
+}
+
+async function toggleLeadIntel(btn, row) {
+  const i = Number(btn.dataset.intel);
+  const lead = leadFinderLeads[i];
+  const tbody = row.parentNode;
+  const existing = tbody.querySelector(`tr[data-intel-row="${i}"]`);
+  if (existing) { existing.remove(); btn.textContent = '✦ Intel'; return; }
+  btn.disabled = true;
+  btn.textContent = '…';
+  const { status, data } = await api('POST', '/api/app/lead-finder/intel', {
+    company: lead.company, email: lead.email, pitch: servicePitch, title: lead.title,
+  });
+  btn.disabled = false;
+  btn.textContent = '✦ Intel';
+  const tr = document.createElement('tr');
+  tr.dataset.intelRow = i;
+  const content = status === 200 && data.ok
+    ? intelCardHtml(data)
+    : `<div class="intel-card"><p class="intel-empty">${esc(data.error || 'Research failed.')}</p></div>`;
+  tr.innerHTML = `<td colspan="7">${content}</td>`;
+  row.after(tr);
+}
+
 function renderLeadResults(leads) {
   leadFinderLeads = leads;
   const box = $('leadResults');
   if (!leads.length) { box.hidden = true; return; }
   box.hidden = false;
-  $('leadTable').querySelector('tbody').innerHTML = leads.map((l, i) => `
+  const tbody = $('leadTable').querySelector('tbody');
+  tbody.innerHTML = leads.map((l, i) => `
     <tr>
       <td><input type="checkbox" data-lead="${i}" checked /></td>
       <td>${esc(l.email)}</td>
@@ -1004,7 +1064,12 @@ function renderLeadResults(leads) {
       <td>${esc(l.company) || '—'}</td>
       <td>${esc(l.title) || '—'}</td>
       <td>${l.verified === 'valid' ? '<span class="ok-tag">✓ deliverable</span>' : '<span class="warn-tag">unknown</span>'}</td>
+      <td><button class="btn btn-ghost btn-xs" data-intel="${i}">✦ Intel</button></td>
     </tr>`).join('');
+  tbody.onclick = e => {
+    const btn = e.target.closest('[data-intel]');
+    if (btn) toggleLeadIntel(btn, btn.closest('tr'));
+  };
   $('leadEnrollCampaign').innerHTML = campaigns.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
 }
 
