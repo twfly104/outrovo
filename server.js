@@ -386,6 +386,42 @@ function resolveNextIndex(campaign, prospect) {
   return prospect.stepIndex + 1;
 }
 
+// ---------- A/B testing ----------
+// Email steps may carry variantB: { subject, body } — variant A is the step's
+// own subject/body. Assignment is deterministic per prospect+step (stable
+// across retries) and recorded on prospect.abLog for the results endpoint.
+function pickVariant(step, prospect) {
+  if (!step.variantB || !step.variantB.subject || !step.variantB.body) return { key: 'A', subject: step.subject, body: step.body };
+  prospect.abLog = prospect.abLog || {};
+  const k = String(prospect.stepIndex);
+  if (!prospect.abLog[k]) {
+    const h = crypto.createHash('sha1').update(`${prospect.id}:${k}`).digest()[0];
+    prospect.abLog[k] = h % 2 === 0 ? 'A' : 'B';
+  }
+  const key = prospect.abLog[k];
+  return key === 'B' ? { key, subject: step.variantB.subject, body: step.variantB.body } : { key, subject: step.subject, body: step.body };
+}
+
+function abResultsFor(campaign, prospects) {
+  const rows = [];
+  campaign.steps.forEach((step, i) => {
+    if (step.type !== 'email' || !step.variantB) return;
+    const inCampaign = prospects.filter(p => p.campaignId === campaign.id && p.abLog && p.abLog[String(i)]);
+    const a = inCampaign.filter(p => p.abLog[String(i)] === 'A');
+    const b = inCampaign.filter(p => p.abLog[String(i)] === 'B');
+    const stat = arr => ({ sent: arr.length, replied: arr.filter(p => p.replied).length, clicked: arr.filter(p => p.clicked).length });
+    const sa = stat(a), sb = stat(b);
+    const rate = s => (s.sent ? Math.round((s.replied / s.sent) * 1000) / 10 : 0);
+    rows.push({
+      stepIndex: i, label: step.label || `Step ${i + 1}`,
+      variantA: { subject: step.subject, ...sa, replyRate: rate(sa) },
+      variantB: { subject: step.variantB.subject, ...sb, replyRate: rate(sb) },
+      winner: sa.sent >= 10 && sb.sent >= 10 ? (rate(sa) >= rate(sb) ? 'A' : 'B') : null,
+    });
+  });
+  return rows;
+}
+
 // ---------- reply intent (Smart Unibox) ----------
 const INTENT_LABELS = ['interested', 'not_interested', 'question', 'out_of_office', 'unsubscribe', 'bounce', 'neutral'];
 async function classifyIntent(reply) {
@@ -676,9 +712,10 @@ function enrollLeads(sessionEmail, campaignId, leads) {
   const plan = planOf(user);
   const prospects = load('prospects');
   const existing = new Set(prospects.filter(p => p.campaignId === campaignId).map(p => p.email));
+  const ownerCampaignIds = new Set(load('campaigns').filter(c => c.owner === sessionEmail).map(c => c.id));
   let added = 0, skippedSuppressed = 0;
   for (const l of leads) {
-    if (prospects.length >= plan.maxProspects) break;
+    if (prospects.filter(p => ownerCampaignIds.has(p.campaignId)).length >= plan.maxProspects) break;
     const email = (l.email || '').trim().toLowerCase();
     if (!isEmail(email) || existing.has(email)) continue;
     if (isSuppressed(sessionEmail, email)) { skippedSuppressed++; continue; }
@@ -809,12 +846,13 @@ function senderTransport(sender) {
 // opts.sender picks a specific inbox (test-email), opts.fallback is the
 // legacy env SMTP transport kept for backward compatibility.
 async function sendEmail(campaign, prospect, step, opts = {}) {
-  const subject = personalize(step.subject, prospect);
+  const variant = pickVariant(step, prospect);
+  const subject = personalize(variant.subject, prospect);
   // Compliance footer + List-Unsubscribe headers on real campaign sends
   // (skipped for the test-email tool, which passes campaign.id undefined).
   const withUnsub = Boolean(campaign.id && campaign.owner);
   const link = withUnsub ? unsubUrl(campaign.owner, prospect.email) : null;
-  const body = personalize(step.body, prospect)
+  const body = personalize(variant.body, prospect)
     + (withUnsub ? `\n\n—\nDon't want these emails? Unsubscribe: ${link}` : '');
   const unsubHeaders = withUnsub ? {
     'List-Unsubscribe': `<${link}>`,
@@ -1912,11 +1950,12 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const plan = planOf(user);
     if (plan.expired) return send(res, 402, { ok: false, error: 'Your trial has ended — upgrade to keep building campaigns.', upgrade: true });
     const campaigns = load('campaigns');
-    if (campaigns.length >= plan.maxCampaigns) return send(res, 402, { ok: false, error: `${plan.name} plan allows ${plan.maxCampaigns} campaign${plan.maxCampaigns > 1 ? 's' : ''} — upgrade for more.`, upgrade: true });
+    if (campaigns.filter(c => c.owner === session.email).length >= plan.maxCampaigns) return send(res, 402, { ok: false, error: `${plan.name} plan allows ${plan.maxCampaigns} campaign${plan.maxCampaigns > 1 ? 's' : ''} — upgrade for more.`, upgrade: true });
     for (const s of b.steps) {
       if (!['email', 'task', 'wait'].includes(s.type)) return send(res, 400, { ok: false, error: `Unknown step type "${s.type}"` });
       if (s.type === 'email' && (!s.subject || !s.body)) return send(res, 400, { ok: false, error: 'Email steps need subject and body.' });
       if (s.type === 'task' && !s.note) return send(res, 400, { ok: false, error: 'Task steps need a note.' });
+      if (s.variantB && (!s.variantB.subject || !s.variantB.body)) return send(res, 400, { ok: false, error: 'A/B variant B needs both subject and body.' });
     }
     const campaign = {
       id: crypto.randomUUID(), name: b.name.trim(), status: 'draft', owner: session.email,
@@ -1930,6 +1969,14 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     };
     campaigns.push(campaign); save('campaigns', campaigns);
     send(res, 201, { ok: true, campaign });
+  },
+
+  'GET /api/app/campaigns/:id/ab-results': (req, res, id) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const campaign = load('campaigns').find(c => c.id === id && c.owner === session.email);
+    if (!campaign) return send(res, 404, { ok: false, error: 'Campaign not found' });
+    send(res, 200, { ok: true, results: abResultsFor(campaign, load('prospects')) });
   },
 
   'PATCH /api/app/campaigns/:id': async (req, res, id) => {
@@ -2089,7 +2136,8 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const plan = planOf(user);
     if (plan.expired) return send(res, 402, { ok: false, error: 'Your trial has ended — upgrade to keep adding prospects.', upgrade: true });
     const prospects = load('prospects');
-    if (prospects.length >= plan.maxProspects) return send(res, 402, { ok: false, error: `${plan.name} plan caps at ${plan.maxProspects} prospects — upgrade for more.`, upgrade: true });
+    const ownerCampaignIds = new Set(load('campaigns').filter(c => c.owner === session.email).map(c => c.id));
+    if (prospects.filter(p => ownerCampaignIds.has(p.campaignId)).length >= plan.maxProspects) return send(res, 402, { ok: false, error: `${plan.name} plan caps at ${plan.maxProspects} prospects — upgrade for more.`, upgrade: true });
     const existing = new Set(prospects.filter(p => p.campaignId === b.campaignId).map(p => p.email));
 
     const BUILTIN_COLS = { email: 'email', 'first name': 'firstName', firstname: 'firstName', first_name: 'firstName', 'last name': 'lastName', lastname: 'lastName', last_name: 'lastName', company: 'company' };
@@ -2312,6 +2360,89 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
   },
 
   // Autopilot callback: PhantomBuster/Zapier/etc. report task outcomes.
+  // --- MCP (Model Context Protocol, streamable HTTP) ---
+  // Auth: Authorization: Bearer <integration token> or x-integration-token.
+  // JSON-RPC 2.0: initialize, tools/list, tools/call. Generate a token in
+  // Settings → LinkedIn autopilot bridge → Generate integration token.
+  'POST /api/mcp': async (req, res) => {
+    const auth = req.headers.authorization || '';
+    const token = req.headers['x-integration-token'] || (auth.startsWith('Bearer ') ? auth.slice(7) : '');
+    const user = integrationTokenOk(token);
+    if (!user) return send(res, 403, { jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Invalid integration token' } });
+    const b = await readBody(req).catch(() => ({}));
+    const rpc = (result, id) => send(res, 200, { jsonrpc: '2.0', id: id ?? null, result });
+    const rpcErr = (code, message, id) => send(res, 200, { jsonrpc: '2.0', id: id ?? null, error: { code, message } });
+
+    const TOOLS = [
+      { name: 'overview_stats', description: 'Aggregate stats: campaigns, prospects, sends, replies, bounces, open to-dos.', inputSchema: { type: 'object', properties: {} } },
+      { name: 'list_campaigns', description: 'List campaigns with status, step count, prospect counts, daily cap.', inputSchema: { type: 'object', properties: {} } },
+      { name: 'ab_results', description: 'A/B test results for a campaign: per-step variant sends, replies, reply rates, winner.', inputSchema: { type: 'object', properties: { campaignId: { type: 'string' } }, required: ['campaignId'] } },
+      { name: 'add_prospect', description: 'Add a prospect to a campaign (suppression-checked).', inputSchema: { type: 'object', properties: { campaignId: { type: 'string' }, email: { type: 'string' }, firstName: { type: 'string' }, lastName: { type: 'string' }, company: { type: 'string' } }, required: ['campaignId', 'email'] } },
+      { name: 'list_replies', description: 'Most recent inbox replies with intent classification.', inputSchema: { type: 'object', properties: { limit: { type: 'number' } } } },
+    ];
+
+    if (b.method === 'initialize') {
+      return rpc({ protocolVersion: '2025-03-26', capabilities: { tools: {} }, serverInfo: { name: 'outrovo', version: '1.0.0' } }, b.id);
+    }
+    if (b.method === 'notifications/initialized') return send(res, 202, { ok: true });
+    if (b.method === 'tools/list') return rpc({ tools: TOOLS }, b.id);
+    if (b.method === 'tools/call') {
+      const { name, arguments: args = {} } = b.params || {};
+      const wrap = data => rpc({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }, b.id);
+      const ownerCampaigns = () => load('campaigns').filter(c => c.owner === user.email);
+      if (name === 'overview_stats') {
+        const campaigns = ownerCampaigns();
+        const ids = new Set(campaigns.map(c => c.id));
+        const prospects = load('prospects').filter(p => ids.has(p.campaignId));
+        const replies = load('replies').filter(r => !r.owner || r.owner === user.email);
+        return wrap({
+          campaigns: campaigns.length, active: campaigns.filter(c => c.status === 'active').length,
+          prospects: prospects.length, sent: campaigns.reduce((n, c) => n + (c.sentCount || 0), 0),
+          replies: replies.length, bounces: prospects.filter(p => p.bounced).length,
+        });
+      }
+      if (name === 'list_campaigns') {
+        const prospects = load('prospects');
+        return wrap(ownerCampaigns().map(c => ({
+          id: c.id, name: c.name, status: c.status, steps: c.steps.length,
+          prospects: prospects.filter(p => p.campaignId === c.id).length,
+          sent: c.sentCount || 0, bounced: c.bounceCount || 0,
+          abTests: c.steps.filter(s => s.variantB).length,
+        })));
+      }
+      if (name === 'ab_results') {
+        const campaign = ownerCampaigns().find(c => c.id === args.campaignId);
+        if (!campaign) return rpcErr(-32602, 'Campaign not found', b.id);
+        return wrap(abResultsFor(campaign, load('prospects')));
+      }
+      if (name === 'add_prospect') {
+        const campaign = ownerCampaigns().find(c => c.id === args.campaignId);
+        if (!campaign) return rpcErr(-32602, 'Campaign not found', b.id);
+        const email = (args.email || '').trim().toLowerCase();
+        if (!isEmail(email)) return rpcErr(-32602, 'Valid email required', b.id);
+        if (isSuppressed(user.email, email)) return rpcErr(-32602, 'Address is suppressed', b.id);
+        const prospects = load('prospects');
+        if (prospects.some(p => p.campaignId === campaign.id && p.email === email)) return rpcErr(-32602, 'Already in this campaign', b.id);
+        prospects.push({
+          id: crypto.randomUUID(), campaignId: campaign.id, email,
+          firstName: args.firstName || '', lastName: args.lastName || '', company: args.company || '',
+          customVars: { source: 'mcp' }, stepIndex: null, nextRunAt: null, finished: false,
+          verified: null, addedAt: new Date().toISOString(),
+        });
+        save('prospects', prospects);
+        logEvent('mcp', `Prospect ${email} added to “${campaign.name}” via MCP`);
+        return wrap({ ok: true, email, campaign: campaign.name });
+      }
+      if (name === 'list_replies') {
+        const limit = Math.min(50, Math.max(1, Number(args.limit) || 10));
+        return wrap(load('replies').filter(r => !r.owner || r.owner === user.email).slice(0, limit)
+          .map(r => ({ from: r.from, subject: r.subject, intent: r.intent, at: r.at })));
+      }
+      return rpcErr(-32601, `Unknown tool "${name}"`, b.id);
+    }
+    return rpcErr(-32601, `Unknown method "${b.method}"`, b.id);
+  },
+
   // Auth: x-integration-token header or ?token=. Body:
   //   { taskId } | { prospect, campaign? }  +  outcome: done|failed|connected|replied, note?
   'POST /api/integrations/linkedin/callback': async (req, res, _id, query) => {

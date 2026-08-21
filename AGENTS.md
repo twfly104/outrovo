@@ -64,6 +64,10 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   target company domains the user types in and MX-verifies what it finds.
   Quotas per plan: trial 25, starter 100, growth 1,000, scale/agency 10,000
   credits/month (1 credit per returned lead), tracked on `user.leadFinder`.
+- `LLM_API_KEY` (or `OPENAI_API_KEY`; optional `LLM_BASE_URL`, `LLM_MODEL`) —
+  upgrades the AI sequence writer, site-scan prefill, reply-intent
+  classification, and AI reply drafts to a real LLM. Without it all four run
+  on built-in heuristic engines, so nothing breaks.
 
 ## API
 - `POST /api/signup` — validates, scrypt-hashes password, 409 on duplicate email
@@ -76,7 +80,19 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   `/:id/verify`), `/api/app/activity`, `/api/app/tasks` (`/:id/done`),
   `/api/app/tools/verify` (syntax + MX), `/api/app/tools/domain-audit`
   (MX/SPF/DMARC/DKIM-selector DNS checks), `/api/app/lead-finder/status|search|enroll`
-  (ICP/domain search → verify → add to campaign, credit-metered), `/api/app/engine`
+  (ICP/domain search → verify → add to campaign, credit-metered),
+  `/api/app/campaigns/:id/ab-results` (per-step A/B variant stats), `/api/app/engine`
+- A/B testing: email steps may carry `variantB {subject, body}` (builder UI has
+  a "⇄ A/B test this step" toggle). Assignment is deterministic per
+  prospect+step (`prospect.abLog`), stats via ab-results (winner declared at
+  ≥10 sends per arm by reply rate).
+- MCP: `POST /api/mcp` — JSON-RPC 2.0 (initialize, tools/list, tools/call)
+  with tools overview_stats, list_campaigns, ab_results, add_prospect,
+  list_replies. Auth: `Authorization: Bearer <integration token>` (Settings →
+  LinkedIn autopilot bridge → Generate integration token).
+- CLI: `bin/outrovo.js` (zero-dep, Node 18+, `npm run cli` or the `outrovo`
+  bin). Env `OUTROVO_URL` + `OUTROVO_TOKEN`; commands overview, campaigns,
+  ab, add-prospect, replies — all ride the MCP endpoint.
 - `/app.html` and `/app.js` redirect to `/login.html` without a session
 
 ## Conventions

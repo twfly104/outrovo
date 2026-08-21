@@ -146,7 +146,12 @@ function stepRowHtml(type) {
   let fields = '';
   if (type === 'email') {
     fields = `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" />
-              <textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}… — variables and {spintax|variants} work here">{Hi|Hello|Hey} {{firstName}}, {{company}} caught my eye — quick idea.</textarea>${branch}`;
+              <textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}… — variables and {spintax|variants} work here">{Hi|Hello|Hey} {{firstName}}, {{company}} caught my eye — quick idea.</textarea>
+              <button type="button" class="ab-toggle">⇄ A/B test this step</button>
+              <div class="ab-b" hidden>
+                <input class="subject-b" placeholder="Variant B subject" />
+                <textarea class="body-b" placeholder="Variant B body — half your prospects get this version"></textarea>
+              </div>${branch}`;
   } else if (type === 'task') {
     fields = `<select class="task-kind">
         <option value="connect">Connection request</option>
@@ -169,6 +174,17 @@ function stepRowHtml(type) {
     </div>`;
 }
 
+function bindAbToggle(row) {
+  const btn = row.querySelector('.ab-toggle');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const box = row.querySelector('.ab-b');
+    box.hidden = !box.hidden;
+    btn.textContent = box.hidden ? '⇄ A/B test this step' : '✕ Remove variant B';
+    if (box.hidden) { row.querySelector('.subject-b').value = ''; row.querySelector('.body-b').value = ''; }
+  });
+}
+
 function addStepRow(type, data = {}) {
   const wrap = document.createElement('div');
   wrap.innerHTML = stepRowHtml(type);
@@ -177,11 +193,13 @@ function addStepRow(type, data = {}) {
   row.querySelector('.remove-step').addEventListener('click', () => row.remove());
   row.querySelector('.step-type').addEventListener('change', e => {
     row.querySelector('.step-fields').innerHTML = e.target.value === 'email'
-      ? `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" /><textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}…"></textarea>`
+      ? `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" /><textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}…"></textarea><button type="button" class="ab-toggle">⇄ A/B test this step</button><div class="ab-b" hidden><input class="subject-b" placeholder="Variant B subject" /><textarea class="body-b" placeholder="Variant B body — half your prospects get this version"></textarea></div>`
       : e.target.value === 'task'
       ? `<select class="task-kind"><option value="connect">Connection request</option><option value="message">Direct message</option><option value="view">Profile view</option></select><textarea class="note" placeholder="LinkedIn action — e.g. Send connection request to {{firstName}}"></textarea>`
       : '';
+    bindAbToggle(row);
   });
+  bindAbToggle(row);
   if (data.delayMinutes != null) row.querySelector('.delay').value = data.delayMinutes;
   if (data.subject) row.querySelector('.subject') && (row.querySelector('.subject').value = data.subject);
   if (data.body && row.querySelector('.body')) row.querySelector('.body').value = data.body;
@@ -271,6 +289,9 @@ async function saveCampaign() {
     const label = row.querySelector('.step-label')?.value.trim() || undefined;
     if (type === 'email') {
       const step = { type, subject: row.querySelector('.subject').value, body: row.querySelector('.body').value, delayMinutes, label };
+      const subjectB = row.querySelector('.subject-b')?.value.trim();
+      const bodyB = row.querySelector('.body-b')?.value.trim();
+      if (subjectB && bodyB) step.variantB = { subject: subjectB, body: bodyB };
       const onReplied = row.querySelector('.br-replied')?.value.trim();
       const onClicked = row.querySelector('.br-clicked')?.value.trim();
       const onNoReply = row.querySelector('.br-noreply')?.value.trim();
@@ -310,6 +331,7 @@ async function loadCampaigns() {
           <h3>${esc(c.name)}</h3>
           <div class="meta">${c.steps.length} steps · ${c.prospects} prospects · ${c.finished} finished</div>
           <div class="meta">${c.sentCount || 0} sent${c.bounced ? ` · ${c.bounced} bounced` : ''} · today ${c.sentToday ?? 0}/${c.capToday ?? 25}${c.timezone ? ` · ${c.sendWindowStart ?? 9}:00–${c.sendWindowEnd ?? 17}:00 ${esc(c.timezone)}` : ''}</div>
+          ${c.steps.some(s => s.variantB) ? `<div class="ab-results" data-campaign="${c.id}"></div>` : ''}
         </div>
         <div class="actions">
           ${c.status === 'active'
@@ -327,6 +349,17 @@ async function loadCampaigns() {
     loadCampaigns();
     fillProspectSelect();
   }));
+
+  list.querySelectorAll('.ab-results').forEach(async box => {
+    const { data: ab } = await api('GET', `/api/app/campaigns/${box.dataset.campaign}/ab-results`);
+    if (!ab?.ok || !ab.results.length) return;
+    box.innerHTML = ab.results.map(r => `
+      <div class="ab-row">
+        <span class="ab-label">⇄ ${esc(r.label)}</span>
+        <span class="ab-cell ${r.winner === 'A' ? 'ab-winner' : ''}">A — ${esc(r.variantA.subject.slice(0, 34))}: ${r.variantA.sent} sent · ${r.variantA.replied} replies (${r.variantA.replyRate}%)</span>
+        <span class="ab-cell ${r.winner === 'B' ? 'ab-winner' : ''}">B — ${esc(r.variantB.subject.slice(0, 34))}: ${r.variantB.sent} sent · ${r.variantB.replied} replies (${r.variantB.replyRate}%)</span>
+      </div>`).join('');
+  });
 
   fillProspectSelect();
 }

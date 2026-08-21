@@ -6,7 +6,11 @@
     "node": ">=18"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "cli": "node bin/outrovo.js"
+  },
+  "bin": {
+    "outrovo": "bin/outrovo.js"
   },
   "dependencies": {
     "nodemailer": "^9.0.5"

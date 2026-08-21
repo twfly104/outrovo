@@ -1552,6 +1552,15 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .lead-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
 .lead-actions select { max-width: 280px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font: inherit; }
 .lead-actions select:focus { outline: none; border-color: var(--crest); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14); }
+
+.ab-toggle { background: none; border: 1px dashed var(--line-strong, #d9d9de); border-radius: 10px; padding: 6px 12px; font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--ink-soft); cursor: pointer; margin: 4px 0; }
+.ab-toggle:hover { border-color: var(--crest); color: var(--crest-deep, var(--crest)); }
+.ab-b { display: grid; gap: 8px; margin: 6px 0; padding: 10px; border-radius: 12px; background: var(--cream, #f7f7f8); border: 1px solid var(--line); }
+.ab-results { margin-top: 8px; display: grid; gap: 6px; }
+.ab-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 12px; border-radius: 10px; background: var(--cream, #f7f7f8); border: 1px solid var(--line); font-size: 0.82rem; }
+.ab-label { font-weight: 700; color: var(--ink); }
+.ab-cell { color: var(--ink-soft); }
+.ab-cell.ab-winner { color: #1a7a4a; font-weight: 700; }
 #leadResults { margin-top: 18px; }
 #leadTable td:first-child, #leadTable th:first-child { width: 34px; }
 .app-body .field textarea {
