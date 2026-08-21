@@ -107,9 +107,9 @@ function requireAuth(req, res) {
   if (!session) { send(res, 401, { ok: false, error: 'Not signed in.' }); return null; }
   return session;
 }
-function logEvent(type, message, meta = {}) {
+function logEvent(type, message, meta = {}, owner = null) {
   const events = load('events');
-  events.unshift({ id: crypto.randomUUID(), type, message, meta, demo: !smtpConfigured, at: new Date().toISOString() });
+  events.unshift({ id: crypto.randomUUID(), type, message, meta, owner, demo: !smtpConfigured, at: new Date().toISOString() });
   save('events', events.slice(0, 500));
 }
 
@@ -152,6 +152,16 @@ function gatewaySender() {
   if (RESEND_KEY) return { id: '__gateway__', owner: '*', provider: 'resend', email: RESEND_FROM, fromName: '', resend: true, status: 'active', dailyLimit: Infinity };
   if (SMTP.host && SMTP.user) return { id: '__gateway__', owner: '*', provider: 'custom', email: SMTP.from, fromName: '', host: SMTP.host, port: SMTP.port, user: SMTP.user, pass: SMTP.pass || '', status: 'active', dailyLimit: Infinity };
   return null;
+}
+
+// With no inboxes and no env gateway the engine still has to do something
+// visible: demo sends are logged to the feed (never delivered), so a fresh
+// trial user sees the campaign run instead of a silently stalled queue.
+function demoSender() {
+  return { id: '__demo__', owner: '*', provider: 'demo', email: SMTP.from || 'demo@outrovo.app', fromName: '', status: 'active', dailyLimit: Infinity, demo: true };
+}
+function hasRealSender(ownerEmail) {
+  return Boolean(gatewaySender() || (ownerEmail && load('senders').some(s => s.owner === ownerEmail && s.status === 'active')));
 }
 
 function engineMode(ownerEmail) {
@@ -261,7 +271,7 @@ function suppressEmail(ownerEmail, email, reason = 'unsubscribe') {
   if (!user.suppressed.some(s => s.email === email)) {
     user.suppressed.push({ email, reason, at: new Date().toISOString() });
     save('users', users);
-    logEvent('unsubscribe', `${email} opted out (${reason})`);
+    logEvent('unsubscribe', `${email} opted out (${reason})`, {}, ownerEmail);
     fireWebhooks(ownerEmail, 'unsubscribe', { email, reason });
     // Stop any in-flight sequences for this prospect across the owner's campaigns.
     const ownerCampaigns = new Set(load('campaigns').filter(c => c.owner === ownerEmail).map(c => c.id));
@@ -748,7 +758,7 @@ async function autopilotRun() {
       const validOnly = found.leads.filter(l => l.verified === 'valid');
       const result = validOnly.length ? enrollLeads(user.email, ap.campaignId, validOnly) : { added: 0 };
       ap.lastNote = `${result.added || 0} new lead${result.added === 1 ? '' : 's'} auto-enrolled from ${found.leads.length} found into "${result.campaignName || 'your campaign'}"`;
-      if (!result.added) logEvent('lead-finder', `Autopilot: ${ap.lastNote}`, { owner: user.email });
+      if (!result.added) logEvent('lead-finder', `Autopilot: ${ap.lastNote}`, {}, user.email);
       // Wake new prospects immediately if the campaign is already active.
       const camp = load('campaigns').find(c => c.id === ap.campaignId && c.owner === user.email);
       if (camp && camp.status === 'active' && result.added) {
@@ -800,7 +810,7 @@ function enrollLeads(sessionEmail, campaignId, leads) {
     added++;
   }
   save('prospects', prospects);
-  logEvent('lead-finder', `${added} Lead Finder prospects added to “${campaign.name}”`, { campaign: campaign.name, added });
+  logEvent('lead-finder', `${added} Lead Finder prospects added to “${campaign.name}”`, { campaign: campaign.name, added }, sessionEmail);
   return { added, skippedSuppressed, campaignName: campaign.name };
 }
 
@@ -822,7 +832,7 @@ async function fireWebhooks(ownerEmail, eventType, payload) {
       await fetch(hook.url, { method: 'POST', headers, body, signal: controller.signal });
       clearTimeout(timer);
     } catch (err) {
-      logEvent('error', `Webhook delivery failed (${hook.provider || hook.url}): ${err.message}`);
+      logEvent('error', `Webhook delivery failed (${hook.provider || hook.url}): ${err.message}`, {}, hook.owner || null);
     }
   }
 }
@@ -942,19 +952,21 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
   if (!sender) {
     sender = campaign.owner ? pickSender(campaign.owner, prospect) : gatewaySender();
     if (!sender) {
-      const hasAny = campaign.owner && (ownerSenders(campaign.owner).length || gatewaySender());
-      const err = new Error(hasAny
-        ? 'All sender inboxes hit their daily cap — paused until tomorrow.'
-        : 'No sender inbox connected — add one in Settings → Sender accounts.');
-      logEvent('error', `${label}: ${err.message}`);
-      throw err;
+      if (!hasRealSender(campaign.owner)) {
+        // Zero-config demo mode: log the send, deliver nothing.
+        sender = demoSender();
+      } else {
+        const err = new Error('All sender inboxes hit their daily cap — paused until tomorrow.');
+        logEvent('error', `${label}: ${err.message}`, {}, campaign.owner || null);
+        throw err;
+      }
     }
   }
 
   if (sender.resend) {
     await sendViaResend(prospect.email, subject, body, senderDisplayName(sender), unsubHeaders);
     recordCampaignSend(campaign.id);
-    logEvent('sent', `${label} (via Resend)`, { subject, sender: sender.email });
+    logEvent('sent', `${label} (via Resend)`, { subject, sender: sender.email }, campaign.owner || null);
     if (campaign.owner) fireWebhooks(campaign.owner, 'sent', { email: prospect.email, campaign: campaign.name, subject, sender: sender.email });
     return { demo: false, sender: sender.email };
   }
@@ -964,14 +976,16 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
   const senderHasSmtp = Boolean(sender.host && nodemailer);
   const t = senderHasSmtp ? senderTransport(sender) : opts.fallback || null;
   if (!t) {
-    logEvent('sent', `[DEMO] ${label}`, { subject, sender: sender.email });
+    recordCampaignSend(campaign.id);
+    logEvent('sent', `[DEMO] ${label}`, { subject, sender: sender.email }, campaign.owner || null);
+    if (campaign.owner) fireWebhooks(campaign.owner, 'sent', { email: prospect.email, campaign: campaign.name, subject, sender: sender.email, demo: true });
     return { demo: true, sender: sender.email };
   }
   const from = senderHasSmtp ? senderDisplayName(sender) : (SMTP.from || senderDisplayName(sender));
   await t.sendMail({ from, to: prospect.email, subject, text: body, headers: unsubHeaders || undefined });
   recordSend(sender);
   recordCampaignSend(campaign.id);
-  logEvent('sent', `${label} (via ${sender.email})`, { subject, sender: sender.email });
+  logEvent('sent', `${label} (via ${sender.email})`, { subject, sender: sender.email }, campaign.owner || null);
   if (campaign.owner) fireWebhooks(campaign.owner, 'sent', { email: prospect.email, campaign: campaign.name, subject, sender: sender.email });
   return { demo: false, sender: sender.email };
 }
@@ -1668,7 +1682,7 @@ async function aiGenerateSequence(input) {
 // tiers with hard prospect limits. Stripe Checkout when STRIPE_SECRET_KEY is
 // set; otherwise a manual activation path (admin key) keeps the flow usable.
 const PLANS = {
-  trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, leadFinderCredits: 25, linkedIn: false, agency: false, whiteLabel: false },
+  trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, leadFinderCredits: 25, linkedIn: true, agency: false, whiteLabel: false },
   starter: { name: 'Starter', priceMonthly: 29, maxProspects: 2000, maxCampaigns: 3, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false },
   growth: { name: 'Growth', priceMonthly: 49, maxProspects: 10000, maxCampaigns: 10, leadFinderCredits: 1000, linkedIn: true, agency: false, whiteLabel: false },
   scale: { name: 'Scale', priceMonthly: 99, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: false, whiteLabel: true },
@@ -1791,21 +1805,25 @@ function engineTick() {
           changed = true;
           continue;
         }
-        const sender = campaign.owner ? pickSender(campaign.owner, prospect) : gatewaySender();
+        let sender = campaign.owner ? pickSender(campaign.owner, prospect) : gatewaySender();
         if (!sender) {
-          // Every inbox capped for today: retry this prospect later, keep step.
-          prospect.nextRunAt = now + CAP_RETRY_MS;
-          changed = true;
-          continue;
+          if (hasRealSender(campaign.owner)) {
+            // Every inbox capped for today: retry this prospect later, keep step.
+            prospect.nextRunAt = now + CAP_RETRY_MS;
+            changed = true;
+            continue;
+          }
+          // Nothing to send with at all → demo send (logged, not delivered).
+          sender = demoSender();
         }
         dispatchedThisTick++;
-        sendEmail(campaign, prospect, step).catch(err => {
+        sendEmail(campaign, prospect, step, { sender }).catch(err => {
           const kind = classifySendError(err);
           if (kind === 'hard') {
             prospect.bounced = { kind: 'hard', at: new Date().toISOString(), reason: err.message.slice(0, 200) };
             prospect.finished = true; prospect.nextRunAt = null;
             recordCampaignSend(campaign.id, true);
-            logEvent('bounce', `Hard bounce: ${prospect.email} — sequence stopped`, { reason: err.message.slice(0, 200) });
+            logEvent('bounce', `Hard bounce: ${prospect.email} — sequence stopped`, { reason: err.message.slice(0, 200) }, campaign.owner || null);
             if (campaign.owner) fireWebhooks(campaign.owner, 'bounce', { email: prospect.email, campaign: campaign.name, reason: err.message.slice(0, 200) });
           } else if (kind === 'soft' && Number(prospect.softRetries || 0) < SOFT_MAX_RETRIES) {
             // stepIndex already advanced below — rewind so the retry re-runs
@@ -1813,9 +1831,9 @@ function engineTick() {
             prospect.stepIndex -= 1;
             prospect.softRetries = Number(prospect.softRetries || 0) + 1;
             prospect.nextRunAt = Date.now() + SOFT_RETRY_MS;
-            logEvent('soft-bounce', `Soft bounce: ${prospect.email} — retry ${prospect.softRetries}/${SOFT_MAX_RETRIES} in 30 min`);
+            logEvent('soft-bounce', `Soft bounce: ${prospect.email} — retry ${prospect.softRetries}/${SOFT_MAX_RETRIES} in 30 min`, {}, campaign.owner || null);
           } else {
-            logEvent('error', `Send failed to ${prospect.email}: ${err.message}`);
+            logEvent('error', `Send failed to ${prospect.email}: ${err.message}`, {}, campaign.owner || null);
           }
           save('prospects', load('prospects').map(p => p.id === prospect.id ? prospect : p));
         });
@@ -1825,7 +1843,7 @@ function engineTick() {
         // Over budget → defer the prospect, never drop the task.
         const plan = owner ? planOf(owner) : null;
         if (plan && !plan.linkedIn) {
-          logEvent('task', `LinkedIn step skipped for ${prospect.email} — ${plan.name} plan has no LinkedIn actions`);
+          logEvent('task', `LinkedIn step skipped for ${prospect.email} — ${plan.name} plan has no LinkedIn actions`, {}, campaign.owner || null);
         } else if (campaign.owner && linkedinUsedToday(campaign.owner) >= linkedinBudget(owner)) {
           prospect.nextRunAt = now + CAP_RETRY_MS;
           changed = true;
@@ -1840,7 +1858,7 @@ function engineTick() {
             campaign: campaign.name, owner: campaign.owner || null,
             done: false, dueAt, at: new Date().toISOString(),
           });
-          logEvent('task', `LinkedIn task for ${prospect.email}: ${personalize(step.note, prospect)}`);
+          logEvent('task', `LinkedIn task for ${prospect.email}: ${personalize(step.note, prospect)}`, {}, campaign.owner || null);
         }
       }
       // Event-driven branching: after this step executes, engagement events
@@ -1915,6 +1933,30 @@ function smtpProbe(mxHost, domain, probeAddress) {
     sock.on('error', () => finish(null));
   });
 }
+
+// Verify freshly imported prospects in the background, a few at a time so a
+// big CSV can't fire a DNS/SMTP burst. Stamps each prospect's verdict; the
+// campaign list picks it up on the next refresh.
+async function verifyProspectsInBackground(ids) {
+  const queue = [...ids];
+  const worker = async () => {
+    while (queue.length) {
+      const id = queue.shift();
+      try {
+        const before = load('prospects').find(x => x.id === id);
+        if (!before || before.verified) continue;
+        const verified = await verifyEmail(before.email);
+        // Re-read after the await — the engine tick may have advanced the
+        // prospect meanwhile; never save a stale copy over its work.
+        const prospects = load('prospects');
+        const p = prospects.find(x => x.id === id);
+        if (p && !p.verified) { p.verified = verified; save('prospects', prospects); }
+      } catch { /* verification is best-effort; manual Verify remains */ }
+    }
+  };
+  await Promise.all(Array.from({ length: 4 }, worker));
+}
+
 async function domainAudit(domain) {
   const checks = [
     { name: 'MX records', ok: false, detail: 'none found' },
@@ -1973,12 +2015,17 @@ const router = {
     const consent = { termsVersion: TERMS_VERSION, privacyVersion: TERMS_VERSION, at: new Date().toISOString() };
     const user = { id: crypto.randomUUID(), firstName: b.firstName.trim(), lastName: b.lastName.trim(), email, company: b.company.trim(), salt, hash, plan: 'trial', trialEnds, consent, createdAt: new Date().toISOString() };
     users.push(user); save('users', users);
+    // Sign up once, straight into the workspace — same session cookie as login.
+    const sessions = load('sessions');
+    const token = newToken();
+    sessions.push({ token, email, expires: new Date(Date.now() + 7 * 864e5).toISOString() });
+    save('sessions', sessions);
     // Onboarding diagnostic: audit the signup domain right away so the first
     // settings visit shows a ready result instead of a spinner.
     domainAudit(email.split('@')[1])
-      .then(result => logEvent('domain-audit', `Domain check for ${result.domain}: score ${result.score}/100`, { score: result.score, checks: result.checks }))
+      .then(result => logEvent('domain-audit', `Domain check for ${result.domain}: score ${result.score}/100`, { score: result.score, checks: result.checks }, email))
       .catch(() => {});
-    send(res, 201, { ok: true, user: publicUser(user) });
+    send(res, 201, { ok: true, user: publicUser(user) }, { 'Set-Cookie': `outrovo_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 86400}` });
   },
 
   'POST /api/login': async (req, res) => {
@@ -2057,7 +2104,7 @@ const router = {
       const plan = b?.data?.object?.metadata?.plan;
       if (email && plan && PLANS[plan]) {
         upgradeUser(email, plan);
-        logEvent('billing', `Plan activated via Stripe: ${email} → ${plan}`);
+        logEvent('billing', `Plan activated via Stripe: ${email} → ${plan}`, {}, email);
       }
       return send(res, 200, { received: true });
     }
@@ -2065,7 +2112,7 @@ const router = {
     if (!b.email || !PLANS[b.plan]) return send(res, 400, { ok: false, error: 'email and valid plan required' });
     const user = upgradeUser(b.email, b.plan);
     if (!user) return send(res, 404, { ok: false, error: 'User not found' });
-    logEvent('billing', `Plan activated (manual): ${b.email} → ${b.plan}`);
+    logEvent('billing', `Plan activated (manual): ${b.email} → ${b.plan}`, {}, b.email);
     send(res, 200, { ok: true, user: publicUser(user), plan: b.plan });
   },
 
@@ -2170,7 +2217,7 @@ const router = {
       createdAt: new Date().toISOString(),
     };
     users.push(client); save('users', users);
-    logEvent('agency', `Client account created: ${email} (${client.company})`);
+    logEvent('agency', `Client account created: ${email} (${client.company})`, {}, session.email);
     send(res, 201, { ok: true, client: { email, name: `${client.firstName} ${client.lastName}`.trim(), company: client.company, plan: planId, tempPassword: b.password ? undefined : password } });
   },
 
@@ -2187,7 +2234,7 @@ const router = {
     client.plan = b.plan;
     client.trialEnds = null;
     save('users', users);
-    logEvent('billing', `Client ${client.email} → ${PLANS[b.plan].name} (billed to agency)`);
+    logEvent('billing', `Client ${client.email} → ${PLANS[b.plan].name} (billed to agency)`, {}, session.email);
     send(res, 200, { ok: true, client: { email: client.email, plan: b.plan } });
   },
 
@@ -2200,7 +2247,7 @@ const router = {
     if (!client) return send(res, 404, { ok: false, error: 'Client not found' });
     const keep = { ...client, owner: null }; // orphan, don't delete their data
     save('users', users.map(u => u.email === email ? keep : u));
-    logEvent('agency', `Client detached: ${email}`);
+    logEvent('agency', `Client detached: ${email}`, {}, session.email);
     send(res, 200, { ok: true });
   },
 
@@ -2314,6 +2361,8 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
   'POST /api/app/campaigns/:id/verify-all': async (req, res, id) => {
     const session = requireAuth(req, res);
     if (!session) return;
+    const campaign = load('campaigns').find(c => c.id === id && (!c.owner || c.owner === session.email));
+    if (!campaign) return send(res, 404, { ok: false, error: 'Campaign not found' });
     const b = await readBody(req).catch(() => ({}));
     const prospects = load('prospects');
     const mine = prospects.filter(p => p.campaignId === id && !p.finished);
@@ -2330,7 +2379,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       if (v.verdict !== 'deliverable') { p.finished = true; p.nextRunAt = null; p.skipped = 'undeliverable'; }
     }
     save('prospects', prospects);
-    logEvent('verify', `Verification gate: ${checked} checked → ${deliverable} ok, ${acceptAll} accept-all, ${undeliverable} removed`);
+    logEvent('verify', `Verification gate: ${checked} checked → ${deliverable} ok, ${acceptAll} accept-all, ${undeliverable} removed`, {}, session.email);
     send(res, 200, { ok: true, checked, deliverable, acceptAll, undeliverable });
   },
 
@@ -2345,7 +2394,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       p.clicks.push({ url, at: new Date().toISOString() });
       p.clicked = true;
       save('prospects', prospects);
-      logEvent('click', `${p.email} clicked ${url.slice(0, 80)}`);
+      logEvent('click', `${p.email} clicked ${url.slice(0, 80)}`, {}, load('campaigns').find(c => c.id === p.campaignId)?.owner || null);
       const campaign = load('campaigns').find(c => c.id === p.campaignId);
       if (campaign?.owner) fireWebhooks(campaign.owner, 'click', { email: p.email, url, campaign: campaign.name });
     }
@@ -2547,7 +2596,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     }
     user.leadFinderAutopilot = ap;
     save('users', users);
-    logEvent('lead-finder', enabled ? `Lead Finder autopilot ON — up to ${ap.dailyLimit} verified leads/day` : 'Lead Finder autopilot off');
+    logEvent('lead-finder', enabled ? `Lead Finder autopilot ON — up to ${ap.dailyLimit} verified leads/day` : 'Lead Finder autopilot off', {}, session.email);
     send(res, 200, { ok: true, autopilot: ap });
   },
 
@@ -2634,14 +2683,15 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const prospects = load('prospects');
     const replies = load('replies');
     const tasks = load('tasks');
-    const mine = campaigns.filter(c => c.owner === session.email);
+    // Legacy ownerless records are shared; owned records are tenant-private.
+    const mine = campaigns.filter(c => !c.owner || c.owner === session.email);
     const mineIds = new Set(mine.map(c => c.id));
-    const myProspects = mineIds.size ? prospects.filter(p => mineIds.has(p.campaignId)) : prospects;
+    const myProspects = prospects.filter(p => mineIds.has(p.campaignId));
     send(res, 200, { ok: true, stats: {
-      campaigns: mine.length || campaigns.length,
-      active: (mine.length ? mine : campaigns).filter(c => c.status === 'active').length,
+      campaigns: mine.length,
+      active: mine.filter(c => c.status === 'active').length,
       prospects: myProspects.length,
-      sent: mine.reduce((acc, c) => acc + Number(c.sentCount || 0), 0) || load('events').filter(e => e.type === 'sent').length,
+      sent: mine.reduce((acc, c) => acc + Number(c.sentCount || 0), 0) || load('events').filter(e => e.type === 'sent' && (!e.owner || e.owner === session.email)).length,
       replies: replies.filter(r => !r.owner || r.owner === session.email).length,
       bounces: myProspects.filter(p => p.bounced).length,
       openTasks: tasks.filter(t => !t.done && (!t.owner || t.owner === session.email)).length,
@@ -2650,8 +2700,10 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
   },
 
   'GET /api/app/campaigns': (req, res) => {
-    if (!requireAuth(req, res)) return;
-    const campaigns = load('campaigns');
+    const session = requireAuth(req, res);
+    if (!session) return;
+    // Legacy ownerless campaigns are shared; owned campaigns are tenant-private.
+    const campaigns = load('campaigns').filter(c => !c.owner || c.owner === session.email);
     const prospects = load('prospects');
     send(res, 200, { ok: true, campaigns: campaigns.map(c => ({
       ...c, prospects: prospects.filter(p => p.campaignId === c.id).length,
@@ -2716,9 +2768,10 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
   },
 
   'POST /api/app/campaigns/:id/activate': (req, res, id) => {
-    if (!requireAuth(req, res)) return;
+    const session = requireAuth(req, res);
+    if (!session) return;
     const campaigns = load('campaigns');
-    const campaign = campaigns.find(c => c.id === id);
+    const campaign = campaigns.find(c => c.id === id && (!c.owner || c.owner === session.email));
     if (!campaign) return send(res, 404, { ok: false, error: 'Not found' });
     const prospects = load('prospects');
     let enrolled = 0;
@@ -2727,7 +2780,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     }
     campaign.status = 'active';
     save('campaigns', campaigns); save('prospects', prospects);
-    logEvent('campaign', `Campaign “${campaign.name}” activated (${enrolled} prospects enrolled)`);
+    logEvent('campaign', `Campaign “${campaign.name}” activated (${enrolled} prospects enrolled)`, {}, campaign.owner || null);
     engineTick(); // immediate pass — on serverless there is no background loop
     send(res, 200, { ok: true, enrolled });
   },
@@ -2739,19 +2792,24 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
   },
 
   'POST /api/app/campaigns/:id/pause': (req, res, id) => {
-    if (!requireAuth(req, res)) return;
+    const session = requireAuth(req, res);
+    if (!session) return;
     const campaigns = load('campaigns');
-    const campaign = campaigns.find(c => c.id === id);
+    const campaign = campaigns.find(c => c.id === id && (!c.owner || c.owner === session.email));
     if (!campaign) return send(res, 404, { ok: false, error: 'Not found' });
     campaign.status = 'paused';
     save('campaigns', campaigns);
-    logEvent('campaign', `Campaign “${campaign.name}” paused`);
+    logEvent('campaign', `Campaign “${campaign.name}” paused`, {}, campaign.owner || null);
     send(res, 200, { ok: true });
   },
 
   'DELETE /api/app/campaigns/:id': (req, res, id) => {
-    if (!requireAuth(req, res)) return;
-    save('campaigns', load('campaigns').filter(c => c.id !== id));
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const campaigns = load('campaigns');
+    const campaign = campaigns.find(c => c.id === id);
+    if (!campaign || (campaign.owner && campaign.owner !== session.email)) return send(res, 404, { ok: false, error: 'Not found' });
+    save('campaigns', campaigns.filter(c => c.id !== id));
     save('prospects', load('prospects').filter(p => p.campaignId !== id));
     send(res, 200, { ok: true });
   },
@@ -2801,7 +2859,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     };
     if (b.warmup) record.warmup = { enabled: true, startCap: Math.max(1, Number(b.startCap || WARMUP_DEFAULT_START)), rampDays: 0, lastRampDay: null, startedAt: new Date().toISOString() };
     senders.push(record); save('senders', senders);
-    logEvent('sender', `Sender inbox connected: ${fromEmail}${record.warmup ? ' (warmup on)' : ''}`);
+    logEvent('sender', `Sender inbox connected: ${fromEmail}${record.warmup ? ' (warmup on)' : ''}`, {}, session.email);
     send(res, 201, { ok: true, sender: publicSender(record) });
   },
 
@@ -2830,7 +2888,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const s = senders.find(x => x.id === id && x.owner === session.email);
     if (!s) return send(res, 404, { ok: false, error: 'Not found' });
     save('senders', senders.filter(x => x.id !== id));
-    logEvent('sender', `Sender inbox removed: ${s.email}`);
+    logEvent('sender', `Sender inbox removed: ${s.email}`, {}, session.email);
     send(res, 200, { ok: true });
   },
 
@@ -2851,7 +2909,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     if (!session) return;
     const b = await readBody(req);
     if (!b.campaignId) return send(res, 400, { ok: false, error: 'campaignId required' });
-    const campaign = load('campaigns').find(c => c.id === b.campaignId);
+    const campaign = load('campaigns').find(c => c.id === b.campaignId && (!c.owner || c.owner === session.email));
     if (!campaign) return send(res, 404, { ok: false, error: 'Campaign not found' });
     const user = load('users').find(u => u.email === session.email);
     const plan = planOf(user);
@@ -2864,18 +2922,21 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const BUILTIN_COLS = { email: 'email', 'first name': 'firstName', firstname: 'firstName', first_name: 'firstName', 'last name': 'lastName', lastname: 'lastName', last_name: 'lastName', company: 'company' };
 
     let skippedSuppressed = 0;
+    const addedProspects = [];
     const add = (entry) => {
       const email = (entry.email || '').trim().toLowerCase();
       if (!isEmail(email)) return false;
       if (isSuppressed(session.email, email)) { skippedSuppressed++; return false; }
       if (existing.has(email)) return false;
       existing.add(email);
-      prospects.push({
+      const prospect = {
         id: crypto.randomUUID(), campaignId: b.campaignId, email,
         firstName: entry.firstName || '', lastName: entry.lastName || '', company: entry.company || '',
         customVars: entry.customVars && typeof entry.customVars === 'object' ? entry.customVars : {},
         stepIndex: null, nextRunAt: null, finished: false, verified: null, addedAt: new Date().toISOString(),
-      });
+      };
+      prospects.push(prospect);
+      addedProspects.push(prospect);
       return true;
     };
 
@@ -2914,20 +2975,29 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     }
     save('prospects', prospects);
     send(res, 200, { ok: true, added, total: existing.size, customVars: [...importedNames], skippedSuppressed });
+    // "Verified as they come in": check the fresh batch in the background and
+    // stamp each prospect's verdict — the list flips from "not checked" to
+    // deliverable/undeliverable without the user clicking Verify.
+    verifyProspectsInBackground(addedProspects.slice(0, 100).map(p => p.id));
   },
 
   'GET /api/app/prospects': (req, res, _id, query) => {
-    if (!requireAuth(req, res)) return;
-    let prospects = load('prospects');
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const visibleIds = new Set(load('campaigns').filter(c => !c.owner || c.owner === session.email).map(c => c.id));
+    let prospects = load('prospects').filter(p => visibleIds.has(p.campaignId));
     if (query?.get('campaignId')) prospects = prospects.filter(p => p.campaignId === query.get('campaignId'));
     send(res, 200, { ok: true, prospects });
   },
 
   'POST /api/app/prospects/:id/verify': async (req, res, id) => {
-    if (!requireAuth(req, res)) return;
+    const session = requireAuth(req, res);
+    if (!session) return;
     const prospects = load('prospects');
     const p = prospects.find(p => p.id === id);
     if (!p) return send(res, 404, { ok: false, error: 'Not found' });
+    const owner = load('campaigns').find(c => c.id === p.campaignId)?.owner;
+    if (owner && owner !== session.email) return send(res, 404, { ok: false, error: 'Not found' });
     p.verified = await verifyEmail(p.email);
     save('prospects', prospects);
     send(res, 200, { ok: true, verified: p.verified });
@@ -2987,7 +3057,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
         prospect.finished = true;
         prospect.nextRunAt = null;
         save('prospects', prospects);
-        logEvent('reply', `${from} replied in “${campaignName}” — sequence stopped`);
+        logEvent('reply', `${from} replied in “${campaignName}” — sequence stopped`, {}, owner);
       }
     }
     // Smart Unibox: categorize intent (LLM or heuristic) and auto-suppress
@@ -3004,18 +3074,22 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
   },
 
   'POST /api/app/inbox/:id/read': (req, res, id) => {
-    if (!requireAuth(req, res)) return;
+    const session = requireAuth(req, res);
+    if (!session) return;
     const replies = load('replies');
     const r = replies.find(x => x.id === id);
-    if (!r) return send(res, 404, { ok: false });
+    if (!r || (r.owner && r.owner !== session.email)) return send(res, 404, { ok: false });
     r.read = true;
     save('replies', replies);
     send(res, 200, { ok: true });
   },
 
   'GET /api/app/activity': (req, res) => {
-    if (!requireAuth(req, res)) return;
-    send(res, 200, { ok: true, events: load('events').slice(0, 100) });
+    const session = requireAuth(req, res);
+    if (!session) return;
+    // Ownerless events are global/system; owned events are tenant-private.
+    const events = load('events').filter(e => !e.owner || e.owner === session.email);
+    send(res, 200, { ok: true, events: events.slice(0, 100) });
   },
 
   'GET /api/app/tasks': (req, res) => {
@@ -3095,7 +3169,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     save('senders', load('senders').filter(s => s.owner !== email));
     save('sessions', load('sessions').filter(s => s.email !== email));
     save('users', users.filter(u => u.email !== email));
-    logEvent('account', `Account self-deleted (GDPR erasure): ${email}`);
+    logEvent('account', `Account self-deleted (GDPR erasure): ${email}`, {}, email);
     send(res, 200, { ok: true }, { 'Set-Cookie': 'outrovo_session=; HttpOnly; Path=/; Max-Age=0' });
   },
 
@@ -3110,7 +3184,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     if (!user) return send(res, 404, { ok: false });
     user.integrationTokenHash = crypto.createHash('sha256').update(token).digest('hex');
     save('users', users);
-    logEvent('integration', 'LinkedIn autopilot token generated');
+    logEvent('integration', 'LinkedIn autopilot token generated', {}, session.email);
     send(res, 200, { ok: true, token, callbackUrl: `${PUBLIC_URL}/api/integrations/linkedin/callback` });
   },
 
@@ -3201,7 +3275,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
           verified: null, addedAt: new Date().toISOString(),
         });
         save('prospects', prospects);
-        logEvent('mcp', `Prospect ${email} added to “${campaign.name}” via MCP`);
+        logEvent('mcp', `Prospect ${email} added to “${campaign.name}” via MCP`, {}, campaign.owner || null);
         return wrap({ ok: true, email, campaign: campaign.name });
       }
       if (name === 'list_replies') {
@@ -3250,7 +3324,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       if (touched) save('prospects', prospects);
     }
 
-    logEvent('linkedin', `Autopilot: ${outcome}${task ? ` — ${task.prospect}` : b.prospect ? ` — ${b.prospect}` : ''}${b.note ? ` (${String(b.note).slice(0, 120)})` : ''}`);
+    logEvent('linkedin', `Autopilot: ${outcome}${task ? ` — ${task.prospect}` : b.prospect ? ` — ${b.prospect}` : ''}${b.note ? ` (${String(b.note).slice(0, 120)})` : ''}`, {}, user.email);
     send(res, 200, { ok: true, matched: Boolean(task) });
   },
 

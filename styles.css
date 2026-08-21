@@ -397,8 +397,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 }
 @keyframes pulse { 50% { opacity: 0.35; } }
 
-.app-body { display: grid; grid-template-columns: 1.15fr 0.85fr; }
-
 .seq { padding: 20px 22px; display: grid; gap: 0; }
 .seq-step {
   position: relative;
@@ -893,7 +891,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .cta-band .hero-meta li::before { background: #fff; }
 
 /* ---------- Footer ---------- */
-.site-footer { background: var(--card); color: var(--ink-faint); padding: 80px 0 40px; position: relative; }
+.site-footer { background: var(--forest); color: var(--ink-faint); padding: 80px 0 40px; position: relative; }
 .foot-grid { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 40px; margin-bottom: 64px; }
 .foot-brand p { font-size: 0.92rem; margin: 16px 0 22px; max-width: 30ch; }
 .foot-brand .logo { color: var(--paper); }
@@ -902,7 +900,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink);
+  color: var(--paper);
   margin-bottom: 18px;
 }
 .foot-col ul { display: grid; gap: 11px; }
@@ -1167,7 +1165,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgba(246, 241, 231, 0.05) 1px, transparent 1.4px);
+  background-image: radial-gradient(rgba(11, 12, 14, 0.06) 1px, transparent 1.4px);
   background-size: 24px 24px;
 }
 .auth-side .logo { color: var(--ink); position: relative; }
@@ -1198,6 +1196,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 20px;
   padding: 48px 24px;
 }
 .auth-box { width: min(430px, 100%); }
