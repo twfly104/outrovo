@@ -131,3 +131,39 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   falls back to the task's own prospect when only taskId is sent).
 - PUBLIC_URL env sets absolute URLs in unsubscribe links/callback examples
   (defaults to https://outrovo.onrender.com).
+
+## Phase 2/3 real spec (agency scale + intelligence)
+- PLANS now includes `agency` ($249, agency:true, whiteLabel:true); scale
+  gets whiteLabel:true. `planOf` returns the full flags.
+- Agency: `user.owner` = agency email for client accounts. Agency dashboard
+  routes (`/api/app/agency/clients`) list clients with per-client rollup
+  (campaigns, prospects, sent, bounces, inboxes) + consolidated billing
+  (agency plan + seats × $49). Clients can be detached (orphan, keeps data).
+- White-label: `user.whiteLabel` = { brandName, logoUrl, cname, accentColor }.
+  `POST /api/app/white-label` gated to whiteLabel plans. Branded report at
+  `GET /api/reports/branded` (session or admin key + ?u=, ?c= for one client)
+  renders per-workspace stats with agency branding.
+- Conditional branching: email steps carry `label` + `branchNext` =
+  { onReplied, onClicked, onNoReply } (step labels as jump targets). Engine
+  resolves next step via `resolveNextIndex` after each send — events
+  (replied/clicked) set prospect flags that route on the next tick. Click
+  tracking: GET /api/t/:id?u=<url> logs the click and 302s through.
+- Smart Unibox: `classifyIntent` (LLM when LLM_API_KEY, heuristic fallback
+  otherwise) labels every inbound reply; unsubscribe-intent replies
+  auto-suppress. Replies carry `intent`; inbox UI renders chips and an
+  ✦ AI draft button (POST /api/app/inbox/:id/draft — LLM with reply
+  context + user identity, or intent-keyed heuristic templates).
+- Enrichment: `callEnrichment` picks Apollo (APOLLO_API_KEY) → Hunter
+  (HUNTER_API_KEY) → Dropcontact (DROPCONTACT_API_KEY) → builtin
+  (MX + Gravatar). Single: POST /api/app/prospects/:id/enrich. Bulk:
+  POST /api/app/campaigns/:id/enrich-all (50/batch). Stores `enriched`
+  on the prospect and backfills empty name/company fields.
+- Verification gate: POST /api/app/campaigns/:id/verify-all (100/batch)
+  runs verifyEmail on every unfinished prospect; undeliverable → pulled
+  from sequence (`skipped: 'undeliverable'`). `verifyEmail` now probes
+  the primary MX with a randomized RCPT to detect catch-all domains
+  (`verified.catchAll`), which stay in but are flagged accept-all.
+- CRM webhooks: `user.integrations[]` = { url, provider, secret, events[] }.
+  `fireWebhooks(owner, event, payload)` fans out on sent/bounce/reply/
+  unsubscribe/click/task/campaign. HMAC-signed when secret set. Managed in
+  Settings → CRM & automation; POST /:id/test verifies reachability.

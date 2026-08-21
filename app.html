@@ -21,6 +21,7 @@
         <button data-page="prospects">Prospects</button>
         <button data-page="activity">Activity</button>
         <button data-page="tools">Tools</button>
+        <button data-page="agency" id="agencyNavBtn" hidden>Agency</button>
         <button data-page="settings">Settings</button>
       </nav>
       <div class="app-user">
@@ -204,6 +205,11 @@
             </div>
             <button class="btn btn-dark btn-s" id="importBtn">Add people</button>
             <span class="import-note" id="importNote"></span>
+            <div style="display:flex;gap:8px;margin-top:14px;">
+              <button class="btn btn-ghost btn-s" id="verifyAllBtn">✓ Verify before sending</button>
+              <button class="btn btn-ghost btn-s" id="enrichAllBtn">✦ Enrich all</button>
+            </div>
+            <div class="tool-result" id="bulkToolResult"></div>
           </div>
         </div>
         <div class="app-card-block">
@@ -259,6 +265,45 @@
             <button class="btn btn-dark btn-s" id="auditBtn">Check domain</button>
             <div class="tool-result" id="auditResult"></div>
           </div>
+        </div>
+      </section>
+
+      <!-- Agency -->
+      <section class="app-page" id="page-agency" hidden>
+        <h1>Agency</h1>
+        <div class="app-card-block">
+          <h2>Client accounts</h2>
+          <p class="settings-note">Each client gets their own campaigns, inboxes and suppression list. You bill them
+          through your agency plan — everything rolls up to one invoice below.</p>
+          <div id="clientList"></div>
+          <div class="field-row">
+            <div class="field"><label>Client first name</label><input id="clFirst" placeholder="Ava" /></div>
+            <div class="field"><label>Client company</label><input id="clCompany" placeholder="Acme Corp" /></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Client email</label><input id="clEmail" placeholder="ava@acme.com" /></div>
+            <div class="field"><label>Password (optional — auto-generated if blank)</label><input id="clPass" type="text" placeholder="leave blank to auto-generate" /></div>
+          </div>
+          <button class="btn btn-primary btn-s" id="addClientBtn">Add client</button>
+          <div class="tool-result" id="clientResult"></div>
+        </div>
+        <div class="app-card-block">
+          <h2>Consolidated billing</h2>
+          <div id="billingSummary"></div>
+        </div>
+        <div class="app-card-block">
+          <h2>Branded reporting</h2>
+          <p class="settings-note">Share a live, white-labeled report with any client — your logo, your colors, their numbers.</p>
+          <div class="field-row">
+            <div class="field"><label>Brand name</label><input id="wlBrand" placeholder="Your agency name" /></div>
+            <div class="field"><label>Logo URL</label><input id="wlLogo" placeholder="https://youragency.com/logo.png" /></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Custom domain (CNAME)</label><input id="wlCname" placeholder="outreach.youragency.com" /></div>
+            <div class="field"><label>Accent color</label><input id="wlColor" placeholder="#f97316" /></div>
+          </div>
+          <button class="btn btn-dark btn-s" id="saveWhiteLabelBtn">Save branding</button>
+          <div class="tool-result" id="whiteLabelResult"></div>
         </div>
       </section>
 
@@ -335,6 +380,41 @@
             <div class="field"><button class="btn btn-dark btn-s" id="suppAddBtn" style="margin-top:26px;">Add to list</button></div>
           </div>
           <div id="suppList"></div>
+        </div>
+        <div class="app-card-block">
+          <h2>CRM &amp; automation</h2>
+          <p class="settings-note">Push every send, reply, bounce, unsubscribe and click into your stack. Point a
+          Zapier catch hook, a HubSpot/Pipedrive workflow webhook, or any HTTPS endpoint at Outrovo — events fan out
+          as JSON, optionally signed with your secret.</p>
+          <div id="webhookList"></div>
+          <div class="field-row">
+            <div class="field"><label>Provider</label>
+              <select id="whProvider">
+                <option value="zapier">Zapier</option>
+                <option value="hubspot">HubSpot</option>
+                <option value="pipedrive">Pipedrive</option>
+                <option value="salesforce">Salesforce</option>
+                <option value="webhook">Generic webhook</option>
+              </select>
+            </div>
+            <div class="field"><label>Webhook URL</label><input id="whUrl" placeholder="https://hooks.zapier.com/hooks/catch/…" /></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Signing secret (optional)</label><input id="whSecret" type="password" placeholder="verify deliveries with HMAC" /></div>
+            <div class="field sender-check"><label>Events</label></div>
+          </div>
+          <div class="field-row" style="margin-top:-10px;">
+            <div class="field" style="display:flex;gap:14px;flex-wrap:wrap;">
+              <label><input type="checkbox" class="whEvent" value="sent" checked /> sent</label>
+              <label><input type="checkbox" class="whEvent" value="reply" checked /> reply</label>
+              <label><input type="checkbox" class="whEvent" value="bounce" checked /> bounce</label>
+              <label><input type="checkbox" class="whEvent" value="unsubscribe" checked /> unsubscribe</label>
+              <label><input type="checkbox" class="whEvent" value="click" /> click</label>
+              <label><input type="checkbox" class="whEvent" value="task" /> task</label>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-s" id="addWebhookBtn">Add webhook</button>
+          <div class="tool-result" id="webhookResult"></div>
         </div>
         <div class="app-card-block">
           <h2>Sending engine</h2>

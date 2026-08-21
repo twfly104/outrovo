@@ -91,7 +91,7 @@ function readBody(req) {
   });
 }
 const isEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
-const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company });
+const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company, owner: u.owner || null, whiteLabel: u.whiteLabel || null });
 const newToken = () => crypto.randomBytes(24).toString('hex');
 
 function getSession(req) {
@@ -260,6 +260,7 @@ function suppressEmail(ownerEmail, email, reason = 'unsubscribe') {
     user.suppressed.push({ email, reason, at: new Date().toISOString() });
     save('users', users);
     logEvent('unsubscribe', `${email} opted out (${reason})`);
+    fireWebhooks(ownerEmail, 'unsubscribe', { email, reason });
     // Stop any in-flight sequences for this prospect across the owner's campaigns.
     const ownerCampaigns = new Set(load('campaigns').filter(c => c.owner === ownerEmail).map(c => c.id));
     const prospects = load('prospects');
@@ -327,6 +328,190 @@ function classifySendError(err) {
   if (HARD_BOUNCE_RE.test(text)) return 'hard';
   if (SOFT_BOUNCE_RE.test(text)) return 'soft';
   return 'unknown';
+}
+
+// ---------- agency: client accounts & consolidated billing ----------
+// A user can act as an agency: invite client accounts (owner: agencyEmail)
+// and scope every view/action to the active workspace. Billable seats roll
+// up to the agency.
+function clientsOf(agencyEmail) {
+  return load('users').filter(u => u.owner === agencyEmail);
+}
+function workspaceEmail(req) {
+  const session = getSession(req);
+  if (!session) return null;
+  const actAs = req.headers['x-outrovo-as'];
+  if (!actAs) return session.email;
+  const target = load('users').find(u => u.email === String(actAs).toLowerCase());
+  return target && target.owner === session.email ? target.email : session.email;
+}
+function agencyStats(agencyEmail) {
+  const campaigns = load('campaigns');
+  const prospects = load('prospects');
+  const senders = load('senders');
+  return clientsOf(agencyEmail).map(c => {
+    const mine = campaigns.filter(x => x.owner === c.email);
+    const ids = new Set(mine.map(x => x.id));
+    const myProspects = prospects.filter(p => ids.has(p.campaignId));
+    const plan = planOf(c);
+    return {
+      email: c.email, name: `${c.firstName} ${c.lastName}`, company: c.company,
+      plan: plan.name, planId: c.plan || 'trial', trialEnds: c.trialEnds, expired: plan.expired || false,
+      campaigns: mine.length, active: mine.filter(x => x.status === 'active').length,
+      prospects: myProspects.length,
+      sent: mine.reduce((acc, x) => acc + Number(x.sentCount || 0), 0),
+      bounces: myProspects.filter(p => p.bounced).length,
+      inboxes: senders.filter(s => s.owner === c.email && s.status === 'active').length,
+      createdAt: c.createdAt,
+    };
+  });
+}
+
+// ---------- conditional branching ----------
+// Email steps can carry branchNext: { onReplied: 'label', onClicked: 'label',
+// onNoReply: 'label' }. Step labels give the engine a jump table. Missing
+// labels fall through to the next step in order.
+function resolveNextIndex(campaign, prospect) {
+  const step = campaign.steps[prospect.stepIndex];
+  let label = null;
+  if (step?.branchNext && typeof step.branchNext === 'object') {
+    if (prospect.replied && step.branchNext.onReplied) label = step.branchNext.onReplied;
+    else if (prospect.clicked && step.branchNext.onClicked) label = step.branchNext.onClicked;
+    else if (!prospect.replied && step.branchNext.onNoReply) label = step.branchNext.onNoReply;
+  }
+  if (label) {
+    const idx = campaign.steps.findIndex(s => s.label === label && s.type !== 'branch-anchor');
+    if (idx >= 0) return idx;
+  }
+  return prospect.stepIndex + 1;
+}
+
+// ---------- reply intent (Smart Unibox) ----------
+const INTENT_LABELS = ['interested', 'not_interested', 'question', 'out_of_office', 'unsubscribe', 'bounce', 'neutral'];
+async function classifyIntent(reply) {
+  const text = `Subject: ${reply.subject}\n\n${String(reply.body || '').slice(0, 1200)}`;
+  const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+  if (key) {
+    try {
+      const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+      const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+      const res = await fetch(`${base}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'Categorize a cold-outreach reply into exactly one label. Respond with only the label, one of: ' + INTENT_LABELS.join(', ') + '. unsubscribe means an opt-out request. bounce means an auto-reply delivery failure. out_of_office means an auto-responder.' },
+            { role: 'user', content: text },
+          ],
+          temperature: 0, max_tokens: 12,
+        }),
+      });
+      const data = await res.json();
+      const label = (data.choices?.[0]?.message?.content || '').trim().toLowerCase().replace(/[^a-z_]/g, '');
+      if (INTENT_LABELS.includes(label)) return label;
+    } catch {}
+  }
+  // Heuristic fallback so the Unibox works with zero LLM config.
+  const t = text.toLowerCase();
+  if (/out of (the )?office|auto-?reply|on vacation|returning on|limited access to email/.test(t)) return 'out_of_office';
+  if (/undeliverable|delivery (has )?failed|mail delivery (failed|subsystem)|550 |5\.1\.1/.test(t)) return 'bounce';
+  if (/unsubscribe|remove me|stop emailing|opt.?out|take me off|don't (email|contact) me/.test(t)) return 'unsubscribe';
+  if (/(not|no) interested|not a (good )?fit|we're (all )?set|pass\b|don't reach out/.test(t)) return 'not_interested';
+  if (/\?\s*$|how (much|does)|what (does|is)|can you (send|share)|pricing|demo\?/.test(t) || t.includes('?')) return 'question';
+  if (/(yes|sounds good|let's (talk|chat|book)|interested|send (over|me)|book a|schedule a|tell me more|love to)/.test(t)) return 'interested';
+  return 'neutral';
+}
+
+// ---------- enrichment (Apollo / Hunter / Dropcontact) ----------
+function enrichmentProvider() {
+  if (process.env.APOLLO_API_KEY) return 'apollo';
+  if (process.env.HUNTER_API_KEY) return 'hunter';
+  if (process.env.DROPCONTACT_API_KEY) return 'dropcontact';
+  return null;
+}
+async function callEnrichment(email, name = {}) {
+  const provider = enrichmentProvider();
+  const domain = (email.split('@')[1] || '').toLowerCase();
+  const base = { email, provider: provider || 'builtin', at: new Date().toISOString() };
+  if (provider === 'apollo') {
+    const res = await fetch('https://api.apollo.io/api/v1/people/match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': process.env.APOLLO_API_KEY },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) throw new Error(`Apollo ${res.status}`);
+    const p = (await res.json())?.person || {};
+    return { ...base, firstName: p.first_name || name.firstName, lastName: p.last_name || name.lastName,
+      company: p.organization?.name || '', title: p.title || '', linkedinUrl: p.linkedin_url || '',
+      city: p.city || '', seniority: p.seniority || '', departments: p.departments || [] };
+  }
+  if (provider === 'hunter') {
+    const q = new URLSearchParams({ email, api_key: process.env.HUNTER_API_KEY });
+    const res = await fetch(`https://api.hunter.io/v2/email-verifier?${q}`);
+    if (!res.ok) throw new Error(`Hunter ${res.status}`);
+    const d = (await res.json())?.data || {};
+    return { ...base, firstName: d.first_name || name.firstName, lastName: d.last_name || name.lastName,
+      company: d.company || '', title: d.position || '', linkedinUrl: d.linkedin_url || '',
+      hunterStatus: d.status || '', hunterScore: d.score ?? null };
+  }
+  if (provider === 'dropcontact') {
+    const res = await fetch('https://api.dropcontact.io/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Access-Token': process.env.DROPCONTACT_API_KEY },
+      body: JSON.stringify({ data: [{ email }] }),
+    });
+    if (!res.ok) throw new Error(`Dropcontact ${res.status}`);
+    const d = (await res.json())?.data?.[0] || {};
+    return { ...base, firstName: d.first_name || name.firstName, lastName: d.last_name || name.lastName,
+      company: d.company || '', title: d.job || '', linkedinUrl: d.linkedin || '' };
+  }
+  // No paid key: derive from MX records + public Gravatar profile so the UI
+  // still works and the UI labels which mode answered.
+  const enriched = { ...base };
+  if (!name.firstName && !enriched.firstName) {
+    const [local] = email.split('@');
+    const parts = local.split(/[._-]+/).filter(Boolean);
+    if (parts.length >= 2) { enriched.firstName = cap(parts[0]); enriched.lastName = cap(parts[1]); }
+  }
+  try {
+    const mx = await dns.resolveMx(domain);
+    enriched.mx = mx.map(m => m.exchange).slice(0, 2);
+  } catch { enriched.mx = []; }
+  const h = crypto.createHash('md5').update(email).digest('hex');
+  try {
+    const g = await fetch(`https://www.gravatar.com/${h}.json`, { headers: { 'User-Agent': 'OutrovoBot/1.0' } });
+    if (g.ok) {
+      const e = (await g.json())?.entry?.[0] || {};
+      if (!enriched.firstName && e.name?.givenName) { enriched.firstName = e.name.givenName; enriched.lastName = e.name.familyName || ''; }
+      if (!enriched.company && e.currentLocation) enriched.city = e.currentLocation;
+    }
+  } catch {}
+  return enriched;
+}
+function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
+
+// ---------- CRM / automation webhooks ----------
+// user.integrations: [{ url, provider, secret, events[] }]. Events fan out
+// to matching webhooks (Zapier catch hooks, HubSpot/Pipedrive workflow
+// webhooks, or any endpoint). Failures are logged, never block the engine.
+const INTEGRATION_EVENTS = ['sent', 'bounce', 'unsubscribe', 'reply', 'task', 'campaign'];
+async function fireWebhooks(ownerEmail, eventType, payload) {
+  const user = load('users').find(u => u.email === ownerEmail);
+  const hooks = (user?.integrations || []).filter(i => i.url && (i.events?.includes(eventType) || !i.events?.length));
+  for (const hook of hooks) {
+    try {
+      const body = JSON.stringify({ event: eventType, provider: hook.provider || 'webhook', at: new Date().toISOString(), data: payload });
+      const headers = { 'Content-Type': 'application/json', 'User-Agent': 'Outrovo-Webhooks/1.0' };
+      if (hook.secret) headers['X-Outrovo-Signature'] = crypto.createHmac('sha256', hook.secret).update(body).digest('hex');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      await fetch(hook.url, { method: 'POST', headers, body, signal: controller.signal });
+      clearTimeout(timer);
+    } catch (err) {
+      logEvent('error', `Webhook delivery failed (${hook.provider || hook.url}): ${err.message}`);
+    }
+  }
 }
 
 // ---------- LinkedIn task safety ----------
@@ -448,6 +633,7 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
     await sendViaResend(prospect.email, subject, body, senderDisplayName(sender), unsubHeaders);
     recordCampaignSend(campaign.id);
     logEvent('sent', `${label} (via Resend)`, { subject, sender: sender.email });
+    if (campaign.owner) fireWebhooks(campaign.owner, 'sent', { email: prospect.email, campaign: campaign.name, subject, sender: sender.email });
     return { demo: false, sender: sender.email };
   }
 
@@ -464,6 +650,7 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
   recordSend(sender);
   recordCampaignSend(campaign.id);
   logEvent('sent', `${label} (via ${sender.email})`, { subject, sender: sender.email });
+  if (campaign.owner) fireWebhooks(campaign.owner, 'sent', { email: prospect.email, campaign: campaign.name, subject, sender: sender.email });
   return { demo: false, sender: sender.email };
 }
 
@@ -614,10 +801,11 @@ async function aiGenerateSequence(input) {
 // tiers with hard prospect limits. Stripe Checkout when STRIPE_SECRET_KEY is
 // set; otherwise a manual activation path (admin key) keeps the flow usable.
 const PLANS = {
-  trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, linkedIn: false },
-  starter: { name: 'Starter', priceMonthly: 29, maxProspects: 2000, maxCampaigns: 3, linkedIn: false },
-  growth: { name: 'Growth', priceMonthly: 49, maxProspects: 10000, maxCampaigns: 10, linkedIn: true },
-  scale: { name: 'Scale', priceMonthly: 99, maxProspects: Infinity, maxCampaigns: Infinity, linkedIn: true },
+  trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, linkedIn: false, agency: false, whiteLabel: false },
+  starter: { name: 'Starter', priceMonthly: 29, maxProspects: 2000, maxCampaigns: 3, linkedIn: false, agency: false, whiteLabel: false },
+  growth: { name: 'Growth', priceMonthly: 49, maxProspects: 10000, maxCampaigns: 10, linkedIn: true, agency: false, whiteLabel: false },
+  scale: { name: 'Scale', priceMonthly: 99, maxProspects: Infinity, maxCampaigns: Infinity, linkedIn: true, agency: false, whiteLabel: true },
+  agency: { name: 'Agency', priceMonthly: 249, maxProspects: Infinity, maxCampaigns: Infinity, linkedIn: true, agency: true, whiteLabel: true },
 };
 
 function planOf(user) {
@@ -706,6 +894,12 @@ function engineTick() {
           changed = true;
           continue;
         }
+        // Replied prospects exit immediately (pre-branch).
+        if (prospect.replied) {
+          prospect.finished = true; prospect.nextRunAt = null;
+          changed = true;
+          continue;
+        }
         // Campaign pacing: outside the send window or past the daily cap →
         // defer, don't fail.
         if (!inWindow || campaignUsedToday(campaign) + dispatchedThisTick >= campaignDailyCap(campaign)) {
@@ -728,6 +922,7 @@ function engineTick() {
             prospect.finished = true; prospect.nextRunAt = null;
             recordCampaignSend(campaign.id, true);
             logEvent('bounce', `Hard bounce: ${prospect.email} — sequence stopped`, { reason: err.message.slice(0, 200) });
+            if (campaign.owner) fireWebhooks(campaign.owner, 'bounce', { email: prospect.email, campaign: campaign.name, reason: err.message.slice(0, 200) });
           } else if (kind === 'soft' && Number(prospect.softRetries || 0) < SOFT_MAX_RETRIES) {
             // stepIndex already advanced below — rewind so the retry re-runs
             // this email step rather than skipping ahead.
@@ -764,7 +959,14 @@ function engineTick() {
           logEvent('task', `LinkedIn task for ${prospect.email}: ${personalize(step.note, prospect)}`);
         }
       }
-      prospect.stepIndex += 1;
+      // Event-driven branching: after this step executes, engagement events
+      // captured since it sent re-route the prospect to a labeled step.
+      // Missing events/labels fall through to the next step in order.
+      if (step.branchNext && typeof step.branchNext === 'object') {
+        prospect.stepIndex = resolveNextIndex(campaign, prospect);
+      } else {
+        prospect.stepIndex += 1;
+      }
       const nextStep = campaign.steps[prospect.stepIndex];
       if (!nextStep) { prospect.finished = true; prospect.nextRunAt = null; }
       else {
@@ -786,7 +988,7 @@ if (!process.env.VERCEL) setInterval(engineTick, ENGINE_INTERVAL_MS).unref();
 // ---------- tools ----------
 async function verifyEmail(email) {
   const syntax = isEmail(email);
-  const result = { email, syntax, mx: null, verdict: 'invalid' };
+  const result = { email, syntax, mx: null, verdict: 'invalid', catchAll: null };
   if (!syntax) return result;
   const domain = email.split('@')[1];
   try {
@@ -794,7 +996,39 @@ async function verifyEmail(email) {
     result.mx = mx.length ? mx.map(m => m.exchange).slice(0, 3) : [];
   } catch { result.mx = []; }
   result.verdict = result.mx && result.mx.length ? 'deliverable' : 'undeliverable';
+  // Catch-all heuristic: probe a randomized nonexistent local part against
+  // the primary MX. Accepting everything → the domain accepts any mailbox,
+  // so per-address verdicts are unreliable (accept-all).
+  if (result.mx?.length && nodemailer) {
+    try {
+      const mxHost = (await dns.resolveMx(domain)).sort((a, b) => a.priority - b.priority)[0]?.exchange;
+      const sock = await smtpProbe(mxHost, domain, `oc-probe-${crypto.randomBytes(8).toString('hex')}@${domain}`);
+      result.catchAll = sock === true ? true : sock === false ? false : null;
+    } catch { result.catchAll = null; }
+  }
   return result;
+}
+
+// Minimal SMTP RCPT probe with hard timeouts. Returns true = accepted
+// (catch-all), false = rejected (550), null = inconclusive.
+function smtpProbe(mxHost, domain, probeAddress) {
+  return new Promise(resolve => {
+    const net = require('net');
+    const sock = net.createConnection(25, mxHost);
+    let stage = 0; // 0 connect, 1 ehlo, 2 mailfrom, 3 rcpt
+    const done = v => { try { sock.destroy(); } catch {} resolve(v); };
+    const timer = setTimeout(() => done(null), 5000);
+    const finish = v => { clearTimeout(timer); done(v); };
+    sock.setEncoding('utf8');
+    sock.on('data', data => {
+      const code = data.slice(0, 3);
+      if (stage === 0) { sock.write(`EHLO ${domain}\r\n`); stage = 1; }
+      else if (stage === 1) { sock.write(`MAIL FROM:<verify@${domain}>\r\n`); stage = 2; }
+      else if (stage === 2) { sock.write(`RCPT TO:<${probeAddress}>\r\n`); stage = 3; }
+      else if (stage === 3) { finish(code.startsWith('2') ? true : code.startsWith('5') ? false : null); }
+    });
+    sock.on('error', () => finish(null));
+  });
 }
 async function domainAudit(domain) {
   const checks = [
@@ -1004,6 +1238,339 @@ const router = {
     user.suppressed = (user.suppressed || []).filter(s => s.email !== email);
     save('users', users);
     send(res, 200, { ok: true });
+  },
+
+  // --- agency: client accounts & consolidated billing ---
+  'GET /api/app/agency/clients': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const user = load('users').find(u => u.email === session.email);
+    if (!planOf(user).agency) return send(res, 403, { ok: false, error: 'Agency plan required.' });
+    const clients = agencyStats(session.email);
+    const agencyPlan = planOf(user);
+    send(res, 200, {
+      ok: true,
+      clients,
+      billing: {
+        agencyPlan: agencyPlan.name, agencyPrice: agencyPlan.priceMonthly,
+        seats: clients.length,
+        clientMrr: clients.reduce((acc, c) => acc + Number(PLANS[c.planId]?.priceMonthly || 0), 0),
+        seatChargeMonthly: clients.length * 49,
+        consolidatedTotal: agencyPlan.priceMonthly + clients.length * 49,
+      },
+    });
+  },
+
+  'POST /api/app/agency/clients': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const agencyUser = load('users').find(u => u.email === session.email);
+    if (!planOf(agencyUser).agency) return send(res, 403, { ok: false, error: 'Agency plan required.' });
+    const b = await readBody(req);
+    const email = (b.email || '').trim().toLowerCase();
+    if (!isEmail(email) || !b.firstName?.trim() || !b.company?.trim()) return send(res, 400, { ok: false, error: 'firstName, company and a valid email are required.' });
+    const users = load('users');
+    if (users.some(u => u.email === email)) return send(res, 409, { ok: false, error: 'That email already has an account.' });
+    const password = b.password && b.password.length >= 8 ? b.password : `ov-${crypto.randomBytes(6).toString('hex')}`;
+    const { salt, hash } = hashPassword(password);
+    const planId = PLANS[b.plan] && b.plan !== 'trial' ? b.plan : 'trial';
+    const client = {
+      id: crypto.randomUUID(), firstName: b.firstName.trim(), lastName: (b.lastName || '').trim(),
+      email, company: b.company.trim(), salt, hash, plan: planId,
+      trialEnds: planId === 'trial' ? new Date(Date.now() + 14 * 864e5).toISOString() : null,
+      owner: session.email, whiteLabel: b.whiteLabel && typeof b.whiteLabel === 'object' ? b.whiteLabel : null,
+      createdAt: new Date().toISOString(),
+    };
+    users.push(client); save('users', users);
+    logEvent('agency', `Client account created: ${email} (${client.company})`);
+    send(res, 201, { ok: true, client: { email, name: `${client.firstName} ${client.lastName}`.trim(), company: client.company, plan: planId, tempPassword: b.password ? undefined : password } });
+  },
+
+  'POST /api/app/agency/clients/:id/plan': async (req, res, id) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const agencyUser = load('users').find(u => u.email === session.email);
+    if (!planOf(agencyUser).agency) return send(res, 403, { ok: false, error: 'Agency plan required.' });
+    const b = await readBody(req);
+    if (!PLANS[b.plan]) return send(res, 400, { ok: false, error: 'Unknown plan' });
+    const users = load('users');
+    const client = users.find(u => u.email === decodeURIComponent(id).toLowerCase() && u.owner === session.email);
+    if (!client) return send(res, 404, { ok: false, error: 'Client not found' });
+    client.plan = b.plan;
+    client.trialEnds = null;
+    save('users', users);
+    logEvent('billing', `Client ${client.email} → ${PLANS[b.plan].name} (billed to agency)`);
+    send(res, 200, { ok: true, client: { email: client.email, plan: b.plan } });
+  },
+
+  'DELETE /api/app/agency/clients/:id': (req, res, id) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const email = decodeURIComponent(id).toLowerCase();
+    const users = load('users');
+    const client = users.find(u => u.email === email && u.owner === session.email);
+    if (!client) return send(res, 404, { ok: false, error: 'Client not found' });
+    const keep = { ...client, owner: null }; // orphan, don't delete their data
+    save('users', users.map(u => u.email === email ? keep : u));
+    logEvent('agency', `Client detached: ${email}`);
+    send(res, 200, { ok: true });
+  },
+
+  // --- white-label: CNAME + logo + branded reporting ---
+  'POST /api/app/white-label': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    if (!user) return send(res, 404, { ok: false });
+    if (!planOf(user).whiteLabel) return send(res, 403, { ok: false, error: 'White-label requires Scale or Agency plan.' });
+    const b = await readBody(req);
+    user.whiteLabel = {
+      brandName: (b.brandName || '').trim().slice(0, 60),
+      logoUrl: (b.logoUrl || '').trim().slice(0, 500),
+      cname: (b.cname || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').slice(0, 120),
+      accentColor: /^#[0-9a-f]{6}$/i.test(b.accentColor || '') ? b.accentColor : null,
+      updatedAt: new Date().toISOString(),
+    };
+    save('users', users);
+    send(res, 200, { ok: true, whiteLabel: user.whiteLabel });
+  },
+
+  // Branded, shareable report. ?token= (agency's admin key via header) OR
+  // session auth as the owner. ?c=<clientEmail> picks one client (agency).
+  'GET /api/reports/branded': (req, res, _id, query) => {
+    const session = getSession(req);
+    const adminHeader = req.headers['x-admin-key'];
+    let ownerEmail = session?.email || null;
+    if (!ownerEmail && adminHeader && adminOk(req)) {
+      ownerEmail = (query?.get('u') || '').toLowerCase() || null;
+    }
+    if (!ownerEmail) return send(res, 401, { ok: false });
+    const clientFilter = (query?.get('c') || '').toLowerCase() || null;
+    const user = load('users').find(u => u.email === ownerEmail);
+    const wl = user?.whiteLabel || {};
+    const brand = wl.brandName || user?.company || 'Outrovo';
+    const campaigns = load('campaigns');
+    const prospects = load('prospects');
+    const targets = clientFilter && clientsOf(ownerEmail).some(c => c.email === clientFilter)
+      ? [clientFilter] : [ownerEmail, ...clientsOf(ownerEmail).map(c => c.email)];
+    const rows = targets.map(owner => {
+      const mine = campaigns.filter(c => c.owner === owner);
+      const ids = new Set(mine.map(c => c.id));
+      const mineProspects = prospects.filter(p => ids.has(p.campaignId));
+      return {
+        owner,
+        campaigns: mine.length, active: mine.filter(c => c.status === 'active').length,
+        prospects: mineProspects.length,
+        sent: mine.reduce((a, c) => a + Number(c.sentCount || 0), 0),
+        bounced: mineProspects.filter(p => p.bounced).length,
+        replied: mineProspects.filter(p => p.replied).length,
+      };
+    });
+    const accent = wl.accentColor || '#f97316';
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${brand} — outreach report</title>
+<style>body{font-family:system-ui,sans-serif;background:#f7f7f8;margin:0;padding:40px;color:#0b0c0e}
+.wrap{max-width:760px;margin:0 auto}.brand{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+.brand img{height:36px}.card{background:#fff;border:1px solid #e4e6ea;border-radius:16px;padding:24px;margin-bottom:16px}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #e4e6ea;font-size:0.92rem}
+th{color:#8a9199;font-weight:600}.pill{background:${accent};color:#fff;padding:2px 10px;border-radius:999px;font-size:0.75rem;font-weight:700}
+h1{font-size:1.4rem;margin:0}</style></head><body><div class="wrap">
+<div class="brand">${wl.logoUrl ? `<img src="${wl.logoUrl}" alt="${brand}">` : ''}<h1>${brand} — outreach report</h1><span class="pill">${new Date().toISOString().slice(0, 10)}</span></div>
+${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><table>
+<tr><th>Campaigns</th><th>Active</th><th>Prospects</th><th>Sent</th><th>Bounced</th><th>Replies</th></tr>
+<tr><td>${r.campaigns}</td><td>${r.active}</td><td>${r.prospects}</td><td>${r.sent}</td><td>${r.bounced}</td><td>${r.replied}</td></tr></table></div>`).join('')}
+</div></body></html>`);
+  },
+
+  // --- enrichment ---
+  'POST /api/app/prospects/:id/enrich': async (req, res, id) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const prospects = load('prospects');
+    const p = prospects.find(x => x.id === id);
+    if (!p) return send(res, 404, { ok: false, error: 'Not found' });
+    try {
+      const enriched = await callEnrichment(p.email, { firstName: p.firstName, lastName: p.lastName });
+      p.enriched = enriched;
+      if (enriched.firstName && !p.firstName) p.firstName = enriched.firstName;
+      if (enriched.lastName && !p.lastName) p.lastName = enriched.lastName;
+      if (enriched.company && !p.company) p.company = enriched.company;
+      save('prospects', prospects);
+      send(res, 200, { ok: true, enriched });
+    } catch (err) {
+      send(res, 502, { ok: false, error: err.message });
+    }
+  },
+
+  'POST /api/app/campaigns/:id/enrich-all': async (req, res, id) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const prospects = load('prospects');
+    const mine = prospects.filter(p => p.campaignId === id && !p.enriched);
+    let done = 0, failed = 0;
+    for (const p of mine.slice(0, 50)) { // batch cap per call
+      try {
+        p.enriched = await callEnrichment(p.email, { firstName: p.firstName, lastName: p.lastName });
+        if (p.enriched.firstName && !p.firstName) p.firstName = p.enriched.firstName;
+        if (p.enriched.lastName && !p.lastName) p.lastName = p.enriched.lastName;
+        if (p.enriched.company && !p.company) p.company = p.enriched.company;
+        done++;
+      } catch { failed++; }
+    }
+    save('prospects', prospects);
+    send(res, 200, { ok: true, enriched: done, failed, remaining: mine.length - done - failed, provider: enrichmentProvider() || 'builtin' });
+  },
+
+  // --- pre-sequence verification gate (incl. catch-all) ---
+  'POST /api/app/campaigns/:id/verify-all': async (req, res, id) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const b = await readBody(req).catch(() => ({}));
+    const prospects = load('prospects');
+    const mine = prospects.filter(p => p.campaignId === id && !p.finished);
+    let deliverable = 0, undeliverable = 0, acceptAll = 0, checked = 0;
+    for (const p of mine.slice(0, 100)) { // batch cap per call
+      const v = await verifyEmail(p.email);
+      p.verified = v;
+      checked++;
+      if (v.verdict === 'deliverable' && v.catchAll !== true) deliverable++;
+      else if (v.catchAll === true) acceptAll++;
+      else undeliverable++;
+      // Gate: undeliverable addresses are pulled out of the sequence before
+      // it runs. Accept-all stays in but is flagged risky.
+      if (v.verdict !== 'deliverable') { p.finished = true; p.nextRunAt = null; p.skipped = 'undeliverable'; }
+    }
+    save('prospects', prospects);
+    logEvent('verify', `Verification gate: ${checked} checked → ${deliverable} ok, ${acceptAll} accept-all, ${undeliverable} removed`);
+    send(res, 200, { ok: true, checked, deliverable, acceptAll, undeliverable });
+  },
+
+  // --- click tracking (feeds conditional branches) ---
+  'GET /api/t/:id': (req, res, id, query) => {
+    const url = (query?.get('u') || '').trim();
+    if (!/^https?:\/\//i.test(url)) return send(res, 400, { ok: false, error: 'url required' });
+    const prospects = load('prospects');
+    const p = prospects.find(x => x.id === id);
+    if (p) {
+      p.clicks = p.clicks || [];
+      p.clicks.push({ url, at: new Date().toISOString() });
+      p.clicked = true;
+      save('prospects', prospects);
+      logEvent('click', `${p.email} clicked ${url.slice(0, 80)}`);
+      const campaign = load('campaigns').find(c => c.id === p.campaignId);
+      if (campaign?.owner) fireWebhooks(campaign.owner, 'click', { email: p.email, url, campaign: campaign.name });
+    }
+    res.writeHead(302, { Location: url });
+    res.end();
+  },
+
+  // --- AI context-aware reply drafts ---
+  'POST /api/app/inbox/:id/draft': async (req, res, id) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const b = await readBody(req).catch(() => ({}));
+    const replies = load('replies');
+    const reply = replies.find(r => r.id === id && (!r.owner || r.owner === session.email));
+    if (!reply) return send(res, 404, { ok: false, error: 'Not found' });
+    const user = load('users').find(u => u.email === session.email);
+    const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+    let draft, source = 'heuristic';
+    if (key) {
+      try {
+        const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+        const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+        const r = await fetch(`${base}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            model, temperature: 0.7, max_tokens: 220,
+            messages: [
+              { role: 'system', content: `You write short, human cold-outreach replies on behalf of ${user?.firstName || 'the sender'} at ${user?.company || 'their company'}. Reply to the prospect's message directly, keep it under 90 words, no fluff, one clear next step. Intent of their reply: ${reply.intent || 'unknown'}.` },
+              { role: 'user', content: `Their reply:\nSubject: ${reply.subject}\n${String(reply.body || '').slice(0, 1000)}\n\nInstruction: ${b.instruction || 'draft a reply'}` },
+            ],
+          }),
+        });
+        const data = await r.json();
+        draft = data.choices?.[0]?.message?.content?.trim();
+        if (draft) source = 'llm';
+      } catch {}
+    }
+    if (!draft) {
+      // Heuristic draft by intent — the UI labels which mode answered.
+      const name = reply.prospect?.split(' ')[0] || 'there';
+      const byIntent = {
+        interested: `Hi ${name},\n\nGreat — glad it resonated. Here's a link to grab 15 minutes on my calendar: [booking link]. If easier, happy to send a short loom first.\n\nBest,\n${user?.firstName || ''}`,
+        question: `Hi ${name},\n\nGood question — short answer: [answer]. Happy to walk you through it live; 15 minutes is plenty. What does your week look like?\n\nBest,\n${user?.firstName || ''}`,
+        not_interested: `Hi ${name},\n\nTotally understand — thanks for the quick reply. I'll close the loop on my end. If priorities change, the door's open.\n\nBest,\n${user?.firstName || ''}`,
+        out_of_office: `Hi ${name},\n\nNo rush — I'll follow up when you're back. Enjoy the time off!\n\nBest,\n${user?.firstName || ''}`,
+        neutral: `Hi ${name},\n\nThanks for getting back to me. Quick context: we help teams like ${user?.company || 'yours'} with [value prop]. Worth a 15-minute look?\n\nBest,\n${user?.firstName || ''}`,
+      };
+      draft = byIntent[reply.intent] || byIntent.neutral;
+    }
+    reply.draft = { text: draft, source, at: new Date().toISOString() };
+    save('replies', replies);
+    send(res, 200, { ok: true, draft, source });
+  },
+
+  // --- CRM / automation integrations (outbound webhooks) ---
+  'GET /api/app/integrations/webhooks': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const user = load('users').find(u => u.email === session.email);
+    const hooks = (user?.integrations || []).map(i => ({ ...i, secret: i.secret ? '•••' : null }));
+    send(res, 200, { ok: true, webhooks: hooks, events: INTEGRATION_EVENTS });
+  },
+
+  'POST /api/app/integrations/webhooks': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const b = await readBody(req);
+    if (!/^https:\/\//i.test(b.url || '')) return send(res, 400, { ok: false, error: 'HTTPS webhook URL required (Zapier catch hook, HubSpot/Pipedrive workflow webhook, or any HTTPS endpoint).' });
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    if (!user) return send(res, 404, { ok: false });
+    user.integrations = user.integrations || [];
+    if (user.integrations.length >= 10) return send(res, 400, { ok: false, error: 'Max 10 webhooks.' });
+    const hook = {
+      id: crypto.randomUUID(),
+      provider: ['hubspot', 'pipedrive', 'salesforce', 'zapier'].includes(b.provider) ? b.provider : 'webhook',
+      url: b.url.trim(),
+      secret: b.secret ? String(b.secret).slice(0, 100) : null,
+      events: Array.isArray(b.events) && b.events.length ? b.events.filter(e => INTEGRATION_EVENTS.includes(e)) : [...INTEGRATION_EVENTS, 'click'],
+      createdAt: new Date().toISOString(),
+    };
+    user.integrations.push(hook);
+    save('users', users);
+    send(res, 201, { ok: true, webhook: { ...hook, secret: hook.secret ? '•••' : null } });
+  },
+
+  'DELETE /api/app/integrations/webhooks/:id': (req, res, id) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    if (!user) return send(res, 404, { ok: false });
+    user.integrations = (user.integrations || []).filter(i => i.id !== id);
+    save('users', users);
+    send(res, 200, { ok: true });
+  },
+
+  'POST /api/app/integrations/webhooks/:id/test': async (req, res, id) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const user = load('users').find(u => u.email === session.email);
+    const hook = (user?.integrations || []).find(i => i.id === id);
+    if (!hook) return send(res, 404, { ok: false, error: 'Not found' });
+    try {
+      const body = JSON.stringify({ event: 'test', provider: hook.provider, at: new Date().toISOString(), data: { message: 'Outrovo webhook test', user: session.email } });
+      const headers = { 'Content-Type': 'application/json', 'User-Agent': 'Outrovo-Webhooks/1.0' };
+      if (hook.secret) headers['X-Outrovo-Signature'] = crypto.createHmac('sha256', hook.secret).update(body).digest('hex');
+      const r = await fetch(hook.url, { method: 'POST', headers, body });
+      send(res, 200, { ok: true, status: r.status });
+    } catch (err) {
+      send(res, 502, { ok: false, error: err.message });
+    }
   },
 
   // --- app (auth required) ---
@@ -1353,17 +1920,24 @@ const router = {
       prospectName = [prospect.firstName, prospect.lastName].filter(Boolean).join(' ') || prospectName;
       if (!prospect.replied) {
         prospect.replied = true;
+        prospect.repliedAt = new Date().toISOString();
         prospect.finished = true;
         prospect.nextRunAt = null;
         save('prospects', prospects);
         logEvent('reply', `${from} replied in “${campaignName}” — sequence stopped`);
       }
     }
+    // Smart Unibox: categorize intent (LLM or heuristic) and auto-suppress
+    // opt-out requests even if they never clicked the unsubscribe link.
+    const intent = await classifyIntent({ subject, body });
+    const reply = { id: crypto.randomUUID(), from, subject, body, prospect: prospectName, campaign: campaignName, owner, intent, read: false, at: new Date().toISOString() };
     const replies = load('replies');
-    replies.unshift({ id: crypto.randomUUID(), from, subject, body, prospect: prospectName, campaign: campaignName, owner, read: false, at: new Date().toISOString() });
+    replies.unshift(reply);
     save('replies', replies);
+    if (owner && intent === 'unsubscribe') suppressEmail(owner, from, 'intent-unsubscribe');
+    if (owner) fireWebhooks(owner, 'reply', { from, subject, intent, campaign: campaignName });
     if (!prospect) logEvent('received', `Reply from ${from}: ${subject}`);
-    send(res, 200, { received: true, matched: Boolean(prospect) });
+    send(res, 200, { received: true, matched: Boolean(prospect), intent });
   },
 
   'POST /api/app/inbox/:id/read': (req, res, id) => {

@@ -42,6 +42,12 @@ async function init() {
   bindLinkedInSafety();
   bindIntegration();
   bindSuppression();
+  bindAgency();
+  bindWhiteLabel();
+  bindWebhooks();
+  bindBulkTools();
+  // Agency plan → reveal the Agency nav
+  if (data.plan?.id === 'agency' || me?.owner) $('agencyNavBtn').hidden = false;
   loadAll();
 }
 
@@ -70,7 +76,8 @@ function showPage(name) {
   if (name === 'prospects') loadProspects();
   if (name === 'activity') loadActivity();
   if (name === 'overview') loadOverview();
-  if (name === 'settings') { loadEngine(); loadSenders(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadSuppression(); }
+  if (name === 'settings') { loadEngine(); loadSenders(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadSuppression(); loadWebhooks(); }
+  if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
 
 // ---------- logout ----------
@@ -122,10 +129,16 @@ function bindCampaignModal() {
 
 function stepRowHtml(type) {
   const delay = `<input type="number" class="delay" min="0" placeholder="Delay (min)" value="0" style="max-width:130px" />`;
+  const branch = `<div class="branch-row" title="Jump to a labeled step when an event fires after this one. Leave blank to continue in order.">
+      <input class="step-label" placeholder="Label (e.g. opener)" style="max-width:120px" />
+      <input class="br-replied" placeholder="if replied → label" style="max-width:140px" />
+      <input class="br-clicked" placeholder="if clicked → label" style="max-width:140px" />
+      <input class="br-noreply" placeholder="if no reply → label" style="max-width:140px" />
+    </div>`;
   let fields = '';
   if (type === 'email') {
     fields = `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" />
-              <textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}… — variables and {spintax|variants} work here">{Hi|Hello|Hey} {{firstName}}, {{company}} caught my eye — quick idea.</textarea>`;
+              <textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}… — variables and {spintax|variants} work here">{Hi|Hello|Hey} {{firstName}}, {{company}} caught my eye — quick idea.</textarea>${branch}`;
   } else if (type === 'task') {
     fields = `<select class="task-kind">
         <option value="connect">Connection request</option>
@@ -166,6 +179,12 @@ function addStepRow(type, data = {}) {
   if (data.body && row.querySelector('.body')) row.querySelector('.body').value = data.body;
   if (data.note && row.querySelector('.note')) row.querySelector('.note').value = data.note;
   if (data.taskKind && row.querySelector('.task-kind')) row.querySelector('.task-kind').value = data.taskKind;
+  if (data.label && row.querySelector('.step-label')) row.querySelector('.step-label').value = data.label;
+  if (data.branchNext && row.querySelector('.br-replied')) {
+    if (data.branchNext.onReplied) row.querySelector('.br-replied').value = data.branchNext.onReplied;
+    if (data.branchNext.onClicked) row.querySelector('.br-clicked').value = data.branchNext.onClicked;
+    if (data.branchNext.onNoReply) row.querySelector('.br-noreply').value = data.branchNext.onNoReply;
+  }
 }
 
 function bindAiGenerate() {
@@ -241,9 +260,17 @@ async function saveCampaign() {
   const steps = [...document.querySelectorAll('.step-row')].map(row => {
     const type = row.querySelector('.step-type').value;
     const delayMinutes = Number(row.querySelector('.delay').value || 0);
-    if (type === 'email') return { type, subject: row.querySelector('.subject').value, body: row.querySelector('.body').value, delayMinutes };
-    if (type === 'task') return { type, note: row.querySelector('.note').value, taskKind: row.querySelector('.task-kind')?.value || 'connect', delayMinutes };
-    return { type, delayMinutes };
+    const label = row.querySelector('.step-label')?.value.trim() || undefined;
+    if (type === 'email') {
+      const step = { type, subject: row.querySelector('.subject').value, body: row.querySelector('.body').value, delayMinutes, label };
+      const onReplied = row.querySelector('.br-replied')?.value.trim();
+      const onClicked = row.querySelector('.br-clicked')?.value.trim();
+      const onNoReply = row.querySelector('.br-noreply')?.value.trim();
+      if (onReplied || onClicked || onNoReply) step.branchNext = { ...(onReplied && { onReplied }), ...(onClicked && { onClicked }), ...(onNoReply && { onNoReply }) };
+      return step;
+    }
+    if (type === 'task') return { type, note: row.querySelector('.note').value, taskKind: row.querySelector('.task-kind')?.value || 'connect', delayMinutes, label };
+    return { type, delayMinutes, label };
   }).filter(s => (s.type !== 'email' || (s.subject && s.body)) && (s.type !== 'task' || s.note));
 
   const { data } = await api('POST', '/api/app/campaigns', {
@@ -327,17 +354,28 @@ async function loadProspects() {
       ? '<span class="v-pill undeliverable">opted out</span>'
       : p.replied
       ? '<span class="v-pill deliverable">replied</span>'
+      : p.verified?.catchAll === true
+      ? '<span class="v-pill warming">accept-all</span>'
       : v ? `<span class="v-pill ${v}">${v}</span>` : '<span class="v-pill unverified">not checked</span>';
     const step = p.finished ? 'done' : (p.stepIndex != null ? `#${p.stepIndex + 1}` : 'queued');
+    const enriched = p.enriched ? ` <span title="enriched via ${esc(p.enriched.provider)}">✦</span>` : '';
     return `<tr>
-      <td>${esc(p.email)}</td><td>${esc(p.firstName)} ${esc(p.lastName)}</td><td>${esc(p.company)}</td>
+      <td>${esc(p.email)}${enriched}</td><td>${esc(p.firstName)} ${esc(p.lastName)}</td><td>${esc(p.company)}</td>
       <td>${step}</td><td>${pill}</td>
-      <td><button class="link" data-verify="${p.id}">Verify</button></td>
+      <td>
+        <button class="link" data-verify="${p.id}">Verify</button>
+        <button class="link" data-enrich="${p.id}">Enrich</button>
+      </td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" style="color:var(--ink-faint)">No prospects in this campaign yet.</td></tr>';
   tbody.querySelectorAll('[data-verify]').forEach(btn => btn.addEventListener('click', async () => {
     btn.textContent = '…';
     await api('POST', `/api/app/prospects/${btn.dataset.verify}/verify`);
+    loadProspects();
+  }));
+  tbody.querySelectorAll('[data-enrich]').forEach(btn => btn.addEventListener('click', async () => {
+    btn.textContent = '…';
+    await api('POST', `/api/app/prospects/${btn.dataset.enrich}/enrich`);
     loadProspects();
   }));
 }
@@ -371,19 +409,30 @@ async function loadInbox() {
   if (!data.ok) return;
   const list = $('inboxList');
   const replies = data.replies || [];
+  const intentChip = r => r.intent ? `<span class="intent-chip intent-${esc(r.intent)}">${esc(r.intent.replace('_', ' '))}</span>` : '';
   list.innerHTML = replies.length ? replies.map(r => `
     <li class="${r.read ? 'read' : 'unread'}">
       <div class="inbox-meta">
-        <strong>${esc(r.subject)}</strong>
+        <strong>${esc(r.subject)}</strong> ${intentChip(r)}
         <span>${esc(r.from)} · ${esc(r.prospect)} · ${esc(r.campaign)}</span>
       </div>
       <p>${esc((r.body || '').slice(0, 160))}${(r.body || '').length > 160 ? '…' : ''}</p>
       <time>${fmtTime(r.at)}</time>
-      ${r.read ? '' : `<button class="link" data-read="${r.id}">Mark read</button>`}
+      <div class="inbox-actions">
+        ${r.read ? '' : `<button class="link" data-read="${r.id}">Mark read</button>`}
+        <button class="link" data-draft="${r.id}">✦ AI draft</button>
+      </div>
+      ${r.draft ? `<div class="draft-box"><em>AI draft (${esc(r.draft.source)}):</em><br>${esc(r.draft.text).replace(/\n/g, '<br>')}</div>` : `<div class="draft-box" id="draft-${r.id}" hidden></div>`}
     </li>`).join('') : '<li class="empty">No replies yet — the unified inbox catches everything here.</li>';
   list.querySelectorAll('[data-read]').forEach(btn => btn.addEventListener('click', async () => {
     await api('POST', `/api/app/inbox/${btn.dataset.read}/read`);
     loadInbox();
+  }));
+  list.querySelectorAll('[data-draft]').forEach(btn => btn.addEventListener('click', async () => {
+    btn.textContent = '… drafting';
+    const { data: d } = await api('POST', `/api/app/inbox/${btn.dataset.draft}/draft`, {});
+    if (d.ok) loadInbox();
+    else { btn.textContent = '✦ AI draft'; alert(d.error || 'Draft failed'); }
   }));
   if (!$('simulateReplyBtn').hasListener) {
     $('simulateReplyBtn').hasListener = true;
@@ -621,6 +670,150 @@ async function loadSuppression() {
     await api('DELETE', `/api/app/suppression/${encodeURIComponent(btn.dataset.unsuppress)}`);
     loadSuppression();
   }));
+}
+
+// ---------- agency: clients + billing ----------
+function bindAgency() {
+  $('addClientBtn').addEventListener('click', async () => {
+    const out = $('clientResult');
+    out.innerHTML = 'Creating…';
+    const { data } = await api('POST', '/api/app/agency/clients', {
+      firstName: $('clFirst').value, company: $('clCompany').value,
+      email: $('clEmail').value, password: $('clPass').value || undefined,
+    });
+    out.innerHTML = data.ok
+      ? `<span class="ok-tag">✓ Client created</span>${data.client.tempPassword ? ` — temp password: <code class="token-box">${esc(data.client.tempPassword)}</code> (share it securely)` : ''}`
+      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
+    if (data.ok) { ['clFirst', 'clCompany', 'clEmail', 'clPass'].forEach(id => $(id).value = ''); loadClients(); loadBilling(); }
+  });
+}
+
+async function loadClients() {
+  const { data } = await api('GET', '/api/app/agency/clients');
+  if (!data.ok) { $('clientList').innerHTML = `<p class="settings-note">${esc(data.error || 'Agency plan required.')}</p>`; return; }
+  $('clientList').innerHTML = data.clients.length ? data.clients.map(c => `
+    <div class="sender-row">
+      <div class="sender-info">
+        <strong>${esc(c.name)} — ${esc(c.company)}</strong>
+        <span>${esc(c.email)} · ${esc(c.plan)}${c.expired ? ' (expired)' : ''} · ${c.campaigns} campaigns · ${c.prospects} prospects · ${c.sent} sent</span>
+      </div>
+      <select data-plan-client="${esc(c.email)}" style="max-width:130px">
+        ${['trial', 'starter', 'growth', 'scale'].map(p => `<option value="${p}" ${c.planId === p ? 'selected' : ''}>${p}</option>`).join('')}
+      </select>
+      <button class="link" data-detach="${esc(c.email)}">Detach</button>
+    </div>`).join('') : '<p class="settings-note">No clients yet — add your first one above.</p>';
+  $('clientList').querySelectorAll('[data-plan-client]').forEach(sel => sel.addEventListener('change', async () => {
+    await api('POST', `/api/app/agency/clients/${encodeURIComponent(sel.dataset.planClient)}/plan`, { plan: sel.value });
+    loadBilling();
+  }));
+  $('clientList').querySelectorAll('[data-detach]').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm(`Detach ${btn.dataset.detach}? Their account keeps its data but leaves your agency.`)) return;
+    await api('DELETE', `/api/app/agency/clients/${encodeURIComponent(btn.dataset.detach)}`);
+    loadClients(); loadBilling();
+  }));
+}
+
+async function loadBilling() {
+  const { data } = await api('GET', '/api/app/agency/clients');
+  if (!data.ok) return;
+  const b = data.billing;
+  $('billingSummary').innerHTML = `
+    <table class="data-table" style="max-width:520px">
+      <tr><td>Agency plan</td><td><strong>${esc(b.agencyPlan)}</strong> — $${b.agencyPrice}/mo</td></tr>
+      <tr><td>Client seats</td><td>${b.seats} × $49 = <strong>$${b.seatChargeMonthly}/mo</strong></td></tr>
+      <tr><td>Client-side MRR (informational)</td><td>$${b.clientMrr}/mo</td></tr>
+      <tr><td><strong>Consolidated invoice</strong></td><td><strong>$${b.consolidatedTotal}/mo</strong></td></tr>
+    </table>`;
+}
+
+// ---------- white-label ----------
+function bindWhiteLabel() {
+  $('saveWhiteLabelBtn').addEventListener('click', async () => {
+    const out = $('whiteLabelResult');
+    const { data } = await api('POST', '/api/app/white-label', {
+      brandName: $('wlBrand').value, logoUrl: $('wlLogo').value,
+      cname: $('wlCname').value, accentColor: $('wlColor').value,
+    });
+    out.innerHTML = data.ok
+      ? `<span class="ok-tag">✓ Branding saved</span> — share the live report: <a href="/api/reports/branded" target="_blank" class="link">open branded report ↗</a>${data.whiteLabel.cname ? ` (or point ${esc(data.whiteLabel.cname)} via CNAME)` : ''}`
+      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
+  });
+}
+
+async function loadWhiteLabel() {
+  const wl = me?.whiteLabel;
+  if (wl) {
+    $('wlBrand').value = wl.brandName || '';
+    $('wlLogo').value = wl.logoUrl || '';
+    $('wlCname').value = wl.cname || '';
+    $('wlColor').value = wl.accentColor || '';
+  }
+}
+
+// ---------- CRM webhooks ----------
+function bindWebhooks() {
+  $('addWebhookBtn').addEventListener('click', async () => {
+    const out = $('webhookResult');
+    out.innerHTML = 'Adding…';
+    const events = [...document.querySelectorAll('.whEvent:checked')].map(c => c.value);
+    const { data } = await api('POST', '/api/app/integrations/webhooks', {
+      provider: $('whProvider').value, url: $('whUrl').value, secret: $('whSecret').value || undefined, events,
+    });
+    out.innerHTML = data.ok
+      ? `<span class="ok-tag">✓ Webhook added</span> — events will POST to ${esc(data.webhook.provider)}.`
+      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
+    if (data.ok) { $('whUrl').value = ''; $('whSecret').value = ''; loadWebhooks(); }
+  });
+}
+
+async function loadWebhooks() {
+  const { data } = await api('GET', '/api/app/integrations/webhooks');
+  if (!data.ok) return;
+  $('webhookList').innerHTML = data.webhooks.length ? data.webhooks.map(w => `
+    <div class="sender-row">
+      <div class="sender-info">
+        <strong>${esc(w.provider)}</strong>
+        <span>${esc(w.url.slice(0, 60))}${w.url.length > 60 ? '…' : ''} · events: ${esc((w.events || []).join(', '))}</span>
+      </div>
+      <button class="link" data-test-hook="${w.id}">Test</button>
+      <button class="link" data-del-hook="${w.id}">Remove</button>
+    </div>`).join('') : '<p class="settings-note">No webhooks yet — add one below to sync your CRM.</p>';
+  $('webhookList').querySelectorAll('[data-del-hook]').forEach(btn => btn.addEventListener('click', async () => {
+    await api('DELETE', `/api/app/integrations/webhooks/${btn.dataset.delHook}`);
+    loadWebhooks();
+  }));
+  $('webhookList').querySelectorAll('[data-test-hook]').forEach(btn => btn.addEventListener('click', async () => {
+    btn.textContent = '…';
+    const { data: r } = await api('POST', `/api/app/integrations/webhooks/${btn.dataset.testHook}/test`);
+    btn.textContent = 'Test';
+    $('webhookResult').innerHTML = r.ok
+      ? `<span class="ok-tag">✓ Delivered</span> — endpoint returned ${r.status}.`
+      : `<span class="no-tag">✗ ${esc(r.error || 'Failed')}</span>`;
+  }));
+}
+
+// ---------- bulk tools: verify + enrich ----------
+function bindBulkTools() {
+  $('verifyAllBtn').addEventListener('click', async () => {
+    if (!selectedCampaign) { $('bulkToolResult').innerHTML = 'Pick a campaign first.'; return; }
+    const out = $('bulkToolResult');
+    out.innerHTML = 'Verifying every prospect (MX + catch-all probe)…';
+    const { data } = await api('POST', `/api/app/campaigns/${selectedCampaign}/verify-all`);
+    out.innerHTML = data.ok
+      ? `<span class="ok-tag">✓ Done</span> — ${data.checked} checked: ${data.deliverable} deliverable, ${data.acceptAll} accept-all (kept, risky), ${data.undeliverable} removed from the sequence.`
+      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
+    loadProspects();
+  });
+  $('enrichAllBtn').addEventListener('click', async () => {
+    if (!selectedCampaign) { $('bulkToolResult').innerHTML = 'Pick a campaign first.'; return; }
+    const out = $('bulkToolResult');
+    out.innerHTML = 'Enriching…';
+    const { data } = await api('POST', `/api/app/campaigns/${selectedCampaign}/enrich-all`);
+    out.innerHTML = data.ok
+      ? `<span class="ok-tag">✓ Enriched ${data.enriched}</span> via ${esc(data.provider)}${data.remaining ? ` — ${data.remaining} remaining (run again to continue)` : ''}`
+      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
+    loadProspects();
+  });
 }
 
 // ---------- settings ----------
