@@ -2095,6 +2095,14 @@ const ASSISTANT_FACTS = [
   'LinkedIn: no auto-clicking — that violates LinkedIn rules and gets accounts banned. Outrovo turns LinkedIn into manual to-do steps inside the sequence, done by hand from the same place, so accounts stay compliant.',
   'AI writer: give it your website and it drafts a sequence based on what you sell and who you target. You review and edit everything before a single send.',
   'Getting started takes four steps: add people (verified on import), pick a template or let AI write it, hit run (Outrovo paces the sends), read replies in one inbox.',
+  'Integrations on every plan: CRM integrations (HubSpot, Pipedrive and others) plus API access, webhooks, MCP and a CLI.',
+  'Lead Finder is built in with monthly credits: 100 on Starter, 1,000 on Growth, 10,000 on Scale.',
+  'Volume is per contacted prospect: 2,000/mo Starter, 10,000/mo Growth, unlimited on Scale. Unlimited email accounts and warm-up on all plans.',
+  'Connecting a sender: users connect their own Gmail or Microsoft inbox with one-click authorize, or an app password. Campaigns rotate across all connected inboxes, each with its own daily cap.',
+  'Compliance: every email carries a one-click unsubscribe (List-Unsubscribe) and the sender\'s mailing address automatically (CAN-SPAM).',
+  'A/B testing is included from the Growth plan up.',
+  'Outrovo does email plus LinkedIn to-dos only — no SMS, no cold calling.',
+  'Replies from every campaign land in one unified inbox.',
 ];
 
 const ASSISTANT_SYSTEM = `${ASSISTANT_PERSONA}\n\nFACTS (ground every answer in these):\n- ${ASSISTANT_FACTS.join('\n- ')}`;

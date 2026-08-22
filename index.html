@@ -355,6 +355,34 @@
           a: 'Four steps: <strong>add people</strong> (verified as they come in), <strong>pick a template</strong> or let AI write it, <strong>hit run</strong> — Outrovo paces the sends — and <strong>read replies</strong> in one inbox. The trial has every feature: <a href="signup.html">start free</a>.' },
         { k: ['what is', 'what\'s outrovo', 'whats outrovo', 'what does', 'who are'],
           a: 'Outrovo is a simple cold-outreach tool: add people, write (or AI-draft) a sequence, press run, and read every reply in <strong>one inbox</strong>. Email plus LinkedIn to-dos in the same campaign.' },
+        { k: ['hubspot', 'pipedrive', 'salesforce', 'crm', 'integration', 'integrate', 'zapier', 'connect to'],
+          a: 'Yes — <strong>CRM integrations (HubSpot, Pipedrive…)</strong> plus <strong>API, webhooks, MCP and CLI</strong> are included on every plan, Starter included.' },
+        { k: ['api', 'webhook', 'mcp', 'cli', 'developer', 'docs'],
+          a: 'Every plan includes <strong>API access, webhooks, MCP and a CLI</strong> — build whatever you need on top. Start a trial and the docs are inside.' },
+        { k: ['lead finder', 'find leads', 'find prospects', 'prospect data', 'lead data', 'apollo', 'database'],
+          a: 'The built-in <strong>Lead Finder</strong> comes with monthly credits — 100 on Starter, 1,000 on Growth, 10,000 on Scale — so you can find prospects without buying a separate database.' },
+        { k: ['how many', 'limit', 'volume', 'per day', 'per month', 'quota', 'cap'],
+          a: 'It\'s per contacted prospect: <strong>2,000/mo</strong> on Starter, <strong>10,000/mo</strong> on Growth, <strong>unlimited</strong> on Scale — with unlimited email accounts and warm-up on all of them.' },
+        { k: ['gmail', 'outlook', 'microsoft', 'google workspace', 'smtp', 'connect my email', 'connect email'],
+          a: 'You connect your own Gmail or Microsoft inbox — <strong>one-click authorize</strong>, or an app password if you prefer. Campaigns rotate across every inbox you connect.' },
+        { k: ['gdpr', 'can-spam', 'canspam', 'legal', 'unsubscribe', 'opt out', 'opt-out', 'compliance', 'compliant'],
+          a: 'Every email carries a <strong>one-click unsubscribe</strong> and your mailing address automatically — the boring legal stuff (CAN-SPAM) is handled for you.' },
+        { k: ['sms', 'text message', 'cold call', 'phone', 'whatsapp'],
+          a: 'Honest answer: no — Outrovo does <strong>email + LinkedIn to-dos</strong>, and does them properly. No SMS or calling.' },
+        { k: ['a/b', 'ab test', 'split test', 'variant'],
+          a: '<strong>A/B testing</strong> is included from the Growth plan up — test subject lines and bodies, keep what wins.' },
+        { k: ['multiple inbox', 'inboxes', 'rotation', 'more than one', 'several inbox', 'team inbox'],
+          a: 'Connect as many inboxes as you like — campaigns <strong>rotate across all of them</strong>, each with its own daily cap and warm-up, so no single inbox gets burned.' },
+        { k: ['agency', 'white label', 'white-label', 'client'],
+          a: 'The <strong>Agency plan ($249/mo)</strong> adds the agency panel, client workspaces, consolidated billing and white-labeling. Start a normal trial and ask to switch it on.' },
+        { k: ['demo', 'see it', 'show me', 'walkthrough', 'tour'],
+          a: 'Two options: <a href="#" data-demo>watch the 4-chapter product tour</a> right now, or <a href="signup.html">book a demo</a> and we\'ll walk you through live.' },
+        { k: ['support', 'contact', 'human', 'talk to', 'help me', 'someone'],
+          a: 'Fastest way to a human: <a href="signup.html">book a demo</a> — it\'s a real conversation, not a sales ambush. Quick questions? I\'m right here.' },
+        { k: ['security', 'secure', 'privacy', 'my data', 'gdpr data', 'data'],
+          a: 'Short version: your lists are yours, and we don\'t sell data. The details are in the <a href="privacy.html">privacy policy</a>.' },
+        { k: ['reply', 'replies', 'unibox', 'unified inbox', 'responses'],
+          a: 'Every reply from every campaign lands in <strong>one inbox</strong>, in order — no more hunting across five Gmail tabs to find who said yes.' },
       ];
       const FALLBACK = 'Good question — I don\'t have a straight answer for that one in my notes. The <a href="#faq" data-asst-close>FAQ</a> covers the common ones, or <a href="signup.html">book a demo</a> and a human will take it from there.';
       const CHIPS = ['Will my emails land in spam?', 'How does warm-up work?', 'What does it cost?', 'Does it automate LinkedIn?'];
@@ -381,7 +409,7 @@
         const t = q.toLowerCase();
         // short alphabetic keywords (e.g. "ai") need word boundaries or they
         // match inside words like "emAIls"; symbols like "$" stay substring
-        const hit = kw => /^\w+$/.test(kw) && kw.length <= 2
+        const hit = kw => /^\w+$/.test(kw) && kw.length <= 3
           ? new RegExp(`\\b${kw}\\b`).test(t)
           : t.includes(kw);
         let best = null, bestScore = 0;
@@ -431,7 +459,15 @@
       fab.addEventListener('click', open);
       document.getElementById('asstClose').addEventListener('click', close);
       document.addEventListener('keydown', e => { if (e.key === 'Escape' && panel.classList.contains('open')) close(); });
-      body.addEventListener('click', e => { if (e.target.matches('[data-asst-close]')) close(); });
+      body.addEventListener('click', e => {
+        if (e.target.matches('[data-asst-close]')) close();
+        const demoLink = e.target.closest('[data-demo]');
+        if (demoLink) {
+          e.preventDefault(); close();
+          document.getElementById('demoModal').classList.add('open');
+          document.body.style.overflow = 'hidden';
+        }
+      });
       form.addEventListener('submit', e => {
         e.preventDefault();
         const q = input.value.trim();
