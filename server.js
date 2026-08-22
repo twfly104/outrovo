@@ -2202,6 +2202,14 @@ const router = {
   },
 
   // Public landing-page assistant — LLM-backed, rate-limited per IP.
+  // Owner/audit probe: reports whether the assistant is answering with a real
+  // LLM (a key is configured) or the built-in keyword fallback. Never leaks
+  // the key itself — just the mode. GET https://<host>/api/assistant
+  'GET /api/assistant': (req, res) => {
+    const keyed = !!(process.env.ASSISTANT_API_KEY || process.env.LLM_API_KEY || process.env.OPENAI_API_KEY);
+    send(res, 200, { ok: true, mode: keyed ? 'llm' : 'keyword', model: keyed ? (process.env.ASSISTANT_MODEL || process.env.LLM_MODEL || 'gpt-4o-mini') : null });
+  },
+
   'POST /api/assistant': async (req, res) => {
     const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'anon').split(',')[0].trim();
     if (!assistantOk(ip)) return send(res, 429, { ok: false, error: 'Too many questions — slow down a little.' });

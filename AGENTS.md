@@ -60,6 +60,14 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 ## Launch checklist (hosting env vars ÔÇö do these in Render/Vercel)
 - `ADMIN_KEY` ÔÇö strong random value; without it admin endpoints are locked
   (verified: 403 with no key, 403 with wrong key, 200 with correct key).
+- `LLM_API_KEY` (or `OPENAI_API_KEY`) ÔÇö REQUIRED for the landing-page
+  assistant to answer with a real LLM (also upgrades the AI sequence writer,
+  site-scan, reply-intent, and reply drafts). Declared in `render.yaml`. To
+  check which mode a deployment is in without guessing:
+  `curl https://<host>/api/assistant` → `{"mode":"llm"}` (keyed) or
+  `{"mode":"keyword"}` (no key — assistant uses built-in keyword answers and
+  can hit the canned fallback on off-script questions). Setting this one var
+  is the single owner action that makes the assistant "actually smart".
 - `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS` (+ optional `SMTP_FROM`), or
   `RESEND_API_KEY` ÔÇö otherwise the engine runs in demo mode and logs sends
   instead of delivering them. The pipeline is end-to-end verified
