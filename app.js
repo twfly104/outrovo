@@ -1255,7 +1255,9 @@ function bindLeadFinder() {
     }
     note.textContent = data.leads.length
       ? `Found ${data.leads.length} — every address is checked before it lands here. (${data.used}/${data.quota} credits)`
-      : 'No leads matched — try broader keywords or a different title.';
+      : (data.errors?.length
+        ? `Search hit a provider error: ${data.errors.join('; ')}`
+        : 'No leads matched — try broader keywords or a different title.');
     renderLeadResults(data.leads);
     loadLeadFinderStatus();
   });
