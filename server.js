@@ -136,12 +136,12 @@ const OAUTH_PROVIDERS = {
     senderProvider: 'gmail',
     clientId: process.env.GOOGLE_CLIENT_ID || '',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
-    tokenUrl: 'https://oauth2.googleapis.com/token',
+    authUrl: process.env.GOOGLE_AUTH_URL || 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: process.env.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token',
     scope: 'https://mail.google.com/ openid email',
     extraAuth: { access_type: 'offline', prompt: 'consent' },
     emailFromTokens: async tokens => {
-      const r = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+      const r = await fetch(process.env.GOOGLE_USERINFO_URL || 'https://openidconnect.googleapis.com/v1/userinfo', {
         headers: { Authorization: `Bearer ${tokens.access_token}` },
       });
       if (!r.ok) throw new Error(`userinfo ${r.status}`);
@@ -152,8 +152,8 @@ const OAUTH_PROVIDERS = {
     senderProvider: 'microsoft',
     clientId: process.env.MS_CLIENT_ID || '',
     clientSecret: process.env.MS_CLIENT_SECRET || '',
-    authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
-    tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+    authUrl: process.env.MS_AUTH_URL || 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+    tokenUrl: process.env.MS_TOKEN_URL || 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
     scope: 'openid email offline_access https://outlook.office.com/SMTP.Send',
     extraAuth: {},
     emailFromTokens: async tokens => {
@@ -172,7 +172,7 @@ function oauthState(sessionToken, name) {
 }
 function oauthCredsFor(senderProvider) {
   const entry = Object.values(OAUTH_PROVIDERS).find(p => p.senderProvider === senderProvider);
-  return entry && entry.clientId ? { clientId: entry.clientId, clientSecret: entry.clientSecret } : null;
+  return entry && entry.clientId ? { clientId: entry.clientId, clientSecret: entry.clientSecret, accessUrl: entry.tokenUrl } : null;
 }
 function decodeJwt(token) {
   try { return JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString('utf8')); } catch { return {}; }
@@ -986,6 +986,7 @@ function senderTransport(sender) {
         refreshToken: sender.oauthRefresh,
         accessToken: sender.oauthAccess || undefined,
         expires: sender.oauthExp || undefined,
+        accessUrl: creds.accessUrl,
       },
     });
   }

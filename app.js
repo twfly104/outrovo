@@ -581,7 +581,7 @@ async function startConnect(oauthName, providerValue) {
   const providers = await oauthStatus();
   if (providers[oauthName]) return startOAuth(oauthName);
   openSenderForm(providerValue);
-  $('senderResult').innerHTML = '<span class="settings-note">One-click authorize needs <code>GOOGLE_CLIENT_ID</code> / <code>MS_CLIENT_ID</code> on the server — meanwhile, an app password works:</span>';
+  $('senderResult').innerHTML = '<span class="settings-note">One-click sign-in isn\'t enabled on this server yet — an app password works today.</span>';
 }
 
 function startOAuth(name) {

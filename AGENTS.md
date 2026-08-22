@@ -351,3 +351,22 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   nesting) removed. Tested: oauth status/start/callback vs real Google token
   endpoint, HMAC state rejection, mini-form connect (Gmail 535 on fake creds
   proves transport path), no token leakage via `GET /api/app/senders`.
+
+- Iteration 6 evidence: full OAuth happy path proven with a mock provider
+  (GOOGLE_AUTH_URL/GOOGLE_TOKEN_URL/GOOGLE_USERINFO_URL + MS_* endpoint
+  overrides added for testability; nodemailer auth now carries accessUrl so
+  Microsoft refresh hits login.microsoftonline.com, not Google default).
+  Harness: local mock auth/token/userinfo + SMTP sink advertising AUTH
+  XOAUTH2. 26/26 checks: start 302 -> consent -> token exchange -> sender
+  created (refresh token AES-GCM at rest, decrypts to provider value, never
+  leaks via API) -> real send over AUTH XOAUTH2 (user= + Bearer in the
+  wire token) -> engine multi-inbox. Same harness passes for the Microsoft
+  provider config (id_token identity path). Browser-verified in headless
+  Chromium via CDP: wizard/tiles/accordions render, zero console errors,
+  minimal form + Advanced disclosure + connect-success state work, and the
+  tile click opens the consent popup which postMessages back and
+  self-closes while the sender list shows the new inbox with an
+  "authorized" chip. Test server restarts: PORT=12001 DATA_DIR=/tmp/otest
+  ENGINE_INTERVAL_MS=5000 node server.js (no oauth env) — the mock-provider
+  variant is only for verification runs. Live (12000) still needs real
+  GOOGLE_CLIENT_ID/SECRET (or MS_*) from the owner for production one-click.
