@@ -225,6 +225,26 @@
     </div>
   </footer>
 
+  <!-- Assistant -->
+  <button class="asst-fab" id="asstFab" aria-label="Ask the Outrovo assistant" aria-haspopup="dialog">
+    <svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M16 8.5c0 3.6-3.1 6.5-7 6.5-.9 0-1.8-.13-2.6-.4L2 16l1.3-3.4A6.1 6.1 0 0 1 2 8.5C2 4.9 5.1 2 9 2s7 2.9 7 6.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    Ask us
+  </button>
+  <div class="asst" id="asstPanel" role="dialog" aria-modal="false" aria-label="Outrovo assistant">
+    <div class="asst-h">
+      <img src="logo.svg" alt="" />
+      <div><strong>Outrovo assistant</strong><span>Straight answers about cold outreach</span></div>
+      <button class="asst-x" id="asstClose" aria-label="Close assistant">✕</button>
+    </div>
+    <div class="asst-body" id="asstBody"></div>
+    <form class="asst-in" id="asstForm">
+      <input id="asstText" placeholder="e.g. Will my emails land in spam?" autocomplete="off" maxlength="300" />
+      <button class="asst-send" type="submit" aria-label="Send">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M14 8H2m5-6 6 6-6 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </form>
+  </div>
+
   <!-- Demo modal -->
   <div class="modal" id="demoModal" role="dialog" aria-modal="true" aria-label="Product demo">
     <div class="modal-backdrop"></div>
@@ -299,6 +319,101 @@
     });
     // header shadow
     addEventListener('scroll', () => hdr.classList.toggle('sc', scrollY > 8), { passive: true });
+  </script>
+  <script>
+    // Landing assistant — every answer below is grounded in this site's own
+    // copy (index + pricing pages), so it can never promise what we don't.
+    (() => {
+      const fab = document.getElementById('asstFab');
+      const panel = document.getElementById('asstPanel');
+      const body = document.getElementById('asstBody');
+      const form = document.getElementById('asstForm');
+      const input = document.getElementById('asstText');
+
+      const QA = [
+        { k: ['spam', 'inbox', 'deliverab', 'land', 'junk', 'promotions tab', 'open rate'],
+          a: 'Honest answer: no tool can guarantee the inbox — anyone who says it can is selling you something. What Outrovo does is fix the three things that decide it: every email is <strong>verified before it\'s sent</strong>, your domain is checked against <strong>SPF, DKIM and DMARC</strong>, and sends are <strong>paced</strong> so nothing looks like a bot.' },
+        { k: ['warm', 'ramp', 'new domain', 'new inbox', 'reputation'],
+          a: 'Warm-up is <strong>free on every plan</strong>. A new inbox starts small and the daily cap grows automatically, so mailbox providers build trust in your address before the volume ramps up.' },
+        { k: ['price', 'pricing', 'cost', 'much', 'plan', 'expensive', 'pay', 'slot', '$'],
+          a: 'Starter is <strong>$29</strong>/slot/mo, Growth <strong>$49</strong> (most popular), Scale <strong>$99</strong> — less when billed annually. Agency is $249/mo with client workspaces and white-labeling. Every plan starts with a <strong>14-day free trial, no card</strong>. Full breakdown on the <a href="pricing.html">pricing page</a>.' },
+        { k: ['trial', 'free', 'card', 'cancel', 'refund'],
+          a: '14 days, every feature, <strong>no card needed</strong>. If it doesn\'t make you money, cancel with one click — that\'s the whole deal. <a href="signup.html">Start free</a>.' },
+        { k: ['linkedin', 'automat', 'ban', 'safe', 'compliant'],
+          a: 'We don\'t auto-click — that violates LinkedIn\'s rules and gets accounts banned. Outrovo turns LinkedIn into <strong>to-do steps inside your sequence</strong>, so you do them by hand from the same place and stay compliant.' },
+        { k: ['ai', 'write', 'template', 'sequence', 'draft', 'copy'],
+          a: 'Yes — give it your website and it <strong>drafts a sequence</strong> based on what you actually sell and who you\'re trying to reach. You review and edit everything before a single send goes out.' },
+        { k: ['spf', 'dkim', 'dmarc', 'domain', 'dns'],
+          a: 'The <strong>domain health check</strong> tests SPF, DKIM and DMARC in one click and shows exactly what to fix — before you burn your sender reputation, not after.' },
+        { k: ['verify', 'verification', 'bounc', 'invalid', 'catch-all', 'catchall'],
+          a: 'Every prospect email is <strong>verified as it\'s imported</strong> — invalid addresses get skipped before they bounce and hurt your sender score. Catch-all verification is free on every plan.' },
+        { k: ['start', 'setup', 'set up', 'how it work', 'how do', 'begin', 'get started'],
+          a: 'Four steps: <strong>add people</strong> (verified as they come in), <strong>pick a template</strong> or let AI write it, <strong>hit run</strong> — Outrovo paces the sends — and <strong>read replies</strong> in one inbox. The trial has every feature: <a href="signup.html">start free</a>.' },
+        { k: ['what is', 'what\'s outrovo', 'whats outrovo', 'what does', 'who are'],
+          a: 'Outrovo is a simple cold-outreach tool: add people, write (or AI-draft) a sequence, press run, and read every reply in <strong>one inbox</strong>. Email plus LinkedIn to-dos in the same campaign.' },
+      ];
+      const FALLBACK = 'Good question — I don\'t have a straight answer for that one in my notes. The <a href="#faq" data-asst-close>FAQ</a> covers the common ones, or <a href="signup.html">book a demo</a> and a human will take it from there.';
+      const CHIPS = ['Will my emails land in spam?', 'How does warm-up work?', 'What does it cost?', 'Does it automate LinkedIn?'];
+
+      const scrollEnd = () => { body.scrollTop = body.scrollHeight; };
+      const addMsg = (html, me) => {
+        const d = document.createElement('div');
+        d.className = 'asst-msg ' + (me ? 'me' : 'bot');
+        if (me) d.textContent = html; else d.innerHTML = html;
+        body.appendChild(d); scrollEnd();
+      };
+      const addChips = () => {
+        const c = document.createElement('div');
+        c.className = 'asst-chips';
+        CHIPS.forEach(q => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.textContent = q;
+          b.addEventListener('click', () => ask(q));
+          c.appendChild(b);
+        });
+        body.appendChild(c); scrollEnd();
+      };
+      const answer = q => {
+        const t = q.toLowerCase();
+        // short alphabetic keywords (e.g. "ai") need word boundaries or they
+        // match inside words like "emAIls"; symbols like "$" stay substring
+        const hit = kw => /^\w+$/.test(kw) && kw.length <= 2
+          ? new RegExp(`\\b${kw}\\b`).test(t)
+          : t.includes(kw);
+        let best = null, bestScore = 0;
+        for (const e of QA) {
+          const s = e.k.reduce((n, kw) => n + (hit(kw) ? 1 : 0), 0);
+          if (s > bestScore) { bestScore = s; best = e; }
+        }
+        return best ? best.a : FALLBACK;
+      };
+      const ask = q => {
+        addMsg(q, true);
+        setTimeout(() => { addMsg(answer(q)); }, 280);
+      };
+
+      const open = () => {
+        panel.classList.add('open'); fab.classList.add('hide');
+        if (!body.children.length) {
+          addMsg('Hi! Ask me anything about Outrovo — pricing, deliverability, LinkedIn — or pick a question:');
+          addChips();
+        }
+        setTimeout(() => input.focus(), 250);
+      };
+      const close = () => { panel.classList.remove('open'); fab.classList.remove('hide'); };
+
+      fab.addEventListener('click', open);
+      document.getElementById('asstClose').addEventListener('click', close);
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && panel.classList.contains('open')) close(); });
+      body.addEventListener('click', e => { if (e.target.matches('[data-asst-close]')) close(); });
+      form.addEventListener('submit', e => {
+        e.preventDefault();
+        const q = input.value.trim();
+        if (!q) return;
+        input.value = '';
+        ask(q);
+      });
+    })();
   </script>
 </body>
 </html>
