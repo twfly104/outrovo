@@ -8,8 +8,15 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   `styles.css`, `script.js` — no build step.
 - Product app: `app.html` + `app.js` — session-gated dashboard with 4 pages:
   Overview (stats + LinkedIn to-dos + event feed), Campaigns (list + prospect
-  management), Inbox, Settings (incl. verify/domain tools). Agency page is
+  management), Inbox, Settings (quick-setup wizard + one-click sender connect;
+  advanced tools in collapsible `<details>` sections). Agency page is
   hidden unless the plan has Agency seats.
+- Settings layout: 3-step wizard on top (① connect inbox — status derives
+  from `GET /api/app/senders`; ② domain check; ③ send test — ②/③ marked done
+  in localStorage keyed `ov-setup:<email>`), then Sender accounts with
+  provider tiles (Google/Microsoft/Other), then accordions: Deliverability
+  tools, LinkedIn automation, Suppression list, CRM & automation, Sending
+  engine, Compliance, Account.
 - Backend: `server.js` (Node >= 18, one dep: `nodemailer` — `npm install` first).
   Static hosting + JSON API + campaign engine. Persistence in `data/*.json`
   (gitignored). Passwords scrypt-hashed, sessions in httpOnly cookie
@@ -59,6 +66,18 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   (`POST /api/app/tools/test-email` delivered via real SMTP during audit).
 - `STRIPE_SECRET_KEY` (+ `STRIPE_WEBHOOK_SECRET` for webhook activation) —
   otherwise checkout returns manual instructions.
+- `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` or `MS_CLIENT_ID`/`MS_CLIENT_SECRET`
+  — enables one-click "Authorize" sender connect in Settings (OAuth consent
+  popup; refresh/access tokens AES-256-GCM-encrypted at rest like app
+  passwords; nodemailer XOAuth2 transports, engine picks via same rotation).
+  `PUBLIC_URL` must match the OAuth app's registered redirect URI
+  (`{PUBLIC_URL}/api/app/oauth/{google|microsoft}/callback`). Without these
+  env vars the tiles fall back to the minimal email + app-password form
+  (Google tile links to myaccount.google.com/apppasswords). Routes:
+  `GET /api/app/oauth/status` (feature flags per provider),
+  `GET /api/app/oauth/:id/start` (302 to consent, HMAC state binds session),
+  `GET /api/app/oauth/:id/callback` (upserts sender, postMessages result to
+  the opener popup). `publicSender` returns `oauth:true` and strips tokens.
 - `APOLLO_API_KEY` or `HUNTER_API_KEY` — powers Lead Finder search
   (Campaigns page), including optional daily auto-pilot
   (`PUT /api/app/lead-finder/autopilot`). Without one, Lead Finder falls back to crawling the
@@ -322,3 +341,13 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - Deploy layout: source /workspace/outrovo (git, main), live copy /tmp/outrovo
   (port 12000, persistent data/), test copy port 12001 (DATA_DIR=/tmp/otest).
   Kill node by PID (ps aux | grep "node server.js"), restart with same env.
+
+## Iteration 6 — Settings simplification (Aug 2026)
+- Settings rebuilt around a 3-step quick-setup wizard + one-click sender
+  connect (Authorize with Google/Microsoft via OAuth popup when
+  `GOOGLE_CLIENT_ID`/`MS_CLIENT_ID` set; otherwise 2-field app-password form
+  with Advanced-options disclosure). Advanced tools moved into collapsible
+  `<details>` accordions; old stacked-cards layout (with its broken split-2
+  nesting) removed. Tested: oauth status/start/callback vs real Google token
+  endpoint, HMAC state rejection, mini-form connect (Gmail 535 on fake creds
+  proves transport path), no token leakage via `GET /api/app/senders`.

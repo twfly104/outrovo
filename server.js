@@ -127,6 +127,57 @@ const PROVIDER_PRESETS = {
   custom:    { host: '',                     port: 587, note: 'Enter any SMTP host.' },
 };
 
+// ---------- one-click OAuth connect (Google / Microsoft) ----------
+// Env-configured: GOOGLE_CLIENT_ID/SECRET or MS_CLIENT_ID/SECRET enable the
+// "Authorize" tiles in Settings — the user never touches an app password.
+// PUBLIC_URL must match the OAuth app's registered redirect URI.
+const OAUTH_PROVIDERS = {
+  google: {
+    senderProvider: 'gmail',
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    scope: 'https://mail.google.com/ openid email',
+    extraAuth: { access_type: 'offline', prompt: 'consent' },
+    emailFromTokens: async tokens => {
+      const r = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      if (!r.ok) throw new Error(`userinfo ${r.status}`);
+      return (await r.json()).email;
+    },
+  },
+  microsoft: {
+    senderProvider: 'microsoft',
+    clientId: process.env.MS_CLIENT_ID || '',
+    clientSecret: process.env.MS_CLIENT_SECRET || '',
+    authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+    tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+    scope: 'openid email offline_access https://outlook.office.com/SMTP.Send',
+    extraAuth: {},
+    emailFromTokens: async tokens => {
+      const claims = decodeJwt(tokens.id_token);
+      return claims.preferred_username || claims.email || null;
+    },
+  },
+};
+const oauthReady = name => Boolean(OAUTH_PROVIDERS[name]?.clientId && OAUTH_PROVIDERS[name]?.clientSecret);
+const oauthRedirect = name => `${PUBLIC_URL}/api/app/oauth/${name}/callback`;
+// CSRF state: HMAC over the session token + provider, so a callback can't be
+// injected into another user's session. Deterministic — replay only
+// re-connects the same account.
+function oauthState(sessionToken, name) {
+  return crypto.createHmac('sha256', SENDER_KEY).update(`oauth:${sessionToken}:${name}`).digest('base64url');
+}
+function oauthCredsFor(senderProvider) {
+  const entry = Object.values(OAUTH_PROVIDERS).find(p => p.senderProvider === senderProvider);
+  return entry && entry.clientId ? { clientId: entry.clientId, clientSecret: entry.clientSecret } : null;
+}
+function decodeJwt(token) {
+  try { return JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString('utf8')); } catch { return {}; }
+}
+
 // Cap ramps up by this many extra emails per active day while warmup is on.
 const WARMUP_RAMP_INCREMENT = Number(process.env.WARMUP_RAMP_INCREMENT || 5);
 const WARMUP_DEFAULT_START = 5;
@@ -172,12 +223,17 @@ function engineMode(ownerEmail) {
 function ownerSenders(email) {
   return load('senders')
     .filter(s => s.owner === email && s.status === 'active')
-    .map(s => ({ ...s, pass: s.encPass ? decryptSecret(s.encPass) : '' }));
+    .map(s => ({
+      ...s,
+      pass: s.encPass ? decryptSecret(s.encPass) : '',
+      oauthRefresh: s.oauthRefresh ? decryptSecret(s.oauthRefresh) : '',
+      oauthAccess: s.oauthAccess ? decryptSecret(s.oauthAccess) : '',
+    }));
 }
 
 function publicSender(s) {
-  const { encPass, pass, ...rest } = s;
-  return { ...rest, hasPassword: Boolean(encPass || pass) };
+  const { encPass, pass, oauthRefresh, oauthAccess, ...rest } = s;
+  return { ...rest, hasPassword: Boolean(encPass || pass), oauth: Boolean(s.oauthRefresh) };
 }
 
 function senderDisplayName(s) {
@@ -914,6 +970,25 @@ async function sendViaResend(to, subject, text, from = RESEND_FROM, headers = nu
 
 function senderTransport(sender) {
   if (!nodemailer || !sender.host) return null;
+  // One-click-authorized inboxes carry OAuth2 tokens instead of a password;
+  // nodemailer refreshes the access token via the provider's token endpoint.
+  if (sender.oauthRefresh) {
+    const creds = oauthCredsFor(sender.provider) || {};
+    return nodemailer.createTransport({
+      host: sender.host,
+      port: sender.port,
+      secure: Number(sender.port) === 465,
+      auth: {
+        type: 'OAuth2',
+        user: sender.user || sender.email,
+        clientId: creds.clientId,
+        clientSecret: creds.clientSecret,
+        refreshToken: sender.oauthRefresh,
+        accessToken: sender.oauthAccess || undefined,
+        expires: sender.oauthExp || undefined,
+      },
+    });
+  }
   return nodemailer.createTransport({
     host: sender.host,
     port: sender.port,
@@ -2821,6 +2896,101 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
   },
 
   // --- sender accounts (multi-inbox rotation + warmup) ---
+  // ---------- one-click OAuth connect ----------
+  'GET /api/app/oauth/status': (req, res) => {
+    if (!requireAuth(req, res)) return;
+    send(res, 200, { ok: true, providers: { google: oauthReady('google'), microsoft: oauthReady('microsoft') } });
+  },
+
+  'GET /api/app/oauth/:id/start': (req, res, name) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const p = OAUTH_PROVIDERS[name];
+    if (!p || !oauthReady(name)) return send(res, 400, { ok: false, error: 'One-click authorize is not configured on this server.' });
+    const q = new URLSearchParams({
+      client_id: p.clientId,
+      redirect_uri: oauthRedirect(name),
+      response_type: 'code',
+      scope: p.scope,
+      state: oauthState(session.token, name),
+      ...p.extraAuth,
+    });
+    res.writeHead(302, { Location: `${p.authUrl}?${q.toString()}` });
+    res.end();
+  },
+
+  'GET /api/app/oauth/:id/callback': async (req, res, name, params) => {
+    // Renders a tiny page that postMessages the outcome back to the Settings
+    // tab that opened the popup, then closes itself.
+    const finish = (ok, payload = {}) => {
+      res.writeHead(ok ? 200 : 400, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Outrovo — connect inbox</title>
+        <style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;height:90vh;margin:0;color:#0b0c0e}h2{font-size:1.2rem;margin:0 0 8px}p{color:#4b5563}</style></head>
+        <body><div style="text-align:center;max-width:340px">
+        <h2>${ok ? '✓ Inbox connected' : 'Connection failed'}</h2>
+        <p>${ok ? 'You can close this window — back in Outrovo, the rotation is already updated.' : (payload.error || 'Unknown error')}</p></div>
+        <script>if(window.opener){window.opener.postMessage({type:'outrovo-oauth',ok:${ok},email:${JSON.stringify(payload.email || '')},error:${JSON.stringify(payload.error || '')}},location.origin);window.close()}</script></body></html>`);
+    };
+    const session = getSession(req);
+    const p = OAUTH_PROVIDERS[name];
+    if (!p || !oauthReady(name)) return finish(false, { error: 'One-click authorize is not configured on this server.' });
+    if (!session) return finish(false, { error: 'Session expired — sign in again and retry from Settings.' });
+    const expected = oauthState(session.token, name);
+    const got = params.get('state') || '';
+    if (got.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected))) {
+      return finish(false, { error: 'Bad state — open Settings and click Authorize again.' });
+    }
+    const code = params.get('code');
+    if (!code) return finish(false, { error: params.get('error') || 'No authorization code returned.' });
+    let tokens, email;
+    try {
+      const tokenRes = await fetch(p.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code', code,
+          redirect_uri: oauthRedirect(name),
+          client_id: p.clientId, client_secret: p.clientSecret,
+        }).toString(),
+      });
+      tokens = await tokenRes.json();
+      if (!tokenRes.ok || !tokens.access_token) {
+        return finish(false, { error: `Token exchange failed: ${tokens.error_description || tokens.error || tokenRes.status}` });
+      }
+      email = ((await p.emailFromTokens(tokens)) || '').trim().toLowerCase();
+      if (!isEmail(email)) return finish(false, { error: 'The provider did not return a usable email address.' });
+    } catch (err) {
+      return finish(false, { error: err.message });
+    }
+    // Upsert the sender: same inbox re-authorizes in place; tokens stay
+    // encrypted at rest like app passwords. Warmup stays on for new inboxes.
+    const senders = load('senders');
+    const existing = senders.find(s => s.owner === session.email && s.email === email);
+    const record = existing || {
+      id: crypto.randomUUID(), owner: session.email, fromName: '',
+      dailyLimit: 50, status: 'active',
+      sentLog: { date: new Date().toISOString().slice(0, 10), count: 0 },
+      warmup: { enabled: true, startCap: WARMUP_DEFAULT_START, rampDays: 0, lastRampDay: null, startedAt: new Date().toISOString() },
+      createdAt: new Date().toISOString(),
+    };
+    record.provider = p.senderProvider;
+    record.email = email;
+    record.host = PROVIDER_PRESETS[p.senderProvider].host;
+    record.port = PROVIDER_PRESETS[p.senderProvider].port;
+    record.user = email;
+    record.oauthRefresh = encryptSecret(String(tokens.refresh_token || ''));
+    record.oauthAccess = encryptSecret(String(tokens.access_token || ''));
+    record.oauthExp = tokens.expires_in ? Date.now() + Number(tokens.expires_in) * 1000 : 0;
+    delete record.encPass;
+    if (!tokens.refresh_token && !existing) {
+      return finish(false, { error: 'The provider returned no refresh token — remove the Outrovo grant from your account and authorize again.' });
+    }
+    if (!existing) senders.push(record);
+    save('senders', senders);
+    logEvent('sender', `Sender inbox authorized via ${name}: ${email}`, {}, session.email);
+    return finish(true, { email });
+  },
+
   'GET /api/app/senders': (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;

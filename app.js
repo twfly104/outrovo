@@ -54,6 +54,7 @@ async function init() {
   bindProspects();
   bindTools();
   bindSenders();
+  bindSetup();
   bindDomainDiag();
   bindAccount();
   bindLinkedInSafety();
@@ -91,7 +92,7 @@ function showPage(name) {
   if (name === 'inbox') loadInbox();
   if (name === 'campaigns') loadCampaigns();
   if (name === 'overview') { loadOverview(); loadActivity(); }
-  if (name === 'settings') { loadEngine(); loadSenders(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadSuppression(); loadWebhooks(); }
+  if (name === 'settings') { loadEngine(); loadSenders(); refreshSetup(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadSuppression(); loadWebhooks(); }
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
 
@@ -544,12 +545,76 @@ function bindTools() {
   });
 }
 
-// ---------- sender accounts ----------
+// ---------- sender accounts (one-click connect) ----------
+const SENDER_HINTS = {
+  gmail: 'Paste your email and a <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">Google app password</a> — takes 30 seconds.',
+  microsoft: 'Paste your email and your Microsoft 365 mailbox password (or app password).',
+  custom: 'Any SMTP inbox works — host and port appear under Advanced options.',
+};
+
 function bindSenders() {
-  $('sProvider').addEventListener('change', e => {
-    $('sCustomFields').hidden = e.target.value !== 'custom';
+  $('connectGoogle').addEventListener('click', () => startConnect('google', 'gmail'));
+  $('connectMicrosoft').addEventListener('click', () => startConnect('microsoft', 'microsoft'));
+  $('connectOther').addEventListener('click', () => openSenderForm('custom'));
+  $('advToggle').addEventListener('click', () => {
+    const panel = $('advPanel');
+    panel.hidden = !panel.hidden;
+    $('advToggle').textContent = panel.hidden ? 'Advanced options ▾' : 'Advanced options ▴';
+    $('sCustomFields').hidden = !panel.hidden && $('sProvider').value !== 'custom';
   });
   $('addSenderBtn').addEventListener('click', addSender);
+}
+
+// OAuth availability is cached for the session — one fetch per Settings visit.
+let oauthProviders = null;
+async function oauthStatus() {
+  if (oauthProviders) return oauthProviders;
+  const { data } = await api('GET', '/api/app/oauth/status');
+  oauthProviders = data.ok ? data.providers : {};
+  return oauthProviders;
+}
+
+// Tiles: when the server has OAuth app credentials, one click opens the
+// provider consent in a popup and the inbox lands in the rotation. Without
+// them the tile falls back to the minimal email + app password form.
+async function startConnect(oauthName, providerValue) {
+  const providers = await oauthStatus();
+  if (providers[oauthName]) return startOAuth(oauthName);
+  openSenderForm(providerValue);
+  $('senderResult').innerHTML = '<span class="settings-note">One-click authorize needs <code>GOOGLE_CLIENT_ID</code> / <code>MS_CLIENT_ID</code> on the server — meanwhile, an app password works:</span>';
+}
+
+function startOAuth(name) {
+  const popup = window.open(`/api/app/oauth/${name}/start`, 'ov-oauth', 'width=640,height=760,menubar=no,toolbar=no');
+  if (!popup) {
+    $('senderResult').innerHTML = '<span class="no-tag">Popup blocked</span> — allow popups for one-click authorize, or use the form below.';
+    $('senderForm').hidden = false;
+    return;
+  }
+  $('senderResult').innerHTML = 'Waiting for authorization…';
+}
+
+// The OAuth callback page postMessages its result back to this tab.
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || e.data?.type !== 'outrovo-oauth') return;
+  $('senderResult').innerHTML = e.data.ok
+    ? `<span class="ok-tag">✓ Connected</span> — ${esc(e.data.email)} added to the rotation.`
+    : `<span class="no-tag">✗ ${esc(e.data.error || 'Authorization failed')}</span>`;
+  if (e.data.ok) { loadSenders(); refreshSetup(); }
+});
+
+function openSenderForm(provider) {
+  const form = $('senderForm');
+  form.hidden = false;
+  form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  $('sProvider').value = provider;
+  $('sFormHint').innerHTML = SENDER_HINTS[provider] || '';
+  $('sCustomFields').hidden = provider !== 'custom' || $('advPanel').hidden;
+  if (provider === 'custom' && $('advPanel').hidden) $('advToggle').click();
+  ['connectGoogle', 'connectMicrosoft', 'connectOther'].forEach(id => $(id).classList.remove('selected'));
+  ({ gmail: 'connectGoogle', microsoft: 'connectMicrosoft', custom: 'connectOther' }[provider] || '') &&
+    $({ gmail: 'connectGoogle', microsoft: 'connectMicrosoft', custom: 'connectOther' }[provider]).classList.add('selected');
+  $('sEmail').focus();
 }
 
 async function addSender() {
@@ -574,6 +639,7 @@ async function addSender() {
   if (data.ok) {
     ['sEmail', 'sFromName', 'sPass', 'sHost'].forEach(id => $(id).value = '');
     loadSenders();
+    refreshSetup();
   }
 }
 
@@ -588,9 +654,10 @@ async function loadSenders() {
     return `<div class="sender-row">
       <div class="sender-info">
         <strong>${esc(s.fromName ? `${s.fromName} <${s.email}>` : s.email)}</strong>
-        <span>${esc(s.provider)} · used ${s.usedToday}/${s.capToday} today</span>
+        <span>${s.oauth ? 'authorized' : esc(s.provider)} · used ${s.usedToday}/${s.capToday} today</span>
         <div class="warmup-bar"><i style="width:${pct}%"></i></div>
       </div>
+      ${s.oauth ? '<span class="sender-pill oauth">✓ authorized</span>' : ''}
       ${warm}
       <button class="link" data-test-sender="${s.id}">Send test</button>
       <button class="link" data-del-sender="${s.id}">Remove</button>
@@ -605,15 +672,16 @@ async function loadSenders() {
       <span class="sender-pill">gateway</span>
     </div>`);
   }
-  $('senderList').innerHTML = rows.join('') || '<p class="settings-note" style="margin-bottom:16px">No inboxes connected yet — add your first sender below.</p>';
+  $('senderList').innerHTML = rows.join('') || '<p class="settings-note" style="margin-bottom:16px">No inboxes connected yet — pick a provider below.</p>';
   $('senderList').querySelectorAll('[data-del-sender]').forEach(btn => btn.addEventListener('click', async () => {
     if (!confirm('Remove this inbox from the rotation?')) return;
     await api('DELETE', `/api/app/senders/${btn.dataset.delSender}`);
     loadSenders();
+    refreshSetup();
   }));
   $('senderList').querySelectorAll('[data-test-sender]').forEach(btn => btn.addEventListener('click', async () => {
     const to = $('testEmailTo').value || me?.email;
-    if (!to) { $('senderResult').innerHTML = 'Enter a test recipient in "Send a test email" below.'; return; }
+    if (!to) { $('senderResult').innerHTML = 'Enter a test recipient in step 3 above.'; return; }
     btn.textContent = '…';
     const { data: r } = await api('POST', '/api/app/tools/test-email', { to, senderId: btn.dataset.testSender });
     btn.textContent = 'Send test';
@@ -621,6 +689,46 @@ async function loadSenders() {
       ? `<span class="ok-tag">✓ Sent</span> via ${esc(r.sender || 'rotation')}${r.demo ? ' (demo — logged, not sent)' : ''}.`
       : `<span class="no-tag">✗ ${esc(r.error || 'Failed')}</span>`;
   }));
+}
+
+// ---------- quick-setup wizard ----------
+const setupKey = () => `ov-setup:${me?.email || ''}`;
+function loadSetupMarks() {
+  try { return JSON.parse(localStorage.getItem(setupKey()) || '{}'); } catch { return {}; }
+}
+function markStepDone(step) {
+  const marks = { ...loadSetupMarks(), [step]: true };
+  localStorage.setItem(setupKey(), JSON.stringify(marks));
+  applySetupMarks();
+}
+function applySetupMarks() {
+  const marks = loadSetupMarks();
+  $('setupDomainStep').classList.toggle('done', Boolean(marks.domain));
+  $('setupTestStep').classList.toggle('done', Boolean(marks.test));
+}
+
+// Sender step derives from live server state; domain/test steps are marked
+// locally once the user runs them (localStorage, per account).
+async function refreshSetup() {
+  const { data } = await api('GET', '/api/app/senders');
+  if (!data.ok) return;
+  const count = (data.senders?.length || 0) + (data.gateway ? 1 : 0);
+  const st = $('setupSenderStatus');
+  st.textContent = count ? `✓ ${count} inbox${count > 1 ? 'es' : ''} connected` : 'Not connected';
+  st.classList.toggle('ok', count > 0);
+  $('gotoSenderBtn').textContent = count ? 'Add another' : 'Connect';
+  $('setupSenderStep').classList.toggle('done', count > 0);
+  applySetupMarks();
+}
+
+function bindSetup() {
+  $('gotoSenderBtn').addEventListener('click', () => {
+    $('senderCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('connectGoogle').classList.add('pulse');
+    $('connectMicrosoft').classList.add('pulse');
+    setTimeout(() => ['connectGoogle', 'connectMicrosoft'].forEach(id => $(id).classList.remove('pulse')), 1600);
+  });
+  if (me?.email && !$('testEmailTo').value) $('testEmailTo').value = me.email;
 }
 
 // ---------- domain health (onboarding diagnostic) ----------
@@ -640,6 +748,7 @@ async function runDomainDiag(domain) {
   out.innerHTML = 'Running DNS checks…';
   const { data } = await api('GET', `/api/app/tools/domain-audit?domain=${encodeURIComponent(domain || '')}`);
   renderAudit(out, data.result);
+  if (data.result) markStepDone('domain');
 }
 
 async function loadDomainDiag() {
@@ -904,6 +1013,7 @@ $('testEmailBtn').addEventListener('click', async () => {
   out.innerHTML = status === 200
     ? '<span class="ok-tag">✓ Sent</span> — check the inbox.'
     : `<span class="no-tag">✗ Failed</span> — ${esc(data.error || 'unknown error')}`;
+  if (status === 200) markStepDone('test');
 });
 
 // ---------- lead finder ----------

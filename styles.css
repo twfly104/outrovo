@@ -1892,6 +1892,145 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .warmup-bar > i { display: block; height: 100%; background: linear-gradient(90deg, #ffd2a3, var(--crest)); }
 .sender-check { display: flex; align-items: flex-end; padding-bottom: 8px; }
 .sender-check label { display: flex; gap: 8px; align-items: center; font-size: 0.9rem; white-space: nowrap; }
+.sender-pill.oauth { background: #e7f5ee; color: #1a7a4a; }
+
+/* ---------- Settings: quick-setup wizard ---------- */
+.page-sub { font-size: 0.95rem; color: var(--ink-soft); margin: -14px 0 22px; }
+.setup-wizard {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.setup-step {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow-m);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.setup-step:hover { border-color: rgba(249, 115, 22, 0.35); }
+.step-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.step-head h3 { margin: 0; font-size: 1.02rem; font-weight: 650; }
+.step-num {
+  flex: none;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font-size: 0.85rem; font-weight: 700;
+  transition: background 0.2s, color 0.2s;
+}
+.setup-step p { font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 14px; flex: 1; }
+.step-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.step-status { font-size: 0.8rem; font-weight: 650; color: var(--ink-faint); }
+.step-status.ok { color: #1a7a4a; }
+.step-fields { display: flex; gap: 8px; }
+.step-fields input {
+  flex: 1; min-width: 0;
+  padding: 10px 13px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--paper);
+  font: inherit; font-size: 0.88rem; color: var(--ink);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.step-fields input:focus { outline: none; border-color: var(--crest); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14); }
+.step-fields .btn { flex: none; }
+.setup-step .tool-result { font-size: 0.82rem; margin-top: 12px; }
+.setup-step.done { border-color: #b7dfc6; background: linear-gradient(180deg, #fbfdfc, var(--card)); }
+.setup-step.done .step-num { background: #1a7a4a; color: #fff; }
+.setup-step.done .step-num { font-size: 0; }
+.setup-step.done .step-num::after { content: "✓"; font-size: 0.85rem; }
+@media (max-width: 980px) { .setup-wizard { grid-template-columns: 1fr; } }
+
+/* ---------- Settings: one-click connect tiles ---------- */
+.connect-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+.connect-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s, transform 0.15s, box-shadow 0.18s;
+}
+.connect-tile:hover { border-color: rgba(249, 115, 22, 0.5); background: #fff; transform: translateY(-2px); box-shadow: var(--shadow-m); }
+.connect-tile.selected { border-color: var(--crest); background: #fff; box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12); }
+.connect-tile svg { flex: none; color: var(--ink-soft); }
+.connect-tile .tile-title { font-weight: 650; font-size: 0.92rem; color: var(--ink); }
+.connect-tile .tile-sub { font-size: 0.78rem; color: var(--ink-faint); line-height: 1.4; }
+.connect-tile.pulse { animation: tile-pulse 0.8s var(--ease-out) 2; }
+@keyframes tile-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
+  50% { box-shadow: 0 0 0 5px rgba(249, 115, 22, 0.25); border-color: var(--crest); }
+}
+@media (max-width: 980px) { .connect-grid { grid-template-columns: 1fr; } }
+
+/* ---------- Settings: connect form ---------- */
+#senderForm {
+  margin-top: 14px;
+  padding: 18px 20px;
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+  animation: app-page-in 0.3s var(--ease-out);
+}
+.form-hint { font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 14px; }
+.form-hint a { color: var(--crest-deep); }
+.adv-toggle { font-size: 0.82rem; color: var(--ink-soft); padding: 0; }
+.adv-toggle:hover { color: var(--crest-deep); }
+#advPanel { margin-top: 14px; }
+.form-actions { margin-top: 16px; display: flex; gap: 10px; }
+
+/* ---------- Settings: collapsible advanced sections ---------- */
+.settings-section {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow-m);
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.settings-section > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 18px 26px;
+  transition: background 0.15s;
+  user-select: none;
+}
+.settings-section > summary::-webkit-details-marker { display: none; }
+.settings-section > summary::after {
+  content: "▾";
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+  transition: transform 0.2s var(--ease-out);
+}
+.settings-section[open] > summary::after { transform: rotate(180deg); }
+.settings-section > summary:hover { background: rgba(249, 115, 22, 0.04); }
+.sec-title { font-size: 1.02rem; font-weight: 650; color: var(--ink); }
+.sec-hint { font-size: 0.8rem; color: var(--ink-faint); }
+.sec-body { padding: 2px 26px 24px; border-top: 1px solid var(--line); padding-top: 18px; }
+.sec-body h3 { font-size: 0.95rem; margin: 0 0 10px; }
+@media (max-width: 700px) { .settings-section > summary { flex-wrap: wrap; } }
 
 /* ---------- Toasts ---------- */
 .toast {
