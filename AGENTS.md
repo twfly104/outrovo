@@ -370,3 +370,12 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   ENGINE_INTERVAL_MS=5000 node server.js (no oauth env) — the mock-provider
   variant is only for verification runs. Live (12000) still needs real
   GOOGLE_CLIENT_ID/SECRET (or MS_*) from the owner for production one-click.
+
+- Owner action needed for real one-click: register OAuth apps per
+  docs/enable-one-click-auth.md and set GOOGLE_CLIENT_ID/SECRET (or MS_*)
+  + PUBLIC_URL in Render. Until then the live tiles show the app-password
+  fallback. Verified against the REAL providers (shape, no creds): Google
+  auth entry accepts our query (302 to sign-in chooser), Google token
+  endpoint returns its real `invalid_client` for a fake client (proves our
+  grant shape parses), Microsoft auth entry accepts our query (200 consent
+  page).
