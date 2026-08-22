@@ -158,6 +158,13 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   normalized question. Without a key the route returns 503 and the widget
   falls back to its local keyword matcher (which also handles greetings now),
   so the panel never dead-ends.
+  Verified end-to-end against a REAL LLM (not a mock): ran a local Ollama
+  serving the actual TinyLlama model as the OpenAI-compatible upstream
+  (ASSISTANT_BASE_URL=http://127.0.0.1:11434/v1). Visitor question → POST
+  /api/assistant → real generated answer grounded in FACTS, sanitized,
+  and served from cache on repeat (cached:true). The full loop works with
+  any OpenAI-compatible endpoint — including a self-hosted model — so the
+  owner can use OpenAI or point LLM_BASE_URL at a local model instead.
 
 ## API
 - `POST /api/signup` ÔÇö validates, scrypt-hashes password, 409 on duplicate email
