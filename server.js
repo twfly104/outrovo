@@ -1085,12 +1085,18 @@ async function fetchSite(url, attempt = 0) {
 // Infer an ideal-customer profile (ICP) from a company website. LLM when
 // configured, heuristic regexes otherwise. Size values match the lead-finder
 // form's select options exactly (e.g. '11,50') or the select ignores them.
-
-// Company size must match the UI select's option values exactly
-// (e.g. "11,50") or the select ignores it.
+// LLM/scan size output arrives as a range like "11-50" — bucket by the UPPER
+// bound (the last number), never by concatenating all digits ("11-50" must
+// not inflate into "1,000+").
+const SIZE_BUCKETS = new Set(['1,10', '11,50', '51,200', '201,500', '501,1000', '1001,10000']);
 function normSize(s) {
-  const n = parseInt(String(s || '').replace(/[^\d]/g, '').slice(-4), 10);
+  const raw = String(s || '').trim();
+  if (SIZE_BUCKETS.has(raw)) return raw; // already in select-option format
+  const nums = raw.replace(/,/g, '').match(/\d+/g);
+  if (!nums) return '';
+  const n = parseInt(nums[nums.length - 1], 10);
   if (!Number.isFinite(n) || n <= 0) return '';
+  if (/\+/.test(raw) && n >= 1000) return '1001,10000';
   if (n <= 10) return '1,10';
   if (n <= 50) return '11,50';
   if (n <= 200) return '51,200';

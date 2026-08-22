@@ -31,7 +31,6 @@ async function init() {
   if (status !== 200) { window.location.href = '/login.html'; return; }
   me = data.user;
   $('userName').textContent = me ? `${me.firstName} ${me.lastName}` : 'User';
-  $('userCompany').textContent = me?.company || '';
   $('userAvatar').textContent = ((me?.firstName || 'U')[0] + (me?.lastName || '')[0]).toUpperCase();
   if (data.engine === 'demo') $('engineBanner').hidden = false;
   const planLine = data.plan
