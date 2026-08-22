@@ -171,7 +171,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .logo-img {
   width: 36px; height: 36px;
   flex: none;
-  filter: drop-shadow(0 4px 10px rgba(232, 73, 15, 0.35));
 }
 
 .nav-links { display: flex; align-items: center; gap: 4px; flex: 1; }
