@@ -404,7 +404,10 @@
         { k: ['test email', 'try it', 'see a sample', 'preview'],
           a: 'Easiest way: <a href="signup.html">start the free trial</a> (14 days, no card) and send yourself a real test — or <a href="#" data-demo>watch the product tour</a> first.' },
       ];
-      const FALLBACK = 'Good question — I don\'t have a straight answer for that one in my notes. The <a href="#faq" data-asst-close>FAQ</a> covers the common ones, or <a href="signup.html">book a demo</a> and a human will take it from there.';
+      // No canned shrug: when nothing matches, steer the visitor to what the
+      // assistant DOES answer (top buyer topics) plus FAQ/demo, so the panel
+      // always moves the conversation forward instead of dead-ending.
+      const FALLBACK = 'That one\'s outside what I can answer precisely. I can help with: <strong>pricing &amp; free trial</strong>, <strong>deliverability &amp; warm-up</strong>, <strong>LinkedIn safety</strong>, <strong>the AI writer</strong>, <strong>integrations</strong>, or <strong>how we compare</strong> to tools like Instantly. The <a href="#faq" data-asst-close>FAQ</a> covers the common ones too, or <a href="signup.html">book a demo</a> and a human will take it from there.';
       const CHIPS = ['Will my emails land in spam?', 'How does warm-up work?', 'What does it cost?', 'Does it automate LinkedIn?'];
 
       const scrollEnd = () => { body.scrollTop = body.scrollHeight; };
