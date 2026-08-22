@@ -432,9 +432,26 @@
         const hit = kw => /^\w+$/.test(kw) && kw.length <= 3
           ? new RegExp(`\\b${kw}\\b`).test(t)
           : t.includes(kw);
+        // Near-miss typo tolerance: a single-word keyword of 5+ chars scores
+        // if a question token is within one edit of it (e.g. "deliverabilty",
+        // "linkdin", "prcing"). Conservative so it never hijacks real matches.
+        const lev = (a, b) => {
+          const m = a.length, n = b.length;
+          if (Math.abs(m - n) > 1) return 2;
+          const d = [Array.from({ length: n + 1 }, (_, j) => j)];
+          for (let i = 1; i <= m; i++) {
+            const row = [i];
+            for (let j = 1; j <= n; j++) row[j] = Math.min(d[i-1][j] + 1, row[j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+            d.push(row);
+          }
+          return d[m][n];
+        };
+        const tokens = t.replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length >= 4);
+        const fuzzy = kw => /^\w+$/.test(kw) && kw.length >= 5 && tokens.some(w => lev(kw, w) <= 1);
+        const ehit = e => e.k.reduce((n, kw) => n + ((hit(kw) || fuzzy(kw)) ? 1 : 0), 0);
         let best = null, bestScore = 0;
         for (const e of QA) {
-          const s = e.k.reduce((n, kw) => n + (hit(kw) ? 1 : 0), 0);
+          const s = ehit(e);
           if (s > bestScore) { bestScore = s; best = e; }
         }
         return best ? best.a : FALLBACK;
