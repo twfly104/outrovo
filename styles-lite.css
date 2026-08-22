@@ -17,7 +17,7 @@ img{max-width:100%;display:block}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;font:600 .74rem/1 var(--fb);letter-spacing:.15em;text-transform:uppercase;color:var(--accent)}
 .eyebrow:before{content:"";width:20px;height:2px;background:var(--accent);border-radius:2px}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:13px 24px;border-radius:999px;font-weight:600;font-size:.95rem;border:none;cursor:pointer;transition:.22s cubic-bezier(.22,1,.36,1)}
-.btn-a{background:var(--accent);color:#fff;box-shadow:0 8px 20px rgba(249,115,22,.3)}
+.btn-a{background:var(--accent);color:#fff;box-shadow:0 8px 20px rgba(249,115,22,.14)}
 .btn-a:hover{background:var(--accent2);transform:translateY(-2px)}
 .btn-o{background:none;border:1.5px solid var(--ink);color:var(--ink)}
 .btn-o:hover{background:var(--ink);color:#fff}
@@ -173,7 +173,7 @@ img{max-width:100%;display:block}
 
 /* orbits */
 .orb{position:relative;height:400px}
-.orb-core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:88px;height:88px;border-radius:24px;background:var(--accent);display:grid;place-items:center;box-shadow:0 16px 40px rgba(249,115,22,.4);z-index:2}
+.orb-core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:88px;height:88px;border-radius:24px;background:var(--accent);display:grid;place-items:center;box-shadow:0 16px 40px rgba(249,115,22,.28);z-index:2}
 .orb-ring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border:1.5px dashed var(--line);border-radius:50%}
 .orb-ring.r1{width:220px;height:220px}.orb-ring.r2{width:360px;height:360px}
 .sat{position:absolute;background:var(--card);border:1px solid var(--line);box-shadow:0 6px 20px rgba(0,0,0,.07);border-radius:999px;padding:8px 14px;font-weight:650;font-size:.8rem;display:flex;align-items:center;gap:7px;white-space:nowrap;animation:f 6s ease-in-out infinite}
@@ -212,7 +212,7 @@ img{max-width:100%;display:block}
 .h-m{font-family:var(--fd);font-weight:560;line-height:1.15;letter-spacing:-.015em;font-size:1.45rem}
 
 /* landing assistant */
-.asst-fab{position:fixed;right:22px;bottom:22px;z-index:90;display:inline-flex;align-items:center;gap:9px;padding:14px 20px;border:none;border-radius:999px;background:var(--accent);color:#fff;font:600 .95rem var(--fb);cursor:pointer;box-shadow:0 10px 26px rgba(249,115,22,.4);transition:.22s cubic-bezier(.22,1,.36,1)}
+.asst-fab{position:fixed;right:22px;bottom:22px;z-index:90;display:inline-flex;align-items:center;gap:9px;padding:14px 20px;border:none;border-radius:999px;background:var(--accent);color:#fff;font:600 .95rem var(--fb);cursor:pointer;box-shadow:0 10px 26px rgba(249,115,22,.28);transition:.22s cubic-bezier(.22,1,.36,1)}
 .asst-fab:hover{background:var(--accent2);transform:translateY(-2px)}
 .asst-fab svg{flex:none}
 .asst-fab.hide{opacity:0;pointer-events:none;transform:translateY(8px)}
