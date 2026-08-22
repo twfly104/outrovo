@@ -16,9 +16,11 @@ per provider. All of it happens in the provider consoles — no code changes.
 4. Under **Authorized redirect URIs** add exactly:
    `https://<your-production-domain>/api/app/oauth/google/callback`
    (for the current deployment: `https://outrovo.onrender.com/api/app/oauth/google/callback`)
-5. Add the scopes `https://mail.google.com/`, `openid`, `email` on the consent
-   screen. While the app is in "Testing" status it works for any Google account
-   you add as a test user; move to "In production" when ready.
+5. Add the scopes `https://www.googleapis.com/auth/gmail.send`, `openid`,
+   `email` on the consent screen. Send-only is enough — replies arrive via the
+   inbound webhook (`/api/email/receive`), never via the Gmail API. While the
+   app is in "Testing" status it works for any Google account you add as a
+   test user; move to "In production" when ready.
 6. Copy the generated **Client ID** and **Client secret** and set them as env
    vars on the server (Render → Environment):
    - `GOOGLE_CLIENT_ID` = …apps.googleusercontent.com

@@ -453,6 +453,22 @@
             <div class="tool-result" id="senderResult"></div>
           </form>
           <p class="settings-note">Campaigns rotate across every connected inbox, each with its own daily cap. Warmup ramp-up starts new inboxes small and grows the cap each day, so mailbox providers build trust in the address.</p>
+          <details class="inbound-guide" id="inboundGuide">
+            <summary><strong>Last step: turn on the Unified Inbox</strong><span class="sec-hint">sync every reply into Outrovo automatically</span></summary>
+            <div class="inbound-body">
+              <p class="settings-note">Forward your incoming mail to your unique Outrovo address — replies land in the Inbox here and stop the prospect's sequence automatically.</p>
+              <div class="inbound-addr-row">
+                <code id="inboundAddr">…</code>
+                <button type="button" class="btn btn-ghost btn-s" id="copyInboundBtn">Copy</button>
+              </div>
+              <ol class="inbound-steps">
+                <li>Copy your unique forwarding address above.</li>
+                <li>In Gmail open <strong>Settings → Forwarding and POP/IMAP → Add a forwarding address</strong> and paste it in.</li>
+                <li>The confirmation email arrives in your Outrovo <strong>Inbox</strong> — click the link inside it to verify.</li>
+                <li>Back in Gmail, choose <strong>Forward a copy of incoming mail to</strong> your address and save. Done.</li>
+              </ol>
+            </div>
+          </details>
         </div>
 
         <!-- Advanced sections -->
