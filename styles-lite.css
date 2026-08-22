@@ -231,6 +231,7 @@ img{max-width:100%;display:block}
 .asst-msg.me{background:var(--accent);color:#fff;border-bottom-right-radius:4px;align-self:flex-end}
 .asst-msg a{color:var(--accent);font-weight:600;text-decoration:underline;text-underline-offset:2px}
 .asst-msg.me a{color:#fff}
+.asst-msg.asst-typing{color:var(--muted);letter-spacing:.2em;padding:8px 14px}
 .asst-chips{display:flex;flex-wrap:wrap;gap:7px;align-self:flex-start;animation:asstIn .25s}
 .asst-chips button{padding:7px 13px;border:1.5px solid var(--accent);border-radius:999px;background:none;color:var(--accent2);font:600 .78rem var(--fb);cursor:pointer;transition:.18s}
 .asst-chips button:hover{background:var(--accent);color:#fff}

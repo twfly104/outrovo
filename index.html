@@ -331,6 +331,10 @@
       const input = document.getElementById('asstText');
 
       const QA = [
+        { k: ['hello', 'hi', 'hiya', 'howdy', 'good morning', 'good afternoon', 'good evening', 'yo', 'sup'],
+          a: 'Hey! Good to see you. I can answer anything about Outrovo — <strong>pricing</strong>, <strong>deliverability</strong>, <strong>LinkedIn</strong>, getting started — or just pick a question below.' },
+        { k: ['thanks', 'thank you', 'thx', 'cheers', 'great', 'awesome', 'cool', 'nice'],
+          a: 'Anytime! If you want to see it in action, <a href="signup.html">start a free trial</a> — no card needed — or keep the questions coming.' },
         { k: ['spam', 'inbox', 'deliverab', 'land', 'junk', 'promotions tab', 'open rate'],
           a: 'Honest answer: no tool can guarantee the inbox — anyone who says it can is selling you something. What Outrovo does is fix the three things that decide it: every email is <strong>verified before it\'s sent</strong>, your domain is checked against <strong>SPF, DKIM and DMARC</strong>, and sends are <strong>paced</strong> so nothing looks like a bot.' },
         { k: ['warm', 'ramp', 'new domain', 'new inbox', 'reputation'],
@@ -373,7 +377,7 @@
         });
         body.appendChild(c); scrollEnd();
       };
-      const answer = q => {
+      const answerLocal = q => {
         const t = q.toLowerCase();
         // short alphabetic keywords (e.g. "ai") need word boundaries or they
         // match inside words like "emAIls"; symbols like "$" stay substring
@@ -387,9 +391,31 @@
         }
         return best ? best.a : FALLBACK;
       };
+      const history = [];
+      const typingMsg = () => {
+        const d = document.createElement('div');
+        d.className = 'asst-msg bot asst-typing';
+        d.textContent = '…';
+        body.appendChild(d); scrollEnd();
+        return d;
+      };
+      // Ask the real API first; the keyword matcher above stays as the
+      // offline fallback so the panel never dead-ends.
       const ask = q => {
         addMsg(q, true);
-        setTimeout(() => { addMsg(answer(q)); }, 280);
+        const typing = typingMsg();
+        fetch('/api/assistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ q, history: history.slice(-6) })
+        })
+          .then(r => r.ok ? r.json() : Promise.reject())
+          .then(data => {
+            history.push({ role: 'user', content: q }, { role: 'assistant', content: data.answer || FALLBACK });
+            typing.remove();
+            addMsg(data.answer || FALLBACK);
+          })
+          .catch(() => { typing.remove(); addMsg(answerLocal(q)); });
       };
 
       const open = () => {

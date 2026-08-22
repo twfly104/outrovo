@@ -2077,6 +2077,80 @@ async function domainAudit(domain) {
   return { domain, score: Math.round((passed / checks.length) * 100), checks };
 }
 
+// ---------- landing assistant ----------
+// The public chat panel on index.html posts here. Answers come from a real
+// LLM API: ASSISTANT_API_KEY (falling back to LLM_API_KEY/OPENAI_API_KEY,
+// LLM_BASE_URL/LLM_MODEL as elsewhere) selects an OpenAI-compatible endpoint.
+// Without a key the route signals "unavailable" and the client falls back to
+// its built-in keyword answers, so the page never dead-ends.
+const ASSISTANT_PERSONA = `You are the Outrovo assistant on a website for Outrovo, a cold email and LinkedIn outreach tool. Answer like a knowledgeable, honest salesperson: warm, brief (1-2 sentences, 3 max), never promise what isn't in the FACTS below. Greetings get a warm reply plus an invite to ask about the product. If a question is outside the FACTS, say so briefly and point to the on-page FAQ (href="#faq") or booking a demo (signup.html). Format with ONLY these HTML tags: <strong>, <em>, <br>, <a href="pricing.html">, <a href="signup.html">, <a href="#faq" data-asst-close>. No markdown.`;
+
+const ASSISTANT_FACTS = [
+  'Outrovo is a simple cold-outreach tool: add people, write (or AI-draft) a sequence, press run, read every reply in one inbox. Email + LinkedIn to-dos in one campaign.',
+  'Pricing: Starter $29/slot/mo, Growth $49 (most popular), Scale $99 — less billed annually. Agency $249/mo with client workspaces and white-labeling.',
+  'Every plan starts with a 14-day free trial, no credit card needed. Cancel anytime in one click.',
+  'Deliverability: no tool can guarantee inbox placement — anyone claiming it is selling something. Outrovo verifies every email before sending, checks SPF/DKIM/DMARC with a one-click domain health check, and paces sends so nothing looks bot-like.',
+  'Warm-up is free on every plan: new inboxes start small and the daily sending cap grows automatically so mailbox providers build trust before volume ramps.',
+  'Verification: every prospect email is verified at import; invalid addresses are skipped before they bounce and hurt sender score. Catch-all verification is free on every plan.',
+  'LinkedIn: no auto-clicking — that violates LinkedIn rules and gets accounts banned. Outrovo turns LinkedIn into manual to-do steps inside the sequence, done by hand from the same place, so accounts stay compliant.',
+  'AI writer: give it your website and it drafts a sequence based on what you sell and who you target. You review and edit everything before a single send.',
+  'Getting started takes four steps: add people (verified on import), pick a template or let AI write it, hit run (Outrovo paces the sends), read replies in one inbox.',
+];
+
+const ASSISTANT_SYSTEM = `${ASSISTANT_PERSONA}\n\nFACTS (ground every answer in these):\n- ${ASSISTANT_FACTS.join('\n- ')}`;
+
+const assistantRate = new Map(); // ip → { count, reset }
+const ASSISTANT_WINDOW = 600e3, ASSISTANT_LIMIT = 30; // 30 questions / 10 min
+const assistantCache = new Map(); // normalized question → { answer, time }
+const ASSISTANT_CACHE_TTL = 3600e3; // 1h — landing questions repeat a lot
+
+function assistantOk(ip) {
+  const now = Date.now();
+  const e = assistantRate.get(ip);
+  if (!e || now > e.reset) { assistantRate.set(ip, { count: 1, reset: now + ASSISTANT_WINDOW }); return true; }
+  e.count++;
+  return e.count <= ASSISTANT_LIMIT;
+}
+
+// LLM replies are sanitized before the client drops them into innerHTML —
+// keep only a few inline tags and local links so an injected prompt can't
+// smuggle scripts or off-site links.
+function cleanAssistantHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/<script[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/<[^>]*>/g, tag => {
+    if (/^<\/?(strong|em|br)\s*\/?>$/i.test(tag) || /^<\/a>$/i.test(tag)) return tag;
+    if (/^<a\s/i.test(tag)) {
+      const href = (tag.match(/href\s*=\s*(['"])((?:[^'"]*?))\1/i) || [])[2] || '';
+      const safe = /^(#faq|pricing\.html|signup\.html|\/)/.test(href) ? href : '#faq';
+      const closeAttr = /data-asst-close/i.test(tag) ? ' data-asst-close' : '';
+      return `<a href="${safe}"${closeAttr}>`;
+    }
+    return '';
+  }).trim();
+}
+
+async function assistantLlm(q, history) {
+  const key = process.env.ASSISTANT_API_KEY || process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '';
+  if (!key) throw new Error('no LLM key configured');
+  const base = (process.env.ASSISTANT_BASE_URL || process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+  const model = process.env.ASSISTANT_MODEL || process.env.LLM_MODEL || 'gpt-4o-mini';
+  const res = await fetch(`${base}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'system', content: ASSISTANT_SYSTEM }, ...history, { role: 'user', content: q }],
+      temperature: 0.4, max_tokens: 250,
+    }),
+    signal: AbortSignal.timeout(25000),
+  });
+  if (!res.ok) throw new Error(`LLM ${res.status}`);
+  const raw = (await res.json()).choices?.[0]?.message?.content;
+  if (!raw) throw new Error('empty LLM reply');
+  return cleanAssistantHtml(raw);
+}
+
 // ---------- API ----------
 const router = {
   // --- marketing / auth ---
@@ -2112,6 +2186,37 @@ const router = {
       .then(result => logEvent('domain-audit', `Domain check for ${result.domain}: score ${result.score}/100`, { score: result.score, checks: result.checks }, email))
       .catch(() => {});
     send(res, 201, { ok: true, user: publicUser(user) }, { 'Set-Cookie': `outrovo_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 86400}` });
+  },
+
+  // Public landing-page assistant — LLM-backed, rate-limited per IP.
+  'POST /api/assistant': async (req, res) => {
+    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'anon').split(',')[0].trim();
+    if (!assistantOk(ip)) return send(res, 429, { ok: false, error: 'Too many questions — slow down a little.' });
+    const b = await readBody(req);
+    const q = String(b.q || '').trim().slice(0, 300);
+    if (!q) return send(res, 400, { ok: false, error: 'Empty question.' });
+    const history = (Array.isArray(b.history) ? b.history : [])
+      .filter(m => m && typeof m.content === 'string' && (m.role === 'user' || m.role === 'assistant'))
+      .slice(-6)
+      .map(m => ({ role: m.role, content: m.content.slice(0, 400) }));
+    // Most landing questions repeat — cache answers for an hour so the
+    // shared zero-config upstream isn't hammered by every visitor.
+    const cacheKey = q.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const hit = cacheKey && assistantCache.get(cacheKey);
+    if (hit && Date.now() - hit.time < ASSISTANT_CACHE_TTL) return send(res, 200, { ok: true, answer: hit.answer, cached: true });
+    try {
+      const answer = await assistantLlm(q, history);
+      if (cacheKey) {
+        if (assistantCache.size >= 200) assistantCache.delete(assistantCache.keys().next().value);
+        assistantCache.set(cacheKey, { answer, time: Date.now() });
+      }
+      send(res, 200, { ok: true, answer });
+    } catch (e) {
+      // Expected states: no LLM key configured (client uses local answers) or
+      // an upstream hiccup. Only the latter is worth a log line.
+      if (!/no LLM key/.test(e?.message || '')) console.error('[assistant]', e?.message || e);
+      send(res, 503, { ok: false, error: 'LLM unavailable.' });
+    }
   },
 
   'POST /api/login': async (req, res) => {
