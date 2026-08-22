@@ -120,9 +120,9 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .btn-primary {
   background: var(--crest);
   color: #fff;
-  box-shadow: 0 4px 12px rgba(232, 93, 4, 0.22);
+  box-shadow: 0 4px 12px rgba(232, 93, 4, 0.12);
 }
-.btn-primary:hover { background: var(--crest-deep); transform: translateY(-1px); box-shadow: 0 8px 20px rgba(232, 93, 4, 0.28); }
+.btn-primary:hover { background: var(--crest-deep); transform: translateY(-1px); box-shadow: 0 8px 20px rgba(232, 93, 4, 0.15); }
 
 .btn-ghost {
   background: transparent;
@@ -759,7 +759,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   width: 96px; height: 96px;
   border-radius: 28px;
   background: var(--crest);
-  box-shadow: 0 20px 44px rgba(232, 73, 15, 0.4);
+  box-shadow: 0 20px 44px rgba(232, 73, 15, 0.28);
   display: grid; place-items: center;
   color: #fff;
   z-index: 2;
@@ -1053,7 +1053,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   text-transform: uppercase;
   padding: 6px 16px;
   border-radius: 999px;
-  box-shadow: 0 6px 16px rgba(232, 73, 15, 0.4);
+  box-shadow: 0 6px 16px rgba(232, 73, 15, 0.28);
   white-space: nowrap;
 }
 .plan h3 { font-size: 1.4rem; }
@@ -1471,6 +1471,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   transition: background 0.2s, transform 0.22s var(--ease-out);
 }
 .app-upsell:hover { background: var(--crest-deep); transform: translateY(-2px); }
+.app-upsell svg { flex: none; }
 
 .app-user {
   display: flex;
