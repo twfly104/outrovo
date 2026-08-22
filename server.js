@@ -974,9 +974,13 @@ function senderTransport(sender) {
   // nodemailer refreshes the access token via the provider's token endpoint.
   if (sender.oauthRefresh) {
     const creds = oauthCredsFor(sender.provider) || {};
+    // Test-only: redirect the provider's SMTP endpoint to a local sink so the
+    // XOAUTH2 send path can be exercised end-to-end without real Gmail.
+    const smtpOverride = process.env.OAUTH_SMTP_HOST ? { host: process.env.OAUTH_SMTP_HOST, port: Number(process.env.OAUTH_SMTP_PORT || sender.port) } : {};
     return nodemailer.createTransport({
       host: sender.host,
       port: sender.port,
+      ...smtpOverride,
       secure: Number(sender.port) === 465,
       auth: {
         type: 'OAuth2',
