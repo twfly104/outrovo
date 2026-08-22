@@ -2103,6 +2103,11 @@ const ASSISTANT_FACTS = [
   'A/B testing is included from the Growth plan up.',
   'Outrovo does email plus LinkedIn to-dos only — no SMS, no cold calling.',
   'Replies from every campaign land in one unified inbox.',
+  'Versus other cold-email tools: verification, domain health, and warm-up are built in free on every plan rather than paid add-ons; LinkedIn stays compliant as manual to-do steps instead of risky auto-clicking.',
+  'On results/open rates: never promise a number. Results depend on list and message; Outrovo controls the deliverability side (verification, domain health, pacing, warm-up) so good emails get seen.',
+  'Sequences support multi-step follow-ups with waits and branch-on-reply; the user sets the cadence and Outrovo paces the sends.',
+  'Personalization: emails carry personalized openers (name, company, imported fields) and the AI writer drafts sequences around what the user sells and who they target.',
+  'Lists: import via CSV (every address verified on import) or use the built-in Lead Finder to source new prospects.',
 ];
 
 const ASSISTANT_SYSTEM = `${ASSISTANT_PERSONA}\n\nFACTS (ground every answer in these):\n- ${ASSISTANT_FACTS.join('\n- ')}`;
