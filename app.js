@@ -81,6 +81,7 @@ async function init() {
   bindAgency();
   bindWhiteLabel();
   bindWebhooks();
+  bindSettingsTabs();
   bindBulkTools();
   // Agency plan → reveal the Agency nav
   if (data.plan?.id === 'agency' || me?.owner) $('agencyNavBtn').hidden = false;
@@ -1065,6 +1066,15 @@ async function loadWhiteLabel() {
 }
 
 // ---------- CRM webhooks ----------
+function bindSettingsTabs() {
+  document.querySelectorAll('.settings-tab').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.settings-tab').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.settings-pane').forEach(p => { p.hidden = p.id !== 'stab-' + btn.dataset.stab; });
+  }));
+  const showBtn = $('showWebhookFormBtn');
+  if (showBtn) showBtn.addEventListener('click', () => { $('webhookForm').hidden = false; showBtn.hidden = true; });
+}
+
 function bindWebhooks() {
   $('addWebhookBtn').addEventListener('click', async () => {
     const out = $('webhookResult');
@@ -1083,6 +1093,7 @@ function bindWebhooks() {
 async function loadWebhooks() {
   const { data } = await api('GET', '/api/app/integrations/webhooks');
   if (!data.ok) return;
+  if (data.webhooks.length && $('webhookForm')) { $('webhookForm').hidden = false; $('showWebhookFormBtn').hidden = true; }
   $('webhookList').innerHTML = data.webhooks.length ? data.webhooks.map(w => `
     <div class="sender-row">
       <div class="sender-info">
@@ -1133,13 +1144,20 @@ function bindBulkTools() {
 // ---------- settings ----------
 async function loadEngine() {
   const { data } = await api('GET', '/api/app/engine');
-  $('engineInfo').innerHTML = data.mode === 'multi-inbox'
-    ? `<p><strong>Multi-inbox rotation</strong> — ${data.inboxes} connected sender account${data.inboxes > 1 ? 's' : ''} load-balance campaign sends.</p>`
-    : data.mode === 'resend'
-    ? `<p><strong>Live — Resend</strong> (HTTP API), from <code>${esc(data.smtp.user)}</code>.</p>`
-    : data.mode === 'smtp'
-    ? `<p><strong>Live SMTP</strong> — sending via <code>${esc(data.smtp.host)}</code> as <code>${esc(data.smtp.user)}</code>.</p>`
-    : '<p><strong>Demo mode</strong> — no sender inbox connected and no gateway credentials. Campaigns run fully, but sends are only logged to the activity feed.</p>';
+  const el = $('engineInfo');
+  if (data.mode === 'multi-inbox') {
+    el.innerHTML = `<span class="status-badge good">Connected — ${data.inboxes} inbox${data.inboxes > 1 ? 'es' : ''} sending</span>
+      <p class="settings-note">Campaigns load-balance across your connected inboxes automatically.</p>`;
+  } else if (data.mode === 'resend') {
+    el.innerHTML = `<span class="status-badge good">Connected via Resend</span>
+      <p class="settings-note">Sending as ${esc(data.smtp.user)} through the server email gateway.</p>`;
+  } else if (data.mode === 'smtp') {
+    el.innerHTML = `<span class="status-badge good">Connected via custom SMTP</span>
+      <p class="settings-note">Sending as ${esc(data.smtp.user)} through the server email gateway.</p>`;
+  } else {
+    el.innerHTML = `<span class="status-badge demo">Demo mode</span>
+      <p class="settings-note">Campaigns simulate sending until you connect an inbox on the Inboxes tab (or your admin adds a gateway key). Nothing is actually delivered.</p>`;
+  }
 }
 
 $('testEmailBtn').addEventListener('click', async () => {

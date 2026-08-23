@@ -19,7 +19,7 @@
   --card: #ffffff;
   --sun: #ffc832;
 
-  --font-display: "Fraunces", Georgia, serif;
+  --font-display: "Instrument Sans", "Helvetica Neue", sans-serif;
   --font-body: "Instrument Sans", "Helvetica Neue", sans-serif;
 
   --radius-s: 10px;
@@ -283,6 +283,8 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 
 /* Keyword with animated color cycle */
 .kw-animate {
+  display: inline-block;
+  padding: 0 .04em .07em;
   font-style: italic;
   background: linear-gradient(100deg, var(--crest), #e11d48, #f59e0b, var(--crest));
   background-size: 300% 100%;
@@ -1374,7 +1376,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 /* ============================================================
    App dashboard — rebuilt to match the landing page design
    language (paper canvas, white rounded cards, pill controls,
-   Fraunces display type, orange crest accent)
+   Instrument Sans type throughout, orange crest accent)
    ============================================================ */
 .app-body {
   --paper: #f7f7f8;
@@ -2045,6 +2047,34 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .setup-step.done .step-num { font-size: 0; }
 .setup-step.done .step-num::after { content: "✓"; font-size: 0.85rem; }
 @media (max-width: 980px) { .setup-wizard { grid-template-columns: 1fr; } }
+
+
+.adv-divider { margin: 34px 0 14px; }
+.adv-divider h2 { margin: 0 0 4px; font-size: 1.05rem; font-weight: 750; }
+
+/* ---------- Settings sub-tabs ---------- */
+.settings-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 22px 0 18px; border-bottom: 1px solid var(--line); padding-bottom: 0; }
+.settings-tab {
+  appearance: none; background: none; border: none; border-bottom: 2.5px solid transparent;
+  padding: 10px 16px 12px; font: 600 0.92rem var(--font-body); color: var(--ink3);
+  cursor: pointer; margin-bottom: -1px; transition: color .15s, border-color .15s;
+}
+.settings-tab:hover { color: var(--ink); }
+.settings-tab.active { color: var(--ink); border-bottom-color: var(--crest); }
+.adv-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 99px;
+  background: var(--bg2, #eef0f2); color: var(--ink3); font-size: 0.68rem;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; vertical-align: 1px;
+}
+.settings-tab.active .adv-tag { background: rgba(249, 115, 22, 0.12); color: var(--accent2); }
+@media (max-width: 720px) { .settings-tab { padding: 8px 10px 10px; font-size: 0.85rem; } }
+
+/* Status badge (replaces backend-jargon engine text) */
+.status-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 99px; font-weight: 650; font-size: 0.88rem; margin-bottom: 12px; }
+.status-badge::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+.status-badge.good { background: #e7f6ec; color: #1e7e3c; }
+.status-badge.warn { background: #fff4e0; color: #a35c00; }
+.status-badge.demo { background: #eef0f2; color: #5c6470; }
 
 /* ---------- Settings: one-click connect tiles ---------- */
 .connect-grid {

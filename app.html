@@ -6,7 +6,7 @@
   <title>Outrovo — Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="icon" href="logo.svg" />
 </head>
@@ -176,7 +176,6 @@
                 </select>
               </div>
               <p class="settings-note">Emails only go out inside this window, in this timezone, and stop at the daily cap. Queued prospects roll over to the next day automatically.</p>
-            </details>
             <div class="modal-actions">
               <button class="btn btn-primary" id="saveCampaignBtn">Create campaign</button>
             </div>
@@ -275,7 +274,6 @@
               <button class="btn btn-primary btn-s" id="leadEnrollBtn">Add selected to campaign</button>
             </div>
           </div>
-        </details>
 
         <div class="subhead">
           <h2>People to email</h2>
@@ -411,6 +409,142 @@
           </div>
         </div>
 
+        <nav class="settings-tabs" id="settingsTabs">
+          <button type="button" class="settings-tab active" data-stab="inboxes">Inboxes</button>
+          <button type="button" class="settings-tab" data-stab="tools">Tools &amp; verification</button>
+          <button type="button" class="settings-tab" data-stab="integrations">Integrations <span class="adv-tag">Advanced</span></button>
+          <button type="button" class="settings-tab" data-stab="account">Account &amp; compliance</button>
+        </nav>
+
+        <div class="settings-pane" id="stab-tools" hidden>
+<div class="app-card-block" id="secDeliverability">
+          <h2>Deliverability tools</h2>
+          <p class="sec-hint" style="margin-bottom:16px;">verify an address · audit any domain</p>
+          <div class="split-2">
+            <div>
+              <h3>Verify one email</h3>
+              <div class="field"><label>Email address</label><input id="vEmail" placeholder="sarah@acme.io" /></div>
+              <button class="btn btn-primary btn-s" id="verifyBtn">Check email</button>
+              <div class="tool-result" id="verifyResult"></div>
+            </div>
+            <div>
+              <h3>Check any domain</h3>
+              <div class="field"><label>Domain</label><input id="dDomain" placeholder="yourcompany.com" /></div>
+              <button class="btn btn-dark btn-s" id="auditBtn">Check domain</button>
+              <div class="tool-result" id="auditResult"></div>
+            </div>
+          </div>
+<div class="app-card-block" id="secSuppression">
+          <h2>Suppression list</h2>
+          <p class="sec-hint" style="margin-bottom:16px;">unsubscribes blocked everywhere, automatically</p>
+          
+            <p class="settings-note">Anyone who unsubscribes lands here and is skipped by every campaign — including future imports.
+            Every email you send carries a one-click unsubscribe link automatically.</p>
+            <div class="field-row">
+              <div class="field"><label>Block an address manually</label><input id="suppEmail" placeholder="ceo@competitor.com" /></div>
+              <div class="field"><button class="btn btn-dark btn-s" id="suppAddBtn" style="margin-top:26px;">Add to list</button></div>
+            </div>
+            <div id="suppList"></div>
+          </div>
+        </div>
+</div><!-- /stab-tools -->
+
+        <div class="settings-pane" id="stab-integrations" hidden>
+<div class="app-card-block" id="secLinkedIn">
+          <h2>LinkedIn automation</h2>
+          <p class="sec-hint" style="margin-bottom:16px;">daily safety budget · autopilot bridge</p>
+          
+            <h3>Daily safety budget</h3>
+            <p class="settings-note">LinkedIn actions are paced to stay inside human-normal limits. The budget caps how many
+            tasks the queue surfaces per day; new tasks spread across a 6-hour window instead of appearing all at once.</p>
+            <div class="field-row">
+              <div class="field"><label>Daily LinkedIn action budget</label><input id="liBudget" type="number" value="20" min="1" max="100" /></div>
+              <div class="field"><button class="btn btn-dark btn-s" id="liBudgetBtn" style="margin-top:26px;">Save</button></div>
+            </div>
+            <div class="tool-result" id="liBudgetResult"></div>
+            <h3 style="margin-top:26px;">Autopilot bridge</h3>
+            <p class="settings-note">Point an external autopilot (PhantomBuster, Zapier, your own scripts) at the callback URL — Outrovo
+            marks tasks done and stops the email sequence when a prospect replies on LinkedIn.</p>
+            <div id="integrationStatus"></div>
+            <button class="btn btn-primary btn-s" id="genTokenBtn">Generate integration token</button>
+            <button class="btn btn-ghost btn-s" id="revokeTokenBtn" hidden>Revoke token</button>
+            <div class="tool-result" id="integrationResult"></div>
+          </div>
+<div class="app-card-block" id="secWebhooks">
+          <h2>CRM &amp; automation</h2>
+          <p class="sec-hint" style="margin-bottom:16px;">push sends, replies and clicks into your stack</p>
+          
+            <p class="settings-note">Point a Zapier catch hook, a HubSpot/Pipedrive workflow webhook, or any HTTPS endpoint at Outrovo —
+            events fan out as JSON, optionally signed with your secret.</p>
+            <div id="webhookList"></div>
+            <button type="button" class="btn btn-dark btn-s" id="showWebhookFormBtn">+ Add integration</button>
+            <div id="webhookForm" hidden>
+            <div class="field-row">
+              <div class="field"><label>Provider</label>
+                <select id="whProvider">
+                  <option value="zapier">Zapier</option>
+                  <option value="hubspot">HubSpot</option>
+                  <option value="pipedrive">Pipedrive</option>
+                  <option value="salesforce">Salesforce</option>
+                  <option value="webhook">Generic webhook</option>
+                </select>
+              </div>
+              <div class="field"><label>Webhook URL</label><input id="whUrl" placeholder="Paste the URL Zapier or HubSpot gave you" /></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Signing secret (optional)</label><input id="whSecret" type="password" placeholder="verify deliveries with HMAC" /></div>
+            </div>
+            <div class="field" style="display:flex;gap:14px;flex-wrap:wrap;">
+              <label><input type="checkbox" class="whEvent" value="sent" checked /> sent</label>
+              <label><input type="checkbox" class="whEvent" value="reply" checked /> reply</label>
+              <label><input type="checkbox" class="whEvent" value="bounce" checked /> bounce</label>
+              <label><input type="checkbox" class="whEvent" value="unsubscribe" checked /> unsubscribe</label>
+              <label><input type="checkbox" class="whEvent" value="click" /> click</label>
+              <label><input type="checkbox" class="whEvent" value="task" /> task</label>
+            </div>
+            <button class="btn btn-primary btn-s" id="addWebhookBtn">Add webhook</button>
+            </div>
+            <div class="tool-result" id="webhookResult"></div>
+          </div>
+<div class="app-card-block" id="secEngine">
+          <h2>Sending status</h2>
+          <p class="sec-hint" style="margin-bottom:16px;">how mail actually leaves Outrovo</p>
+          
+            <div id="engineInfo"></div>
+            <p class="settings-note">How campaigns actually send. Inboxes you connect on the Inboxes tab always take priority; the server gateway below is the admin-level fallback. No setup needed here for most users.</p>
+          </div>
+        </div><!-- /stab-integrations -->
+
+        <div class="settings-pane" id="stab-account" hidden>
+<div class="app-card-block" id="secCompliance">
+          <h2>Compliance</h2>
+          <p class="sec-hint" style="margin-bottom:16px;">CAN-SPAM mailing address</p>
+          
+            <p class="settings-note">CAN-SPAM requires your valid physical postal address in every campaign email.
+            Whatever you save here is added to the footer of every email you send, above the unsubscribe link.</p>
+            <div class="field-row">
+              <div class="field"><label>Your mailing address</label><input id="mailAddr" placeholder="Acme Inc., 123 Main St, Springfield, IL 62701, USA" /></div>
+              <div class="field"><button class="btn btn-dark btn-s" id="mailAddrBtn" style="margin-top:26px;">Save address</button></div>
+            </div>
+            <div class="tool-result" id="mailAddrResult"></div>
+          </div>
+<div class="app-card-block" id="secAccount">
+          <h2>Account</h2>
+          <p class="sec-hint" style="margin-bottom:16px;">log out · export · erase (GDPR)</p>
+          
+            <p id="accountInfo"></p>
+            <p class="settings-note">GDPR data rights: download everything your account holds, or erase the account and
+            all its campaigns, prospects, replies, tasks and inboxes. Erasure is immediate and cannot be undone.</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
+              <button class="btn btn-ghost btn-s" id="logoutBtn2">Log out</button>
+              <button class="btn btn-dark btn-s" id="exportBtn">Export my data (JSON)</button>
+              <button class="btn btn-ghost btn-s" id="deleteAccountBtn" style="color:#d93025;border-color:#d93025;">Delete account…</button>
+            </div>
+            <div class="tool-result" id="accountResult"></div>
+          </div>
+        </div><!-- /stab-account -->
+
+        <div class="settings-pane" id="stab-inboxes">
         <!-- Sender accounts: one-click connect -->
         <div class="app-card-block" id="senderCard">
           <h2>Sender accounts</h2>
@@ -500,131 +634,7 @@
             </div>
           </details>
         </div>
-
-        <!-- Advanced sections -->
-        <details class="settings-section" id="secDeliverability">
-          <summary><span class="sec-title">Deliverability tools</span><span class="sec-hint">verify an address · audit any domain</span></summary>
-          <div class="sec-body split-2">
-            <div>
-              <h3>Verify one email</h3>
-              <div class="field"><label>Email address</label><input id="vEmail" placeholder="sarah@acme.io" /></div>
-              <button class="btn btn-primary btn-s" id="verifyBtn">Check email</button>
-              <div class="tool-result" id="verifyResult"></div>
-            </div>
-            <div>
-              <h3>Check any domain</h3>
-              <div class="field"><label>Domain</label><input id="dDomain" placeholder="yourcompany.com" /></div>
-              <button class="btn btn-dark btn-s" id="auditBtn">Check domain</button>
-              <div class="tool-result" id="auditResult"></div>
-            </div>
-          </div>
-        </details>
-
-        <details class="settings-section" id="secLinkedIn">
-          <summary><span class="sec-title">LinkedIn automation</span><span class="sec-hint">daily safety budget · autopilot bridge</span></summary>
-          <div class="sec-body">
-            <h3>Daily safety budget</h3>
-            <p class="settings-note">LinkedIn actions are paced to stay inside human-normal limits. The budget caps how many
-            tasks the queue surfaces per day; new tasks spread across a 6-hour window instead of appearing all at once.</p>
-            <div class="field-row">
-              <div class="field"><label>Daily LinkedIn action budget</label><input id="liBudget" type="number" value="20" min="1" max="100" /></div>
-              <div class="field"><button class="btn btn-dark btn-s" id="liBudgetBtn" style="margin-top:26px;">Save</button></div>
-            </div>
-            <div class="tool-result" id="liBudgetResult"></div>
-            <h3 style="margin-top:26px;">Autopilot bridge</h3>
-            <p class="settings-note">Point an external autopilot (PhantomBuster, Zapier, your own scripts) at the callback URL — Outrovo
-            marks tasks done and stops the email sequence when a prospect replies on LinkedIn.</p>
-            <div id="integrationStatus"></div>
-            <button class="btn btn-primary btn-s" id="genTokenBtn">Generate integration token</button>
-            <button class="btn btn-ghost btn-s" id="revokeTokenBtn" hidden>Revoke token</button>
-            <div class="tool-result" id="integrationResult"></div>
-          </div>
-        </details>
-
-        <details class="settings-section" id="secSuppression">
-          <summary><span class="sec-title">Suppression list</span><span class="sec-hint">unsubscribes blocked everywhere, automatically</span></summary>
-          <div class="sec-body">
-            <p class="settings-note">Anyone who unsubscribes lands here and is skipped by every campaign — including future imports.
-            Every email you send carries a one-click unsubscribe link automatically.</p>
-            <div class="field-row">
-              <div class="field"><label>Block an address manually</label><input id="suppEmail" placeholder="ceo@competitor.com" /></div>
-              <div class="field"><button class="btn btn-dark btn-s" id="suppAddBtn" style="margin-top:26px;">Add to list</button></div>
-            </div>
-            <div id="suppList"></div>
-          </div>
-        </details>
-
-        <details class="settings-section" id="secWebhooks">
-          <summary><span class="sec-title">CRM &amp; automation</span><span class="sec-hint">push sends, replies and clicks into your stack</span></summary>
-          <div class="sec-body">
-            <p class="settings-note">Point a Zapier catch hook, a HubSpot/Pipedrive workflow webhook, or any HTTPS endpoint at Outrovo —
-            events fan out as JSON, optionally signed with your secret.</p>
-            <div id="webhookList"></div>
-            <div class="field-row">
-              <div class="field"><label>Provider</label>
-                <select id="whProvider">
-                  <option value="zapier">Zapier</option>
-                  <option value="hubspot">HubSpot</option>
-                  <option value="pipedrive">Pipedrive</option>
-                  <option value="salesforce">Salesforce</option>
-                  <option value="webhook">Generic webhook</option>
-                </select>
-              </div>
-              <div class="field"><label>Webhook URL</label><input id="whUrl" placeholder="https://hooks.zapier.com/hooks/catch/…" /></div>
-            </div>
-            <div class="field-row">
-              <div class="field"><label>Signing secret (optional)</label><input id="whSecret" type="password" placeholder="verify deliveries with HMAC" /></div>
-            </div>
-            <div class="field" style="display:flex;gap:14px;flex-wrap:wrap;">
-              <label><input type="checkbox" class="whEvent" value="sent" checked /> sent</label>
-              <label><input type="checkbox" class="whEvent" value="reply" checked /> reply</label>
-              <label><input type="checkbox" class="whEvent" value="bounce" checked /> bounce</label>
-              <label><input type="checkbox" class="whEvent" value="unsubscribe" checked /> unsubscribe</label>
-              <label><input type="checkbox" class="whEvent" value="click" /> click</label>
-              <label><input type="checkbox" class="whEvent" value="task" /> task</label>
-            </div>
-            <button class="btn btn-primary btn-s" id="addWebhookBtn">Add webhook</button>
-            <div class="tool-result" id="webhookResult"></div>
-          </div>
-        </details>
-
-        <details class="settings-section" id="secEngine">
-          <summary><span class="sec-title">Sending engine</span><span class="sec-hint">how mail actually leaves Outrovo</span></summary>
-          <div class="sec-body">
-            <div id="engineInfo"></div>
-            <p class="settings-note">Sending uses <code>RESEND_API_KEY</code> (HTTP, recommended) when set, falling back to SMTP
-            (<code>SMTP_HOST</code>/<code>SMTP_PORT</code>/<code>SMTP_USER</code>/<code>SMTP_PASS</code>/<code>SMTP_FROM</code>). With neither, sends are logged as demos.
-            Inboxes you connect above always take priority over the server gateway.</p>
-          </div>
-        </details>
-
-        <details class="settings-section" id="secCompliance">
-          <summary><span class="sec-title">Compliance</span><span class="sec-hint">CAN-SPAM mailing address</span></summary>
-          <div class="sec-body">
-            <p class="settings-note">CAN-SPAM requires your valid physical postal address in every campaign email.
-            Whatever you save here is added to the footer of every email you send, above the unsubscribe link.</p>
-            <div class="field-row">
-              <div class="field"><label>Your mailing address</label><input id="mailAddr" placeholder="Acme Inc., 123 Main St, Springfield, IL 62701, USA" /></div>
-              <div class="field"><button class="btn btn-dark btn-s" id="mailAddrBtn" style="margin-top:26px;">Save address</button></div>
-            </div>
-            <div class="tool-result" id="mailAddrResult"></div>
-          </div>
-        </details>
-
-        <details class="settings-section" id="secAccount">
-          <summary><span class="sec-title">Account</span><span class="sec-hint">log out · export · erase (GDPR)</span></summary>
-          <div class="sec-body">
-            <p id="accountInfo"></p>
-            <p class="settings-note">GDPR data rights: download everything your account holds, or erase the account and
-            all its campaigns, prospects, replies, tasks and inboxes. Erasure is immediate and cannot be undone.</p>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
-              <button class="btn btn-ghost btn-s" id="logoutBtn2">Log out</button>
-              <button class="btn btn-dark btn-s" id="exportBtn">Export my data (JSON)</button>
-              <button class="btn btn-ghost btn-s" id="deleteAccountBtn" style="color:#d93025;border-color:#d93025;">Delete account…</button>
-            </div>
-            <div class="tool-result" id="accountResult"></div>
-          </div>
-        </details>
+        </div><!-- /stab-inboxes -->
       </section>
       <p style="text-align:center;font-size:0.8rem;color:#6b7280;margin:32px 0 8px;">© 2026 Outrovo Inc. · <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a></p>
     </main>

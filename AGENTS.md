@@ -449,3 +449,44 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   endpoint returns its real `invalid_client` for a fake client (proves our
   grant shape parses), Microsoft auth entry accepts our query (200 consent
   page).
+
+## Iteration 7 — Settings simplification + font change (Aug 2026)
+- Owner rejected the readiness-hero "boss view" (tiles + progress meter) after
+  seeing it live — it was REVERTED. Lesson: don't add dashboard layers on top
+  of Settings; the 3-step wizard + accordions + the small "Advanced" divider
+  (kept) is the accepted level of structure.
+- Typography: owner disliked the "artistic" serif look — Fraunces is GONE
+  site-wide. `--font-display` (styles.css) and `--fd` (styles-lite.css) now
+  both resolve to Instrument Sans; the Google Fonts links in all 7 HTML pages
+  load Instrument Sans only. Keep headings sans — do not reintroduce a serif
+  display face.
+
+- Font follow-up: with Fraunces gone, the hero word "pipeline" (`.kw`) looked
+  clipped — the gradient text uses `background-clip:text; color:transparent`,
+  which crops glyphs to the CSS em box. Instrument Sans italic overhangs that
+  box (descenders + swash edges), and Fraunces' `opsz` optical sizing used to
+  compensate. Fix: `.kw`/`.kw-animate` get `display:inline-block;
+  padding:0 .04em .07em`. Rule of thumb: any `background-clip:text` element
+  needs explicit bottom/side padding, especially in italic.
+
+## Iteration 8 — Settings tab restructure for owners (Aug 2026)
+- Settings page rebuilt around 4 sub-tabs after the 3-step wizard: Inboxes
+  (default, sender accounts + connect tiles + reply-forwarding guide), Tools &
+  verification (deliverability tools + suppression list), Integrations —
+  tagged "Advanced" (LinkedIn automation, CRM & automation, Sending status),
+  Account & compliance (mailing address, export/erase).
+- All 7 former <details class="settings-section"> accordions converted to
+  always-visible .app-card-block cards inside .settings-pane wrappers
+  (#stab-inboxes/tools/integrations/account); tab switching in
+  bindSettingsTabs() (app.js) toggles [hidden].
+- De-jargon pass: "Sending engine" card renamed "Sending status"; the
+  RESEND_API_KEY/SMTP_* env-var paragraph replaced by plain copy; loadEngine()
+  now renders a colored .status-badge (good/warn/demo) + one plain sentence
+  instead of mode names; webhook URL placeholder is "Paste the URL Zapier or
+  HubSpot gave you"; webhook form hidden behind "+ Add integration" until
+  clicked (auto-shown when integrations exist).
+- CSS: .settings-tabs/.settings-tab/.adv-tag/.status-badge added before the
+  "Settings: one-click connect tiles" section in styles.css.
+- Lesson: when moving big DOM blocks with python string ops, wrap panes
+  AFTER all inner transforms and re-check tag balance (details/div counts)
+  before restarting — two bad orderings had to be reverted via git checkout.
