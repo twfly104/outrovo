@@ -1226,12 +1226,21 @@ function extractSiteInfo(html, url) {
   const title = pick(/<title[^>]*>([^<]+)<\/title>/i) || '';
   const desc = pick(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)
     || pick(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i) || '';
-  const h1s = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)]
+  let h1s = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)]
     .map(m => m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 3);
   // h2–h4 carry most of the positioning copy ("People Data", "For revenue
   // teams") that the single h1 rarely does.
-  const headings = [...html.matchAll(/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi)]
+  let headings = [...html.matchAll(/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi)]
     .map(m => m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 12);
+  // Bot-walled sites (Vercel et al.) answer crawlers with a markdown
+  // rendering — headings live in "#" lines instead of <h1> tags.
+  if (!h1s.length || !headings.length) {
+    const md = [...html.matchAll(/^#{1,4}\s+(.+)$/gm)]
+      .map(m => m[1].replace(/\[[^\]]*\]\([^)]*\)/g, ' ').replace(/[*_`]/g, '').replace(/\s+/g, ' ').trim())
+      .filter(Boolean).slice(0, 12);
+    if (!h1s.length) h1s = md.slice(0, 3);
+    if (!headings.length) headings = md;
+  }
   // JSON-LD @type often declares the org's industry (e.g. "FinancialService").
   const ldTypes = [...html.matchAll(/"@type"\s*:\s*"([^"]+)"/gi)]
     .map(m => m[1]).filter(t => !/^(WebSite|WebPage|BreadcrumbList|Article|NewsArticle|FAQPage|Organization|Corporation|LocalBusiness|SearchAction|SiteNavigationElement|ItemList|VideoObject|ImageObject)$/i.test(t))
@@ -1297,7 +1306,9 @@ function normSize(s) {
 // The persona actually buying depends on company size: founders buy at small
 // companies, functional heads at larger ones.
 const BUYER_PERSONAS = [
-  { title: 'head of sales', re: /\b(head of sales|sales director|vp sales|chief revenue|sales team|sales leaders|revenue team)s?\b/ },
+  // Explicit sales titles only — "Talk to sales" / "our sales team" appears
+  // on every B2B contact page and must not flip the buyer persona.
+  { title: 'head of sales', re: /\b(head of sales|sales director|vp sales|chief revenue officer)s?\b/ },
   { title: 'head of marketing', re: /\b(head of marketing|marketing director|cmo|vp marketing|marketing team|growth team)s?\b/ },
   { title: 'head of product', re: /\b(head of product|product manager|cpo|vp product|product team)s?\b/ },
   { title: 'head of engineering', re: /\b(head of engineering|cto|vp engineering|engineering manager|engineering team|developer|engineers?)\b/ },
@@ -1382,11 +1393,14 @@ function isSpecificPhrase(p) {
 // Pull precise market/audience phrases from the site's own copy — far more
 // specific than a canned industry list. Patterns mirror common positioning
 // formulas: "built for X", "platform for Y", "trusted by Z".
-function extractMarketPhrases(highText) {
+function extractMarketPhrases(highText, domainName = '') {
   const phrases = [];
   const seen = new Set();
   const push = (p, kind) => {
     p = cleanPhrase(p);
+    // Never echo the scanned brand — a phrase containing the domain is
+    // self-description, not a market ("hunter is the leading…").
+    if (p && domainName && p.toLowerCase().includes(domainName)) return;
     if (p && p.length > 3 && p.length <= 60 && isSpecificPhrase(p) && !seen.has(p.toLowerCase())) {
       seen.add(p.toLowerCase());
       phrases.push({ phrase: p, kind });
@@ -1481,6 +1495,11 @@ function heuristicIcp(info, domain, extraText) {
     { cue: 'advertis', kw: 'marketing agencies', title: 'head of marketing', pri: 4 },
     { cue: 'marketin', kw: 'marketing agencies', title: 'head of marketing', pri: 4 },
     { cue: 'marketing', kw: 'marketing agencies', title: 'head of marketing', pri: 4 },
+    { cue: 'developer', kw: 'software developers', title: 'head of engineering', pri: 3 },
+    { cue: 'devops', kw: 'DevOps teams', title: 'head of engineering', pri: 3 },
+    // "Agentic" is unambiguous AI-infra vocabulary ("agents" alone is not —
+    // travel/real-estate agents). Buyers of agent tooling are AI companies.
+    { cue: 'agentic', kw: 'AI startups', title: 'head of engineering', pri: 3 },
     { cue: 'saas', kw: 'SaaS startups', title: 'founder', pri: 2 },
     { cue: 'software', kw: 'SaaS startups', title: 'founder', pri: 2 },
     { cue: 'agency', kw: 'marketing agencies', title: 'head of marketing', pri: 3 },
@@ -1488,9 +1507,20 @@ function heuristicIcp(info, domain, extraText) {
   ];
   const seen = new Set();
   const industries = [];
-  const pushIndustry = (kw) => { if (!seen.has(kw) && industries.length < 3) { seen.add(kw); industries.push(kw); } };
+  // Product vocabulary ("Agent Stack", "Core Platform") names what the
+  // company sells, not who buys it — reject unless an audience word rides
+  // along ("developer platform" survives, "agentic infrastructure" drops).
+  const PRODUCT_WORDS = new Set(['infrastructure', 'stack', 'core', 'cloud', 'edge', 'runtime', 'compute', 'serverless', 'agentic', 'agent', 'agents', 'deployment', 'deployments', 'hosting', 'framework', 'pipeline', 'pipelines']);
+  const AUDIENCE_WORDS = new Set(['developer', 'developers', 'team', 'teams', 'engineer', 'engineers', 'founder', 'founders', 'marketer', 'marketers', 'designer', 'designers', 'merchant', 'merchants', 'creator', 'creators', 'agency', 'agencies', 'brand', 'brands', 'startup', 'startups', 'enterprise', 'enterprises', 'recruiter', 'recruiters', 'kitchen', 'kitchens']);
+  const pushIndustry = (kw) => {
+    if (!seen.has(kw) && industries.length < 3) {
+      const ws = kw.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+      if (ws.some(w => PRODUCT_WORDS.has(w)) && !ws.some(w => AUDIENCE_WORDS.has(w))) return;
+      seen.add(kw); industries.push(kw);
+    }
+  };
 
-  const marketPhrases = extractMarketPhrases(high);
+  const marketPhrases = extractMarketPhrases(high, String(domain).toLowerCase().replace(/^www\./, '').split('.')[0]);
   const terms = extractSignificantTerms(info.title + ' ' + info.desc, info.headings || info.h1s, domain);
   for (const { phrase } of marketPhrases) pushIndustry(phrase);
   for (const t of terms) pushIndustry(t);
@@ -1553,14 +1583,15 @@ function heuristicIcp(info, domain, extraText) {
   }
   if (!title) for (const p of BUYER_PERSONAS) { if (p.re.test(text)) { title = p.title; break; } }
 
-  // Company size: explicit language, else the service's implied deployment
-  // tier (enterprise suites → large orgs, integrations/tools → SMB).
+  // Company size: only explicit AUDIENCE phrasing counts — "Vercel
+  // Enterprise" is a plan name, not a target-size signal, and a bare
+  // "startup" mention isn't one either. Unclear → leave blank (Any size).
   let size = '';
-  if (/\b(enterprise|fortune ?500|global enterprises?|multinational|enterprise-grade|corporations?|c-suite)\b/.test(text)) size = '1001,10000';
-  else if (/\b(solo|freelance|indie|bootstrap|solopreneur|self-employed)s?\b/.test(text)) size = '1,10';
-  // Weak tokens like "integration"/"workflow" were dropped — they are
-  // product vocabulary, not target-size signals, and produced bogus sizes.
-  else if (/\b(mid-market|smb|small business|startup|scale-up|early-stage)s?\b/.test(text)) size = '11,50';
+  const ALL_SIZES = /\b(companies|teams|businesses|builders|developers|creators)\s+of\s+(all|every|any)\s+sizes?\b|\bfrom\s+startups?\s+to\s+((the\s+)?largest|fortune ?500|enterprises?)\b/;
+  if (ALL_SIZES.test(text)) size = '';
+  else if (/\bfor\s+(fortune ?500|global enterprises?|multinationals?)\b|\benterprise (customers|teams|companies)\b/.test(text)) size = '1001,10000';
+  else if (/\bfor\s+(the\s+)?mid-market\b/.test(text)) size = '201,500';
+  else if (/\bfor\s+(solo founders?|indie hackers?|startups?|small businesses?|smbs?|scale-ups?|early-stage)\b/.test(text)) size = '11,50';
 
   if (!title) title = size === '1001,10000' ? 'head of sales' : 'founder';
 
@@ -1604,12 +1635,20 @@ function heuristicIcp(info, domain, extraText) {
     [(info.title + ' ' + (info.headings || info.h1s || []).join(' ')).toLowerCase(), 2],
     [(String(info.text || '') + ' ' + String(info.tail || '')).toLowerCase(), 1],
   ];
+  // A site matching 3+ geographies is usually describing a global service
+  // (edge regions, office lists, locale pickers) — leave location blank
+  // rather than anchor on one stray city like a Taipei region. Exception:
+  // a clear HQ anchor in the about/contact pages (weight 4) still wins.
   let location = '';
-  let best = 0;
+  const bucketScores = [];
   for (const { loc, re } of LOCATION_BUCKETS) {
     let score = 0;
     for (const [src, w] of sources) if (re.test(src)) score += w;
-    if (score > best) { best = score; location = loc; }
+    if (score) bucketScores.push({ loc, score });
+  }
+  bucketScores.sort((a, b) => b.score - a.score);
+  if (bucketScores.length && !(bucketScores.length >= 3 && bucketScores[0].score < 4)) {
+    location = bucketScores[0].loc;
   }
 
   // What the company sells + why buyers pick it — fills the form's "Your

@@ -141,9 +141,22 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   headings (Е”ЕЅВ¬Е Г¤Е¤ЕЎГњГ¤/Е Г¤ДЌЕ”ДЊЕЃ/hello/welcomeГ”Г‡ЕЅ) Г”Г‡Г¶ Framer modals inject those before
   the real hero copy. Size inference must NOT match weak product words
   ("integration", "workflow") Г”Г‡Г¶ they are vocabulary, not target-size
-  signals, and produced bogus "11Г”Г‡Гґ50" fills. Regression checks: hunter.io Г”Д‡Дє
-  United States/founder; stripe.com Г”Д‡Дє United States/head of sales;
-  example.com Г”Д‡Дє empty keywords (no domain echo). Each result row
+  signals, and produced bogus "11Г”Г‡Гґ50" fills. Later hardening (vercel.com
+  scan filled product-vocab keywords, size "1,000+" from the "Vercel
+  Enterprise" plan name, location "Taiwan" from a Taipei edge-region list):
+  keywords go through PRODUCT_WORDS (infrastructure/stack/cloud/agenticГ”Г‡ЕЅ)
+  which drop product vocabulary unless an AUDIENCE_WORD rides along; market
+  phrases that contain the scanned domain name are rejected as self-
+  description; size only fills on explicit AUDIENCE phrasing ("for
+  startups", "enterprise customers", "teams of all sizes" Г”Д‡Дє ''), never a
+  bare "enterprise" mention; location blanks when Г”Г«Д…3 geo buckets match
+  (global service) unless about/contact anchors one (weight 4); BUYER_PERSONAS
+  dropped the "sales team"/"revenue team" regexes ("Talk to sales" is on
+  every B2B contact page); bot-walled sites answering with a markdown
+  render (no <h1> tags) get headings from "#" lines instead. Regression
+  checks: vercel.com Г”Д‡Дє AI startups/head of engineering/blank size+location;
+  hunter.io Г”Д‡Дє United States/founder; stripe.com Г”Д‡Дє United States/head of
+  sales; example.com Г”Д‡Дє empty keywords (no domain echo). Each result row
   also has a **Г”ЕҐЕЅ Intel** column: clicking calls
   `POST /api/app/lead-finder/intel` (`leadIntel()` in server.js; cached in
   memory 1h per domain) which scans the lead's company site and returns
