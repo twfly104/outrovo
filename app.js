@@ -56,6 +56,7 @@ async function init() {
     : '';
   $('accountInfo').textContent = (me ? `${me.firstName} ${me.lastName} — ${me.email} (${me.company})` : '') + (planLine ? ` · ${planLine}` : '');
   $('mailAddr').value = me?.mailingAddress || '';
+  $('bookingLink').value = me?.bookingLink || '';
   if (!me?.mailingAddress) {
     $('mailAddrResult').innerHTML = '<span class="no-tag">⚠ No mailing address saved</span> — one is legally required (CAN-SPAM) in every campaign email you send.';
   }
@@ -173,7 +174,7 @@ function stepRowHtml(type) {
   let fields = '';
   if (type === 'email') {
     fields = `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" />
-              <textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}… — variables and {spintax|variants} work here">{Hi|Hello|Hey} {{firstName}}, {{company}} caught my eye — quick idea.</textarea>
+              <textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}… — variables, {spintax|variants} and {{bookingLink}} all work here">{Hi|Hello|Hey} {{firstName}}, {{company}} caught my eye — quick idea.</textarea>
               <button type="button" class="ab-toggle">⇄ A/B test this step</button>
               <div class="ab-b" hidden>
                 <input class="subject-b" placeholder="Variant B subject" />
@@ -220,7 +221,7 @@ function addStepRow(type, data = {}) {
   row.querySelector('.remove-step').addEventListener('click', () => row.remove());
   row.querySelector('.step-type').addEventListener('change', e => {
     row.querySelector('.step-fields').innerHTML = e.target.value === 'email'
-      ? `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" /><textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}…"></textarea><button type="button" class="ab-toggle">⇄ A/B test this step</button><div class="ab-b" hidden><input class="subject-b" placeholder="Variant B subject" /><textarea class="body-b" placeholder="Variant B body — half your prospects get this version"></textarea></div>`
+      ? `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" /><textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}… — {{bookingLink}} drops in your calendar link"></textarea><button type="button" class="ab-toggle">⇄ A/B test this step</button><div class="ab-b" hidden><input class="subject-b" placeholder="Variant B subject" /><textarea class="body-b" placeholder="Variant B body — half your prospects get this version"></textarea></div>`
       : e.target.value === 'task'
       ? `<select class="task-kind"><option value="connect">Connection request</option><option value="message">Direct message</option><option value="view">Profile view</option></select><textarea class="note" placeholder="LinkedIn action — e.g. Send connection request to {{firstName}}"></textarea>`
       : '';
@@ -905,6 +906,12 @@ function bindAccount() {
       ? (data.mailingAddress
         ? '<span class="ok-tag">✓ Saved</span> — this address now appears in every campaign email footer.'
         : '<span class="no-tag">⚠ Address cleared</span> — CAN-SPAM requires a postal address in every campaign email.')
+      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
+  });
+  $('bookingLinkBtn').addEventListener('click', async () => {
+    const { data } = await api('POST', '/api/app/settings', { bookingLink: $('bookingLink').value });
+    $('bookingLinkResult').innerHTML = data.ok
+      ? '<span class="ok-tag">✓ Saved</span> — campaigns can drop it in with <code>{{bookingLink}}</code>.'
       : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
   });
   $('exportBtn').addEventListener('click', () => { window.location.href = '/api/app/export'; });

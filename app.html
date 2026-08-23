@@ -518,7 +518,7 @@
         <div class="settings-pane" id="stab-account" hidden>
 <div class="app-card-block" id="secCompliance">
           <h2>Compliance</h2>
-          <p class="sec-hint" style="margin-bottom:16px;">CAN-SPAM mailing address</p>
+          <p class="sec-hint" style="margin-bottom:16px;">CAN-SPAM mailing address · your booking link</p>
           
             <p class="settings-note">CAN-SPAM requires your valid physical postal address in every campaign email.
             Whatever you save here is added to the footer of every email you send, above the unsubscribe link.</p>
@@ -527,6 +527,15 @@
               <div class="field"><button class="btn btn-dark btn-s" id="mailAddrBtn" style="margin-top:26px;">Save address</button></div>
             </div>
             <div class="tool-result" id="mailAddrResult"></div>
+            <hr style="border:none;border-top:1px solid var(--line);margin:18px 0;" />
+            <p class="settings-note">Save your booking link once — campaigns can drop it in with the
+            <code>{{bookingLink}}</code> tag so interested leads book themselves on your calendar
+            (Calendly, Cal.com, Google "Appointment schedule", any public page).</p>
+            <div class="field-row">
+              <div class="field"><label>Your booking link</label><input id="bookingLink" placeholder="https://calendly.com/you/15min" /></div>
+              <div class="field"><button class="btn btn-dark btn-s" id="bookingLinkBtn" style="margin-top:26px;">Save link</button></div>
+            </div>
+            <div class="tool-result" id="bookingLinkResult"></div>
           </div>
 <div class="app-card-block" id="secAccount">
           <h2>Account</h2>

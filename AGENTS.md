@@ -490,3 +490,18 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - Lesson: when moving big DOM blocks with python string ops, wrap panes
   AFTER all inner transforms and re-check tag balance (details/div counts)
   before restarting — two bad orderings had to be reverted via git checkout.
+
+## Iteration 9 — booking-link loop (Aug 2026)
+- New `user.bookingLink` field closes the "leads book themselves" loop:
+  saved via POST /api/app/settings (https://-URL validated, 400 on junk),
+  exposed in publicUser, editable in Settings → Account & compliance card
+  next to the mailing address.
+- `{{bookingLink}}` template variable resolves in renderTemplate via
+  prospect.owner OR prospect.campaignId→campaign.owner (prospect.import
+  routes never set owner — always fall back through the campaign).
+  Preview-spintax route synthesizes owner: session.email for the same reason.
+- AI "interested" reply draft injects the real bookingLink (no more literal
+  "[booking link]" placeholder); builder placeholders mention the variable.
+- Webhook receive field order gotcha: /api/email/receive reads b.text
+  (Mailgun/SendGrid/Resend shapes), NOT b.body — test payloads must use
+  "text" or intent classification sees an empty body.

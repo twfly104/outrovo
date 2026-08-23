@@ -101,7 +101,7 @@ function readRawBody(req) {
   });
 }
 const isEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
-const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company, owner: u.owner || null, whiteLabel: u.whiteLabel || null, mailingAddress: u.mailingAddress || '' });
+const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company, owner: u.owner || null, whiteLabel: u.whiteLabel || null, mailingAddress: u.mailingAddress || '', bookingLink: u.bookingLink || '' });
 const newToken = () => crypto.randomBytes(24).toString('hex');
 
 function getSession(req) {
@@ -1062,7 +1062,13 @@ function personalize(text, prospect) {
 
 // ---------- transport ----------
 function renderTemplate(text, prospect) {
-  return text.replace(/\{\{(\w+)\}\}/g, (_, key) => prospect[key] ?? prospect.customVars?.[key] ?? '');
+  const ownerEmail = prospect.owner
+    || (prospect.campaignId ? load('campaigns').find(c => c.id === prospect.campaignId)?.owner : null);
+  const owner = ownerEmail ? load('users').find(u => u.email === ownerEmail) : null;
+  return text.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    if (key === 'bookingLink') return owner?.bookingLink || '';
+    return prospect[key] ?? prospect.customVars?.[key] ?? '';
+  });
 }
 let transporter = null;
 if (smtpConfigured && nodemailer) {
@@ -2883,7 +2889,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       // Heuristic draft by intent — the UI labels which mode answered.
       const name = reply.prospect?.split(' ')[0] || 'there';
       const byIntent = {
-        interested: `Hi ${name},\n\nGreat — glad it resonated. Here's a link to grab 15 minutes on my calendar: [booking link]. If easier, happy to send a short loom first.\n\nBest,\n${user?.firstName || ''}`,
+        interested: `Hi ${name},\n\nGreat — glad it resonated. Grab 15 minutes on my calendar here: ${user?.bookingLink || '[your booking link — set it in Settings]'}. If easier, happy to send a short loom first.\n\nBest,\n${user?.firstName || ''}`,
         question: `Hi ${name},\n\nGood question — short answer: [answer]. Happy to walk you through it live; 15 minutes is plenty. What does your week look like?\n\nBest,\n${user?.firstName || ''}`,
         not_interested: `Hi ${name},\n\nTotally understand — thanks for the quick reply. I'll close the loop on my end. If priorities change, the door's open.\n\nBest,\n${user?.firstName || ''}`,
         out_of_office: `Hi ${name},\n\nNo rush — I'll follow up when you're back. Enjoy the time off!\n\nBest,\n${user?.firstName || ''}`,
@@ -3453,12 +3459,14 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
 
   // Preview personalization + spintax without sending anything.
   'POST /api/app/tools/preview-spintax': async (req, res) => {
-    if (!requireAuth(req, res)) return;
+    const session = requireAuth(req, res);
+    if (!session) return;
     const b = await readBody(req);
     const prospect = {
       email: (b.email || 'sarah@acme.io').trim().toLowerCase(),
       firstName: b.firstName || 'Sarah', lastName: b.lastName || 'Connor',
-      company: b.company || 'Acme Inc.', ...(b.customVars && typeof b.customVars === 'object' ? b.customVars : {}),
+      company: b.company || 'Acme Inc.', owner: session.email,
+      ...(b.customVars && typeof b.customVars === 'object' ? b.customVars : {}),
     };
     send(res, 200, { ok: true, subject: personalize(b.subject || '', prospect), body: personalize(b.body || '', prospect) });
   },
@@ -3689,8 +3697,13 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     if (!user) return send(res, 404, { ok: false });
     if (b.linkedinBudget != null) user.linkedinBudget = Math.max(1, Math.min(100, Number(b.linkedinBudget)));
     if (b.mailingAddress != null) user.mailingAddress = String(b.mailingAddress).trim().slice(0, 300);
+    if (b.bookingLink != null) {
+      const link = String(b.bookingLink).trim().slice(0, 300);
+      if (link && !/^https:\/\/[\w.-]+\.[a-z]{2,}/i.test(link)) return send(res, 400, { ok: false, error: 'Booking link must be a full https:// URL' });
+      user.bookingLink = link;
+    }
     save('users', users);
-    send(res, 200, { ok: true, linkedinBudget: linkedinBudget(user), mailingAddress: user.mailingAddress || '' });
+    send(res, 200, { ok: true, linkedinBudget: linkedinBudget(user), mailingAddress: user.mailingAddress || '', bookingLink: user.bookingLink || '' });
   },
 
   // --- GDPR data rights (Arts. 15/17/20) ---
