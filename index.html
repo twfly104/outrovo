@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Outrovo — Cold email &amp; LinkedIn outreach</title>
-  <meta name="description" content="Send cold email safely, manage replies in one inbox, verify emails and check your domain — simply." />
+  <meta name="description" content="Find leads, send email + LinkedIn sequences, and read every reply in one inbox. Verification, warm-up and domain checks built in. 14-day free trial." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles-lite.css" />
@@ -21,7 +21,6 @@
       <a class="l" href="#faq">FAQ</a>
       <div class="c">
         <a class="lg" href="login.html">Log in</a>
-        <a class="o" href="signup.html">Book a demo</a>
         <a class="btn btn-a s" href="signup.html">Start free</a>
       </div>
     </div>
@@ -34,11 +33,11 @@
         <div class="hero-copy">
           <span class="eyebrow">Cold outreach that lands in the inbox</span>
           <h1 class="h-xl">Turn cold outreach into <span class="kw">pipeline</span></h1>
+          <p class="hero-sub">Find leads, send email + LinkedIn sequences, and read every reply in one inbox. Verification, warm-up and domain checks are built in — not bolted on.</p>
           <ul class="plist">
-            <li><span class="tick">✓</span><span><strong>Send emails safely</strong> — verified first, never guess again</span></li>
-            <li><span class="tick">✓</span><span>LinkedIn to-dos built into your campaigns, done from the same place</span></li>
-            <li><span class="tick">✓</span><span>Every reply lands in <strong>one inbox</strong> you actually read from</span></li>
-            <li><span class="tick">✓</span><span><strong>Check your domain</strong> before you send, not after it breaks</span></li>
+            <li><span class="tick">✓</span><span>Every address <strong>verified before you send</strong></span></li>
+            <li><span class="tick">✓</span><span><strong>Warm-up and domain checks</strong> on every plan</span></li>
+            <li><span class="tick">✓</span><span>Email + LinkedIn in one sequence, replies in <strong>one inbox</strong></span></li>
           </ul>
           <div class="ctad">
             <a class="btn btn-a" href="signup.html">Start free
@@ -63,7 +62,7 @@
           <div class="appm-b">
             <div class="steps">
               <div class="step"><span class="ico e">✉</span><div class="stinfo"><strong>Email 1 — Say hello</strong><span>Personalized opener, checked first</span></div><span class="bdg d">Sent</span></div>
-              <div class="step"><span class="ico">🕐</span><div class="stinfo"><strong>Wait 2 days</strong><span>Smart schedule — not spam pace</span></div><span class="bdg d">Done</span></div>
+              <div class="step"><span class="ico">🕐</span><div class="stinfo"><strong>Wait 2 days</strong><span>Natural, human-like pacing</span></div><span class="bdg d">Done</span></div>
               <div class="step"><span class="ico l">in</span><div class="stinfo"><strong>LinkedIn to-do</strong><span>Only if no reply</span></div><span class="bdg">Check</span></div>
               <div class="step"><span class="ico e">✉</span><div class="stinfo"><strong>Email 2 — Follow up</strong><span>Replies thread to your inbox</span></div><span class="bdg">Queued</span></div>
             </div>
@@ -94,7 +93,7 @@
       <div class="wrap grid2">
         <div>
           <span class="eyebrow">Land in the inbox</span>
-          <h2 class="h-l">Send emails that get read, not spammed</h2>
+          <h2 class="h-l">Built to land in the inbox</h2>
           <p class="lead">Cold email only works if it lands. Outrovo verifies every email first, checks your domain's health, and paces your sends so nothing looks like a bot.</p>
           <ul class="feat">
             <li><span class="n1">1</span><div><strong>Verify every email</strong><p>Invalid addresses skipped before you burn your rep.</p></div></li>
@@ -238,7 +237,7 @@
     </div>
     <div class="asst-body" id="asstBody"></div>
     <form class="asst-in" id="asstForm">
-      <input id="asstText" placeholder="e.g. Will my emails land in spam?" autocomplete="off" maxlength="300" />
+      <input id="asstText" placeholder="e.g. Will my emails land in the inbox?" autocomplete="off" maxlength="300" />
       <button class="asst-send" type="submit" aria-label="Send">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M14 8H2m5-6 6 6-6 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -394,7 +393,7 @@
         { k: ['follow up', 'follow-up', 'followup', 'sequence length', 'how many emails', 'cadence', 'steps'],
           a: 'Sequences support <strong>multi-step follow-ups with waits and branch-on-reply</strong> — you set the cadence, Outrovo paces the sends so nothing fires like a bot.' },
         { k: ['who is it for', 'who should use', 'small business', 'startup', 'founder', 'agency owner', 'freelancer'],
-          a: 'It\'s built for founders, small teams, and agencies who need pipeline without a deliverability engineer — <strong>verification and warm-up included</strong> so you don\'t need to be an expert to stay out of spam.' },
+          a: 'It\'s built for founders, small teams, and agencies who need pipeline without a deliverability engineer — <strong>verification and warm-up included</strong>, so you don\'t need to be an expert to land in the inbox.' },
         { k: ['csv', 'import', 'upload list', 'my list', 'existing leads', 'spreadsheet'],
           a: 'Yes — import your list (CSV) and every address is <strong>verified as it comes in</strong>, so bad emails get skipped before they bounce. Or use the built-in <strong>Lead Finder</strong> to source new ones.' },
         { k: ['track', 'analytics', 'report', 'metrics', 'stats', 'dashboard'],
@@ -408,7 +407,7 @@
       // assistant DOES answer (top buyer topics) plus FAQ/demo, so the panel
       // always moves the conversation forward instead of dead-ending.
       const FALLBACK = 'That one\'s outside what I can answer precisely. I can help with: <strong>pricing &amp; free trial</strong>, <strong>deliverability &amp; warm-up</strong>, <strong>LinkedIn safety</strong>, <strong>the AI writer</strong>, <strong>integrations</strong>, or <strong>how we compare</strong> to tools like Instantly. The <a href="#faq" data-asst-close>FAQ</a> covers the common ones too, or <a href="signup.html">book a demo</a> and a human will take it from there.';
-      const CHIPS = ['Will my emails land in spam?', 'How does warm-up work?', 'What does it cost?', 'Does it automate LinkedIn?'];
+      const CHIPS = ['Will my emails land in the inbox?', 'How does warm-up work?', 'What does it cost?', 'Does it automate LinkedIn?'];
 
       const scrollEnd = () => { body.scrollTop = body.scrollHeight; };
       const addMsg = (html, me) => {
