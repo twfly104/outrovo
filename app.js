@@ -324,6 +324,75 @@ async function saveCampaign() {
   loadCampaigns();
 }
 
+function campaignCardHtml(c) {
+  const mins = s => Math.max(0, Number(s.delayMinutes || 0));
+  const waitText = s => {
+    const m = mins(s);
+    if (m >= 1440 && m % 1440 === 0) return `Wait ${m / 1440} day${m === 1440 ? '' : 's'}`;
+    if (m >= 60 && m % 60 === 0) return `Wait ${m / 60} hour${m === 60 ? '' : 's'}`;
+    return `Wait ${m} min`;
+  };
+  const stepTitle = (s, i) => s.label || (
+    s.type === 'email' ? `Email ${c.steps.slice(0, i + 1).filter(x => x.type === 'email').length} — ${s.subject || 'No subject'}`
+    : s.type === 'task' ? `LinkedIn to-do`
+    : waitText(s));
+  const stepSub = s =>
+    s.type === 'email' ? (s.variantB ? 'A/B test running' : 'Sends through your connected inbox')
+    : s.type === 'task' ? ({ connect: 'Connection request', message: 'Direct message', view: 'Profile view' })[s.taskKind] || 'Manual action'
+    : 'Smart schedule — not spam pace';
+  const ico = s => s.type === 'email'
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></svg>`
+    : s.type === 'task' ? 'in'
+    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
+  const badge = s =>
+    s.type === 'email' ? (c.status === 'active' ? '<span class="step-bdg sent">Auto</span>' : '<span class="step-bdg">Queued</span>')
+    : s.type === 'task' ? '<span class="step-bdg check">Manual</span>'
+    : '<span class="step-bdg done">Auto</span>';
+
+  const sent = c.sentCount || 0;
+  const bounced = c.bounced || 0;
+  const replied = c.replied || 0;
+  const placed = sent ? Math.round((Math.max(0, sent - bounced) / sent) * 100) : null;
+  const replyRate = sent ? Math.round((replied / sent) * 100) : null;
+  const days = Array.isArray(c.repliesPastWeek) ? c.repliesPastWeek : [];
+  const peak = Math.max(1, ...days);
+  const bars = days.length
+    ? `<div class="cp-bars">${days.map((n, i) => `<i style="height:${Math.max(12, Math.round((n / peak) * 100))}%" class="${i % 2 ? 'b' : 'a'}" title="${n} repl${n === 1 ? 'y' : 'ies'}"></i>`).join('')}</div>`
+    : '';
+  return `
+    <div class="campaign-card">
+      <div class="cp-head">
+        <div>
+          <h3>${esc(c.name)}</h3>
+          <div class="meta">${c.steps.length} steps · ${c.prospects} prospects · ${c.finished} finished · today ${c.sentToday ?? 0}/${c.capToday ?? 25}</div>
+        </div>
+        <span class="status ${esc(c.status)}">${esc(c.status)}</span>
+      </div>
+      <div class="cp-body">
+        <div class="cp-steps">
+          ${c.steps.map((s, i) => `
+            <div class="cp-step">
+              <span class="cp-ico ${s.type}">${ico(s)}</span>
+              <div class="cp-stinfo"><strong>${esc(stepTitle(s, i))}</strong><span>${esc(stepSub(s))}</span></div>
+              ${badge(s)}
+            </div>`).join('')}
+        </div>
+        <div class="cp-stats">
+          <div class="cp-kpi"><span>Landing in inbox</span><strong>${placed === null ? '—' : placed + '%'}</strong></div>
+          <div class="cp-kpi"><span>Reply rate</span><strong>${replyRate === null ? '—' : replyRate + '%'}</strong></div>
+          <div><span class="cp-kpi-label">Replies · 7 days</span>${bars}</div>
+        </div>
+      </div>
+      ${c.steps.some(s => s.variantB) ? `<div class="ab-results" data-campaign="${c.id}"></div>` : ''}
+      <div class="cp-foot">
+        ${c.status === 'active'
+          ? `<button class="icon-btn icon-btn-text" data-act="pause" data-id="${c.id}" title="Pause campaign">Pause</button>`
+          : `<button class="icon-btn icon-btn-text" data-act="activate" data-id="${c.id}" title="Activate campaign">Run</button>`}
+        <button class="icon-btn icon-btn-text" data-act="delete" data-id="${c.id}" title="Delete campaign">Delete</button>
+      </div>
+    </div>`;
+}
+
 async function loadCampaigns() {
   const { data } = await api('GET', '/api/app/campaigns');
   if (!data.ok) return;
@@ -332,22 +401,7 @@ async function loadCampaigns() {
   if (!campaigns.length) {
     list.innerHTML = '<div class="app-card-block" style="color:var(--ink-faint)">No campaigns yet — press <strong>New campaign</strong> above and the step builder opens. Emails go out automatically once you hit Run.</div>';
   } else {
-    list.innerHTML = campaigns.map(c => `
-      <div class="campaign-item">
-        <span class="status ${esc(c.status)}">${esc(c.status)}</span>
-        <div>
-          <h3>${esc(c.name)}</h3>
-          <div class="meta">${c.steps.length} steps · ${c.prospects} prospects · ${c.finished} finished</div>
-          <div class="meta">${c.sentCount || 0} sent${c.bounced ? ` · ${c.bounced} bounced` : ''} · today ${c.sentToday ?? 0}/${c.capToday ?? 25}${c.timezone ? ` · ${c.sendWindowStart ?? 9}:00–${c.sendWindowEnd ?? 17}:00 ${esc(c.timezone)}` : ''}</div>
-          ${c.steps.some(s => s.variantB) ? `<div class="ab-results" data-campaign="${c.id}"></div>` : ''}
-        </div>
-        <div class="actions">
-          ${c.status === 'active'
-            ? `<button class="icon-btn icon-btn-text" data-act="pause" data-id="${c.id}" title="Pause campaign">Pause</button>`
-            : `<button class="icon-btn icon-btn-text" data-act="activate" data-id="${c.id}" title="Activate campaign">Run</button>`}
-          <button class="icon-btn icon-btn-text" data-act="delete" data-id="${c.id}" title="Delete campaign">Delete</button>
-        </div>
-      </div>`).join('');
+    list.innerHTML = campaigns.map(c => campaignCardHtml(c)).join('');
   }
 
   list.querySelectorAll('button[data-act]').forEach(btn => btn.addEventListener('click', async () => {
