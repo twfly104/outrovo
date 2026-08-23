@@ -1313,7 +1313,7 @@ $('lfTopupBtn')?.addEventListener('click', () => { $('creditBadge').click(); });
 async function loadLeadFinderStatus() {
   const { data } = await api('GET', '/api/app/lead-finder/status');
   if (!data.ok) return;
-  const src = data.provider === 'apollo' ? 'via Apollo' : data.provider === 'hunter' ? 'via Hunter' : 'built-in verify';
+  const src = data.provider === 'apollo' ? 'via Apollo' : 'built-in verify';
   const ap = data.autopilot;
   $('leadFinderStatus').textContent = `${data.used}/${data.quota} credits used this month · ${src}${ap?.enabled ? ' · ✦ auto-pilot on' : ''}`;
   const toggle = $('autopilotEnabled');

@@ -31,6 +31,11 @@ services:
         value: https://outrovo.onrender.com
       - key: RESEND_API_KEY
         sync: false
+      # Powers Lead Finder search + prospect enrichment via Apollo. Paid
+      # plans only — the Free plan has no API access; without a paid key the
+      # app uses its built-in domain-crawl + MX-verify fallback.
+      - key: APOLLO_API_KEY
+        sync: false
       # Powers the landing-page "Ask us" assistant (POST /api/assistant) plus
       # the in-app AI sequence writer, site-scan prefill, reply-intent, and
       # reply drafts. Set in Render > Environment. Without it the assistant
