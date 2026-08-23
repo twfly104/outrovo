@@ -1921,6 +1921,13 @@ const PLANS = {
   scale: { name: 'Scale', priceMonthly: 149, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: false, whiteLabel: true },
   agency: { name: 'Agency', priceMonthly: 249, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: true, whiteLabel: true },
 };
+// Display-name aliases accepted at API boundaries (e.g. the pricing page
+// posts the card's lowercase name, and "Pro" lives under the `growth` id).
+const PLAN_ALIASES = { pro: 'growth' };
+function normalizePlanId(id) {
+  const key = String(id || '').trim().toLowerCase();
+  return PLAN_ALIASES[key] || key;
+}
 
 // Pay-as-you-go Lead Finder credit bundles — high-margin add-on revenue on
 // top of subscriptions. Bonus credits never expire at month rollover.
@@ -2472,7 +2479,7 @@ const router = {
   'POST /api/billing/checkout': async (req, res) => {
     if (!requireAuth(req, res)) return;
     const b = await readBody(req);
-    const planId = b.plan;
+    const planId = normalizePlanId(b.plan);
     const topup = TOPUP_PACKS[planId];
     if ((!PLANS[planId] || planId === 'trial') && !topup) return send(res, 400, { ok: false, error: 'Unknown plan' });
     const user = load('users').find(u => u.email === getSession(req).email);
@@ -2505,7 +2512,7 @@ const router = {
     if (isWebhook) {
       if (!verifyStripeWebhook(req, b)) return send(res, 400, { ok: false, error: 'Invalid signature' });
       const email = b?.data?.object?.customer_email || b?.data?.object?.metadata?.email;
-      const plan = b?.data?.object?.metadata?.plan;
+      const plan = normalizePlanId(b?.data?.object?.metadata?.plan);
       if (email && plan && PLANS[plan]) {
         upgradeUser(email, plan);
         logEvent('billing', `Plan activated via Stripe: ${email} → ${plan}`, {}, email);
@@ -2516,18 +2523,19 @@ const router = {
       return send(res, 200, { received: true });
     }
     // Admin/manual activation
-    if (!b.email || (!PLANS[b.plan] && !TOPUP_PACKS[b.plan])) return send(res, 400, { ok: false, error: 'email and valid plan required' });
-    if (TOPUP_PACKS[b.plan]) {
-      const pack = TOPUP_PACKS[b.plan];
-      const user = creditTopup(b.email, b.plan);
+    const planId = normalizePlanId(b.plan);
+    if (!b.email || (!PLANS[planId] && !TOPUP_PACKS[planId])) return send(res, 400, { ok: false, error: 'email and valid plan required' });
+    if (TOPUP_PACKS[planId]) {
+      const pack = TOPUP_PACKS[planId];
+      const user = creditTopup(b.email, planId);
       if (!user) return send(res, 404, { ok: false, error: 'User not found' });
-      logEvent('billing', `Top-up purchased (manual): ${b.email} → ${b.plan}`, {}, b.email);
-      return send(res, 200, { ok: true, topup: b.plan, service: !!pack.service, credits: pack.credits || 0 });
+      logEvent('billing', `Top-up purchased (manual): ${b.email} → ${planId}`, {}, b.email);
+      return send(res, 200, { ok: true, topup: planId, service: !!pack.service, credits: pack.credits || 0 });
     }
-    const user = upgradeUser(b.email, b.plan);
+    const user = upgradeUser(b.email, planId);
     if (!user) return send(res, 404, { ok: false, error: 'User not found' });
-    logEvent('billing', `Plan activated (manual): ${b.email} → ${b.plan}`, {}, b.email);
-    send(res, 200, { ok: true, user: publicUser(user), plan: b.plan });
+    logEvent('billing', `Plan activated (manual): ${b.email} → ${planId}`, {}, b.email);
+    send(res, 200, { ok: true, user: publicUser(user), plan: planId });
   },
 
   // --- one-click unsubscribe (public, HMAC-signed) ---
@@ -2622,7 +2630,8 @@ const router = {
     if (users.some(u => u.email === email)) return send(res, 409, { ok: false, error: 'That email already has an account.' });
     const password = b.password && b.password.length >= 8 ? b.password : `ov-${crypto.randomBytes(6).toString('hex')}`;
     const { salt, hash } = hashPassword(password);
-    const planId = PLANS[b.plan] && b.plan !== 'trial' ? b.plan : 'trial';
+    const wantedPlan = normalizePlanId(b.plan);
+    const planId = PLANS[wantedPlan] && wantedPlan !== 'trial' ? wantedPlan : 'trial';
     const client = {
       id: crypto.randomUUID(), firstName: b.firstName.trim(), lastName: (b.lastName || '').trim(),
       email, company: b.company.trim(), salt, hash, plan: planId,
@@ -2641,15 +2650,16 @@ const router = {
     const agencyUser = load('users').find(u => u.email === session.email);
     if (!planOf(agencyUser).agency) return send(res, 403, { ok: false, error: 'Agency plan required.' });
     const b = await readBody(req);
-    if (!PLANS[b.plan]) return send(res, 400, { ok: false, error: 'Unknown plan' });
+    const planId = normalizePlanId(b.plan);
+    if (!PLANS[planId]) return send(res, 400, { ok: false, error: 'Unknown plan' });
     const users = load('users');
     const client = users.find(u => u.email === decodeURIComponent(id).toLowerCase() && u.owner === session.email);
     if (!client) return send(res, 404, { ok: false, error: 'Client not found' });
-    client.plan = b.plan;
+    client.plan = planId;
     client.trialEnds = null;
     save('users', users);
-    logEvent('billing', `Client ${client.email} → ${PLANS[b.plan].name} (billed to agency)`, {}, session.email);
-    send(res, 200, { ok: true, client: { email: client.email, plan: b.plan } });
+    logEvent('billing', `Client ${client.email} → ${PLANS[planId].name} (billed to agency)`, {}, session.email);
+    send(res, 200, { ok: true, client: { email: client.email, plan: planId } });
   },
 
   'DELETE /api/app/agency/clients/:id': (req, res, id) => {
