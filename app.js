@@ -1156,7 +1156,7 @@ async function loadCredits() {
   if (!data.ok) return;
   const remaining = Math.max(0, (data.quota || 0) - (data.used || 0));
   const count = $('creditCount');
-  count.textContent = remaining.toLocaleString();
+  count.textContent = `${remaining.toLocaleString()} Credits`;
   const badge = $('creditBadge');
   badge.classList.toggle('low', remaining < 100 && remaining > 0);
   badge.classList.toggle('crit', remaining === 0);
