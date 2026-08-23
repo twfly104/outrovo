@@ -478,6 +478,22 @@
             <button class="btn btn-ghost btn-s" id="revokeTokenBtn" hidden>Revoke token</button>
             <div class="tool-result" id="integrationResult"></div>
           </div>
+<div class="app-card-block" id="secLeadData">
+          <h2>Lead data source</h2>
+          <p class="sec-hint" style="margin-bottom:16px;">bring your own Apollo key</p>
+
+            <p class="settings-note">Lead Finder and contact enrichment run on Apollo. Add your own Apollo API key (any paid plan) to use
+            your account's credits and data — it takes priority over the built-in key. Without one, Outrovo falls back to its
+            built-in domain-crawl + verification. Your key is stored encrypted and never shown again.</p>
+            <div id="apolloKeyStatus"></div>
+            <div class="field-row">
+              <div class="field"><label>Apollo API key</label><input id="apolloKeyInput" type="password" placeholder="Paste your Apollo API key" autocomplete="off" /></div>
+              <div class="field"><button class="btn btn-primary btn-s" id="apolloKeySaveBtn" style="margin-top:26px;">Save key</button></div>
+            </div>
+            <button class="btn btn-ghost btn-s" id="apolloKeyRemoveBtn" hidden>Remove key</button>
+            <div class="tool-result" id="apolloKeyResult"></div>
+            <p class="settings-note" style="margin-top:10px;">Get a key at <a href="https://app.apollo.io/#/settings/integrations/api" target="_blank" rel="noopener">apollo.io → Settings → Integrations → API</a>. API access requires a paid Apollo plan.</p>
+          </div>
 <div class="app-card-block" id="secWebhooks">
           <h2>CRM &amp; automation</h2>
           <p class="sec-hint" style="margin-bottom:16px;">push sends, replies and clicks into your stack</p>

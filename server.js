@@ -556,19 +556,25 @@ async function classifyIntent(reply) {
 }
 
 // ---------- enrichment (Apollo / Dropcontact) ----------
-function enrichmentProvider() {
-  if (process.env.APOLLO_API_KEY) return 'apollo';
+// A per-user Apollo key (BYOK, Settings → Lead data) takes priority over the
+// deployment-wide APOLLO_API_KEY so users can use their own paid plan.
+function userApolloKey(user) {
+  const enc = user?.apolloKeyEnc;
+  return enc ? (decryptSecret(enc) || null) : null;
+}
+function enrichmentProvider(user) {
+  if (userApolloKey(user) || process.env.APOLLO_API_KEY) return 'apollo';
   if (process.env.DROPCONTACT_API_KEY) return 'dropcontact';
   return null;
 }
-async function callEnrichment(email, name = {}) {
-  const provider = enrichmentProvider();
+async function callEnrichment(email, name = {}, user = null) {
+  const provider = enrichmentProvider(user);
   const domain = (email.split('@')[1] || '').toLowerCase();
   const base = { email, provider: provider || 'builtin', at: new Date().toISOString() };
   if (provider === 'apollo') {
     const res = await fetch(`${APOLLO_BASE()}/api/v1/people/match`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Api-Key': process.env.APOLLO_API_KEY },
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': userApolloKey(user) || process.env.APOLLO_API_KEY },
       body: JSON.stringify({ email }),
     });
     if (!res.ok) throw await apolloError(res, 'match');
@@ -614,13 +620,13 @@ async function callEnrichment(email, name = {}) {
 function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
 
 // ---------- lead finder (Apollo / builtin guess+verify) ----------
-function leadFinderProvider() {
-  if (process.env.APOLLO_API_KEY) return 'apollo';
+function leadFinderProvider(user) {
+  if (userApolloKey(user) || process.env.APOLLO_API_KEY) return 'apollo';
   return null;
 }
 const LEAD_SOURCES = ['apollo', 'builtin'];
-function leadFinderSourceOrder() {
-  const p = leadFinderProvider();
+function leadFinderSourceOrder(user) {
+  const p = leadFinderProvider(user);
   return p ? [p, 'builtin'] : ['builtin'];
 }
 
@@ -635,8 +641,8 @@ async function apolloError(res, what) {
   return new Error(`Apollo ${what} ${res.status}${payload?.error ? `: ${payload.error}` : ''}`);
 }
 
-async function apolloSearchLeads(f, perPage) {
-  const key = process.env.APOLLO_API_KEY;
+async function apolloSearchLeads(f, perPage, user = null) {
+  const key = userApolloKey(user) || process.env.APOLLO_API_KEY;
   const pageSize = Math.min(100, Math.max(10, perPage * 3));
   const body = {
     page: 1, per_page: pageSize,
@@ -756,13 +762,13 @@ async function verifyLeadBatch(leads, limit) {
   return [...ok, ...unsure];
 }
 
-async function searchLeads(f, perPage, sessionEmail) {
-  const order = leadFinderSourceOrder();
+async function searchLeads(f, perPage, sessionEmail, user = null) {
+  const order = leadFinderSourceOrder(user);
   const errors = [];
   let leads = [];
   for (const src of order) {
     try {
-      if (src === 'apollo') leads = await apolloSearchLeads(f, perPage);
+      if (src === 'apollo') leads = await apolloSearchLeads(f, perPage, user);
       else leads = await builtinSearchLeads(f, perPage, sessionEmail);
       if (leads.length) break;
     } catch (err) { errors.push(`${src}: ${err.message}`); }
@@ -810,7 +816,7 @@ async function autopilotRun() {
       const found = await searchLeads({
         keywords: ap.keywords.slice(0, 200), title: (ap.title || '').slice(0, 120),
         size: ap.size || '', location: (ap.location || '').slice(0, 120),
-      }, limit, user.email);
+      }, limit, user.email, user);
       user.leadFinder.used = usage.used + Math.min(found.leads.length, limit);
       // Guardrail: only auto-enroll MX-verified deliverables — never risk
       // the sender's domain reputation on unknown/invalid addresses.
@@ -2662,8 +2668,9 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const prospects = load('prospects');
     const p = prospects.find(x => x.id === id);
     if (!p) return send(res, 404, { ok: false, error: 'Not found' });
+    const user = load('users').find(u => u.email === session.email);
     try {
-      const enriched = await callEnrichment(p.email, { firstName: p.firstName, lastName: p.lastName });
+      const enriched = await callEnrichment(p.email, { firstName: p.firstName, lastName: p.lastName }, user);
       p.enriched = enriched;
       if (enriched.firstName && !p.firstName) p.firstName = enriched.firstName;
       if (enriched.lastName && !p.lastName) p.lastName = enriched.lastName;
@@ -2680,10 +2687,11 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     if (!session) return;
     const prospects = load('prospects');
     const mine = prospects.filter(p => p.campaignId === id && !p.enriched);
+    const user = load('users').find(u => u.email === session.email);
     let done = 0, failed = 0;
     for (const p of mine.slice(0, 50)) { // batch cap per call
       try {
-        p.enriched = await callEnrichment(p.email, { firstName: p.firstName, lastName: p.lastName });
+        p.enriched = await callEnrichment(p.email, { firstName: p.firstName, lastName: p.lastName }, user);
         if (p.enriched.firstName && !p.firstName) p.firstName = p.enriched.firstName;
         if (p.enriched.lastName && !p.lastName) p.lastName = p.enriched.lastName;
         if (p.enriched.company && !p.company) p.company = p.enriched.company;
@@ -2691,7 +2699,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       } catch { failed++; }
     }
     save('prospects', prospects);
-    send(res, 200, { ok: true, enriched: done, failed, remaining: mine.length - done - failed, provider: enrichmentProvider() || 'builtin' });
+    send(res, 200, { ok: true, enriched: done, failed, remaining: mine.length - done - failed, provider: enrichmentProvider(user) || 'builtin' });
   },
 
   // --- pre-sequence verification gate (incl. catch-all) ---
@@ -2870,9 +2878,10 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       ? null
       : { website: domain.slice(0, 120) };
     send(res, 200, {
-      ok: true, provider: leadFinderProvider() || 'builtin',
+      ok: true, provider: leadFinderProvider(user) || 'builtin',
       used: usage.used, quota: usage.quota, month: usage.month,
       autopilot: user.leadFinderAutopilot || null, seed,
+      apolloKeySet: Boolean(userApolloKey(user)),
     });
   },
 
@@ -2961,7 +2970,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       location: (b.location || '').slice(0, 120),
     };
     try {
-      const found = await searchLeads(filters, limit, session.email);
+      const found = await searchLeads(filters, limit, session.email, user);
       // Charge one credit per returned lead, capped by remaining quota.
       const charge = Math.min(found.leads.length, Math.max(0, usage.quota - usage.used));
       const users2 = load('users');
@@ -3669,6 +3678,49 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     if (!session) return;
     const user = load('users').find(u => u.email === session.email);
     send(res, 200, { ok: true, hasToken: Boolean(user?.integrationTokenHash), callbackUrl: `${PUBLIC_URL}/api/integrations/linkedin/callback` });
+  },
+
+  // --- BYOK: per-user Apollo key (Lead data source) ---
+  // Stored AES-256-GCM encrypted at rest (same cipher as sender passwords).
+  // The raw key is never returned after save — only a masked hint.
+  'GET /api/app/integrations/apollo-key': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const user = load('users').find(u => u.email === session.email);
+    const key = userApolloKey(user);
+    send(res, 200, { ok: true, set: Boolean(key), hint: key ? `…${key.slice(-4)}` : null });
+  },
+
+  'POST /api/app/integrations/apollo-key': async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const b = await readBody(req);
+    const key = String(b.key || '').trim();
+    if (!key) return send(res, 400, { ok: false, error: 'API key required' });
+    if (key.length > 200) return send(res, 400, { ok: false, error: 'Key looks too long' });
+    // Validate against Apollo before storing so typos don't silently save.
+    let chk;
+    try {
+      chk = await fetch(`${APOLLO_BASE()}/api/v1/auth/health`, { headers: { 'X-Api-Key': key } });
+    } catch { return send(res, 502, { ok: false, error: 'Could not reach Apollo to validate the key.' }); }
+    const d = await chk.json().catch(() => ({}));
+    if (!chk.ok || !d.healthy) return send(res, chk.ok ? 400 : chk.status, { ok: false, error: 'Apollo rejected that key — check it and try again.' });
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    if (!user) return send(res, 404, { ok: false });
+    user.apolloKeyEnc = encryptSecret(key);
+    save('users', users);
+    logEvent('integration', 'Apollo API key connected (BYOK)', {}, session.email);
+    send(res, 200, { ok: true, set: true, hint: `…${key.slice(-4)}` });
+  },
+
+  'DELETE /api/app/integrations/apollo-key': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    if (user) { delete user.apolloKeyEnc; save('users', users); }
+    send(res, 200, { ok: true, set: false });
   },
 
   // Autopilot callback: PhantomBuster/Zapier/etc. report task outcomes.

@@ -78,6 +78,7 @@ async function init() {
   bindAccount();
   bindLinkedInSafety();
   bindIntegration();
+  bindApolloKey();
   bindSuppression();
   bindAgency();
   bindWhiteLabel();
@@ -114,7 +115,7 @@ function showPage(name) {
   if (name === 'inbox') loadInbox();
   if (name === 'campaigns') loadCampaigns();
   if (name === 'overview') { loadOverview(); loadActivity(); }
-  if (name === 'settings') { loadEngine(); loadSenders(); refreshSetup(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadSuppression(); loadWebhooks(); }
+  if (name === 'settings') { loadEngine(); loadSenders(); refreshSetup(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadApolloKeyStatus(); loadSuppression(); loadWebhooks(); }
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
 
@@ -972,6 +973,39 @@ async function loadIntegrationStatus() {
   $('revokeTokenBtn').hidden = !data.hasToken;
 }
 
+// ---------- BYOK: Apollo lead data source ----------
+function bindApolloKey() {
+  $('apolloKeySaveBtn').addEventListener('click', async () => {
+    const out = $('apolloKeyResult');
+    const key = $('apolloKeyInput').value.trim();
+    if (!key) { out.innerHTML = '<span class="no-tag">✗ Paste your Apollo API key first</span>'; return; }
+    out.innerHTML = 'Validating with Apollo…';
+    const { data } = await api('POST', '/api/app/integrations/apollo-key', { key });
+    if (!data.ok) { out.innerHTML = `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`; return; }
+    $('apolloKeyInput').value = '';
+    out.innerHTML = '<span class="ok-tag">✓ Key saved</span> — Lead Finder and enrichment now use your Apollo account.';
+    loadApolloKeyStatus();
+    loadLeadFinderStatus();
+  });
+  $('apolloKeyRemoveBtn').addEventListener('click', async () => {
+    if (!confirm('Remove your Apollo key? Lead Finder falls back to the built-in source.')) return;
+    await api('DELETE', '/api/app/integrations/apollo-key');
+    $('apolloKeyResult').innerHTML = '';
+    loadApolloKeyStatus();
+    loadLeadFinderStatus();
+  });
+}
+
+async function loadApolloKeyStatus() {
+  const { data } = await api('GET', '/api/app/integrations/apollo-key');
+  if (!data.ok) return;
+  $('apolloKeyStatus').innerHTML = data.set
+    ? `<p>🟢 Using your Apollo key (${esc(data.hint || '')}).</p>`
+    : '<p style="color:var(--ink-faint)">No key set — using the built-in lead source.</p>';
+  $('apolloKeyRemoveBtn').hidden = !data.set;
+  $('apolloKeyInput').placeholder = data.set ? 'Replace your Apollo API key' : 'Paste your Apollo API key';
+}
+
 // ---------- suppression list ----------
 function bindSuppression() {
   $('suppAddBtn').addEventListener('click', async () => {
@@ -1313,7 +1347,7 @@ $('lfTopupBtn')?.addEventListener('click', () => { $('creditBadge').click(); });
 async function loadLeadFinderStatus() {
   const { data } = await api('GET', '/api/app/lead-finder/status');
   if (!data.ok) return;
-  const src = data.provider === 'apollo' ? 'via Apollo' : 'built-in verify';
+  const src = data.provider === 'apollo' ? (data.apolloKeySet ? 'via your Apollo key' : 'via Apollo') : 'built-in verify';
   const ap = data.autopilot;
   $('leadFinderStatus').textContent = `${data.used}/${data.quota} credits used this month · ${src}${ap?.enabled ? ' · ✦ auto-pilot on' : ''}`;
   const toggle = $('autopilotEnabled');

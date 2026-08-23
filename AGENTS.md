@@ -100,6 +100,12 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   (Campaigns page), including optional daily auto-pilot
   (`PUT /api/app/lead-finder/autopilot`). Without it, Lead Finder falls back to crawling the
   target company domains the user types in and MX-verifies what it finds.
+  BYOK: a user can also connect their own Apollo key in Settings > Lead data
+  source (`GET/POST/DELETE /api/app/integrations/apollo-key`). It is stored
+  AES-256-GCM encrypted on the user record (`apolloKeyEnc`, via
+  `encryptSecret`) and takes priority over the env `APOLLO_API_KEY` via
+  `userApolloKey()`, which threads through `apolloSearchLeads`,
+  `callEnrichment`, `leadFinderProvider` and `enrichmentProvider`.
   Apollo path: `POST /api/v1/mixed_people/search` maps the ICP filters
   directly (keywords/title/headcount-range/location, `contact_email_status:
   verified`). NOTE: Apollo's Free plan includes NO API access — the search
