@@ -210,7 +210,10 @@
             <div class="lf-group-head"><span class="lf-step">2</span><h3>Your target customer</h3><span class="lf-group-hint">these describe your ideal customer — not your own company</span></div>
             <div class="field-row">
               <div class="field"><label>Target industry / keywords</label><input id="lfKeywords" placeholder="ecommerce brands, saas, fintech…" /></div>
-              <div class="field"><label>Target job title</label><input id="lfTitle" placeholder="founder, head of marketing…" /></div>
+              <div class="field"><label>Target job title</label><input id="lfTitle" list="lfTitleSugs" placeholder="founder, head of marketing…" />
+                <datalist id="lfTitleSugs"></datalist>
+                <div class="lf-chips" id="lfTitleChips"></div>
+              </div>
             </div>
             <div class="field-row">
               <div class="field"><label>Target company size</label>

@@ -2141,6 +2141,14 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .lf-details > summary::after { content: "▾"; color: var(--ink-faint); font-size: 0.85rem; transition: transform 0.2s var(--ease-out); }
 .lf-details[open] > summary::after { transform: rotate(180deg); }
 .lf-details[open] > summary { margin-bottom: 14px; }
+.lf-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.lf-chip {
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft);
+  border-radius: 999px; padding: 3px 10px; font-size: 0.74rem; font-weight: 600; cursor: pointer;
+  transition: all 0.15s;
+}
+.lf-chip:hover { border-color: var(--crest); color: var(--crest-deep); }
+.lf-chip.on { background: var(--crest); border-color: var(--crest); color: #fff; }
 #liMeter { display: flex; align-items: center; gap: 10px; }
 .li-meter-label { font-size: 0.82rem; color: var(--ink-faint); white-space: nowrap; }
 .li-bar { margin-top: 0; width: 120px; }

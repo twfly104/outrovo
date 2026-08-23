@@ -1090,6 +1090,39 @@ $('testEmailBtn').addEventListener('click', async () => {
 // ---------- lead finder ----------
 let leadFinderLeads = [];
 
+// Quick presets for "Target job title" — chip click fills the canonical
+// group value; scan/prefill results snap to a group via TITLE_CANON so a
+// site scan returning "Chief Executive Officer" still lands on CEO presets.
+const TITLE_PRESETS = [
+  { label: 'Founders & C-Level', value: 'founder, CEO, co-founder, owner', terms: ['founder', 'co-founder', 'cofounder', 'owner', 'ceo', 'chief executive', 'managing director', 'president'] },
+  { label: 'Sales Leadership', value: 'VP of Sales, Head of Sales, CRO', terms: ['vp of sales', 'vice president of sales', 'head of sales', 'sales director', 'cro', 'chief revenue officer', 'head of revenue'] },
+  { label: 'Marketing Leadership', value: 'CMO, Head of Marketing, Marketing Director', terms: ['cmo', 'chief marketing officer', 'head of marketing', 'marketing director', 'marketing lead', 'vp of marketing'] },
+  { label: 'Tech & Product', value: 'CTO, VP of Engineering, Head of Product', terms: ['cto', 'chief technology officer', 'vp of engineering', 'head of engineering', 'engineering director', 'cpo', 'chief product officer', 'head of product', 'vp of product'] },
+];
+function canonTitle(raw) {
+  const t = (raw || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!t) return '';
+  for (const p of TITLE_PRESETS) if (p.terms.some(term => t === term || t.includes(term))) return p.value;
+  return raw.trim();
+}
+function fillTitleEl(val) { const el = $('lfTitle'); if (el && !el.value && val) { el.value = canonTitle(val); return true; } return false; }
+function setTitleEl(val) { const el = $('lfTitle'); if (el && val) el.value = canonTitle(val); }
+
+function bindTitlePresets() {
+  const dl = $('lfTitleSugs');
+  if (dl) dl.innerHTML = TITLE_PRESETS.flatMap(p => p.value.split(', ')).map(t => `<option value="${t}">`).join('');
+  const wrap = $('lfTitleChips');
+  if (!wrap) return;
+  wrap.innerHTML = TITLE_PRESETS.map(p => `<button type="button" class="lf-chip" data-val="${p.value}">${p.label}</button>`).join('');
+  wrap.addEventListener('click', (e) => {
+    const chip = e.target.closest('.lf-chip');
+    if (!chip) return;
+    $('lfTitle').value = chip.dataset.val;
+    [...wrap.children].forEach(c => c.classList.toggle('on', c === chip));
+  });
+}
+bindTitlePresets();
+
 async function loadLeadFinderStatus() {
   const { data } = await api('GET', '/api/app/lead-finder/status');
   if (!data.ok) return;
@@ -1106,7 +1139,7 @@ async function loadLeadFinderStatus() {
   // fields the user hasn't already typed into, so it never clobbers edits.
   const fill = (src) => {
     if (src?.keywords && !$('lfKeywords').value) $('lfKeywords').value = src.keywords;
-    if (src?.title && !$('lfTitle').value) $('lfTitle').value = src.title;
+    fillTitleEl(src?.title);
     if (src?.size) $('lfSize').value = src.size;
     if (src?.location && !$('lfLocation').value) $('lfLocation').value = src.location;
   };
@@ -1144,7 +1177,7 @@ function bindLeadFinderScan() {
       if (p.service) $('lfService').value = p.service;
       if (p.valueProp) $('lfValue').value = p.valueProp;
       if (p.keywords) $('lfKeywords').value = p.keywords;
-      if (p.title) $('lfTitle').value = p.title;
+      setTitleEl(p.title);
       if (p.size) $('lfSize').value = p.size;
       if (p.location) $('lfLocation').value = p.location;
       servicePitch = p.service || data.siteTitle || url;
@@ -1173,7 +1206,7 @@ async function applyLeadFinderPrefill() {
     fill('lfService', p.service);
     fill('lfValue', p.valueProp);
     fill('lfKeywords', p.keywords);
-    fill('lfTitle', p.title);
+    if (fillTitleEl(p.title)) filled++;
     fill('lfSize', p.size);
     fill('lfLocation', p.location);
     servicePitch = p.service || d.siteTitle || $('lfScanUrl').value || servicePitch;
@@ -1187,7 +1220,7 @@ async function saveAutopilot(enabled) {
   const body = {
     enabled,
     keywords: $('lfKeywords').value.trim(),
-    title: $('lfTitle').value.trim(),
+    title: canonTitle($('lfTitle').value),
     size: $('lfSize').value,
     location: $('lfLocation').value.trim(),
     campaignId: $('apCampaign').value,
@@ -1300,7 +1333,7 @@ function bindLeadFinder() {
     $('leadResults').hidden = true;
     const body = {
       keywords: $('lfKeywords').value.trim(),
-      title: $('lfTitle').value.trim(),
+      title: canonTitle($('lfTitle').value),
       size: $('lfSize').value,
       location: $('lfLocation').value.trim(),
       limit: Number($('lfCount').value || 10),
