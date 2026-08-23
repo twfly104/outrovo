@@ -541,7 +541,7 @@ function bindTools() {
     const r = data.result;
     $('auditResult').innerHTML = r ? `
       <div class="score">${r.score}/100</div>
-      <ul>${r.checks.map(c => `<li><span class="${c.ok ? 'ok-tag' : 'no-tag'}">${c.ok ? '✓' : '✗'}</span><strong>${esc(c.name)}</strong> — ${esc(c.detail)}</li>`).join('')}</ul>` : 'No result';
+      <ul>${r.checks.map(c => `<li><span class="${c.ok ? 'ok-tag' : 'no-tag'}">${c.ok ? '✓' : '✗'}</span><div><strong>${esc(c.name)}</strong> — ${esc(c.detail)}</div></li>`).join('')}</ul>` : 'No result';
   });
 }
 
@@ -739,7 +739,7 @@ function bindDomainDiag() {
 function renderAudit(target, r) {
   target.innerHTML = r ? `
     <div class="score">${r.score}/100</div>
-    <ul>${r.checks.map(c => `<li><span class="${c.ok ? 'ok-tag' : 'no-tag'}">${c.ok ? '✓' : '✗'}</span><strong>${esc(c.name)}</strong> — ${esc(c.detail)}</li>`).join('')}</ul>
+    <ul>${r.checks.map(c => `<li><span class="${c.ok ? 'ok-tag' : 'no-tag'}">${c.ok ? '✓' : '✗'}</span><div><strong>${esc(c.name)}</strong> — ${esc(c.detail)}</div></li>`).join('')}</ul>
     ${r.score < 100 ? '<p class="settings-note">Fix the failing records in your DNS provider before sending at volume — otherwise most mail lands in spam.</p>' : ''}` : 'No result';
 }
 

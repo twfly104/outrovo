@@ -1874,6 +1874,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .tool-result .score { font-family: var(--font-display); font-size: 1.6rem; font-weight: 620; margin-bottom: 10px; }
 .tool-result ul { display: grid; gap: 7px; }
 .tool-result li { display: flex; gap: 9px; align-items: baseline; }
+.tool-result li > div { flex: 1; min-width: 0; }
 .tool-result .ok-tag { color: var(--forest); font-weight: 700; }
 .tool-result .no-tag { color: #c22; font-weight: 700; }
 .settings-note { font-size: 0.85rem; color: var(--ink-soft); margin-top: 10px; }
