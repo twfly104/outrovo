@@ -1249,7 +1249,7 @@ function bindTitlePresets() {
   if (dl) dl.innerHTML = TITLE_PRESETS.flatMap(p => p.value.split(', ')).map(t => `<option value="${t}">`).join('');
   const wrap = $('lfTitleChips');
   if (!wrap) return;
-  wrap.innerHTML = TITLE_PRESETS.map(p => `<button type="button" class="lf-chip" data-val="${p.value}">${p.label}</button>`).join('');
+  wrap.innerHTML = TITLE_PRESETS.map(p => `<button type="button" class="lf-chip" data-val="${p.value}">+ ${p.label}</button>`).join('');
   wrap.addEventListener('click', (e) => {
     const chip = e.target.closest('.lf-chip');
     if (!chip) return;
@@ -1258,6 +1258,53 @@ function bindTitlePresets() {
   });
 }
 bindTitlePresets();
+
+// Quick location pills — multi-value, comma-separated like the search field.
+const LOC_PRESETS = ['United States', 'United Kingdom', 'Europe', 'Canada', 'Australia', 'Taiwan', 'Singapore'];
+function bindLocPresets() {
+  const wrap = $('lfLocChips');
+  if (!wrap) return;
+  wrap.innerHTML = LOC_PRESETS.map(l => `<button type="button" class="lf-chip" data-val="${l}">+ ${l}</button>`).join('');
+  wrap.addEventListener('click', (e) => {
+    const chip = e.target.closest('.lf-chip');
+    if (!chip) return;
+    const el = $('lfLocation');
+    const parts = el.value.split(',').map(s => s.trim()).filter(Boolean);
+    const i = parts.findIndex(p => p.toLowerCase() === chip.dataset.val.toLowerCase());
+    if (i >= 0) parts.splice(i, 1); else parts.push(chip.dataset.val);
+    el.value = parts.join(', ');
+    chip.classList.toggle('on', i < 0);
+  });
+}
+bindLocPresets();
+
+// "Detected:" summary tag — shows the auto-filled offer profile as one glanceable
+// line; the raw service/value fields stay tucked behind the Edit toggle.
+function syncDetected() {
+  const box = $('lfDetected');
+  if (!box) return;
+  const service = $('lfService').value.trim();
+  const value = $('lfValue').value.trim();
+  if (!service && !value) { box.hidden = true; return; }
+  let text = `Detected: ${service}${value ? ` — ${value}` : ''}`;
+  if (text.length > 140) text = `${text.slice(0, 137).trimEnd()}…`;
+  $('lfDetectedTag').textContent = text;
+  box.hidden = false;
+}
+
+// Programmatic fills (scan/prefill/seed) change the inputs behind the chips'
+// backs — resync the highlight states so a stale pill never glows.
+function syncChips() {
+  const titleVal = $('lfTitle')?.value.trim();
+  [...($('lfTitleChips')?.children || [])].forEach(c => c.classList.toggle('on', c.dataset.val === titleVal));
+  const locs = ($('lfLocation')?.value || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  [...($('lfLocChips')?.children || [])].forEach(c => c.classList.toggle('on', locs.includes(c.dataset.val.toLowerCase())));
+}
+$('lfDetectedEdit')?.addEventListener('click', () => {
+  const row = $('lfOfferFields');
+  row.hidden = !row.hidden;
+  $('lfDetectedEdit').textContent = row.hidden ? 'Edit' : 'Hide';
+});
 
 // Pay-as-you-go credit bundles — checkout rides the same billing endpoint
 // as plan upgrades; packs arrive from GET /api/plans (topups).
@@ -1284,6 +1331,8 @@ async function loadLeadFinderStatus() {
     if (src?.location && !$('lfLocation').value) $('lfLocation').value = src.location;
   };
   fill(ap || data.seed);
+  syncDetected();
+  syncChips();
 
   // Any field still empty → website-scan prefill fills what's left
   // (each field fills non-destructively, so user edits are never clobbered).
@@ -1324,10 +1373,12 @@ function bindLeadFinderScan() {
       $('lfSize').value = p.size || '';
       $('lfLocation').value = p.location || '';
       servicePitch = p.service || data.siteTitle || url;
+      syncDetected();
+      syncChips();
       status.className = 'ai-status ok';
       const gaps = !p.keywords ? ' Could not infer the target industry — type it in step 2.' : '';
       status.textContent = (data.source === 'llm'
-        ? `✦ Filled from ${url} — review, then hit ✦ Find leads.`
+        ? `✦ Filled from ${url} — review, then hit ✦ Search leads.`
         : `✦ Filled from ${url} (heuristic — set LLM_API_KEY for AI-quality fills).`) + gaps;
     } catch (err) {
       status.className = 'ai-status err';
@@ -1353,6 +1404,8 @@ async function applyLeadFinderPrefill() {
     fill('lfSize', p.size);
     fill('lfLocation', p.location);
     servicePitch = p.service || d.siteTitle || $('lfScanUrl').value || servicePitch;
+    syncDetected();
+    syncChips();
     if (filled > 0 && $('lfPrefillNote')) {
       $('lfPrefillNote').textContent = `✨ Pre-filled from your website — tweak anything before searching.`;
     }

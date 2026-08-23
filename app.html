@@ -190,49 +190,56 @@
             <span id="leadFinderStatus" class="lead-status"></span>
             <button type="button" class="btn btn-ghost btn-s" id="lfTopupBtn" hidden title="Buy pay-as-you-go credit bundles — they never expire">+ Add Credits</button>
           </summary>
-          <p class="muted-note">Describe your offer and ideal customer — we find verified contacts and research each company, so every message lands with context. No data key? Enter target company domains (e.g. acme.com) and we pull published emails from their sites.</p>
-
           <div class="lf-group">
-            <div class="lf-group-head"><span class="lf-step">1</span><h3>Your offer</h3><span class="lf-group-hint">auto-filled from your website</span></div>
+            <div class="lf-group-head"><span class="lf-step">1</span><h3>Your business</h3></div>
             <div class="ai-scan-row">
               <div class="field">
-                <label>Your company website</label>
-                <input id="lfScanUrl" placeholder="yourcompany.com — we infer everything below from it" />
+                <input id="lfScanUrl" placeholder="mycompany.com" />
               </div>
-              <button class="btn btn-ghost btn-s" id="lfScanBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Scan &amp; fill</button>
+              <button class="btn btn-ghost btn-s" id="lfScanBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> ✦ Auto-fill profile</button>
             </div>
             <div class="ai-status" id="lfScanStatus"></div>
-            <div class="field-row">
-              <div class="field"><label>Service description — what you sell</label><input id="lfService" placeholder="brand &amp; ecommerce marketing services…" /></div>
-              <div class="field"><label>Key value proposition</label><input id="lfValue" placeholder="integrated campaigns that grow brand revenue…" /></div>
+            <div class="lf-detected" id="lfDetected" hidden>
+              <span class="lf-detected-tag" id="lfDetectedTag"></span>
+              <button type="button" class="lf-detected-edit" id="lfDetectedEdit">Edit</button>
+            </div>
+            <div class="field-row" id="lfOfferFields" hidden>
+              <div class="field"><label>What you sell</label><input id="lfService" placeholder="brand &amp; ecommerce marketing services…" /></div>
+              <div class="field"><label>Value proposition</label><input id="lfValue" placeholder="integrated campaigns that grow brand revenue…" /></div>
             </div>
           </div>
 
           <div class="lf-group">
-            <div class="lf-group-head"><span class="lf-step">2</span><h3>Your target customer</h3><span class="lf-group-hint">these describe your ideal customer — not your own company</span></div>
-            <div class="field-row">
-              <div class="field"><label>Target industry / keywords</label><input id="lfKeywords" placeholder="ecommerce brands, saas, fintech…" /></div>
-              <div class="field"><label>Target job title</label><input id="lfTitle" list="lfTitleSugs" placeholder="founder, head of marketing…" />
-                <datalist id="lfTitleSugs"></datalist>
-                <div class="lf-chips" id="lfTitleChips"></div>
-              </div>
+            <div class="lf-group-head"><span class="lf-step">2</span><h3>Target audience</h3></div>
+            <div class="field">
+              <label>Industry / keywords</label>
+              <input id="lfKeywords" placeholder="ecommerce brands, saas, fintech…" />
             </div>
-            <div class="field-row">
-              <div class="field"><label>Target company size</label>
-                <select id="lfSize">
-                  <option value="">Any size</option>
-                  <option value="1,10">1–10</option>
-                  <option value="11,50">11–50</option>
-                  <option value="51,200">51–200</option>
-                  <option value="201,500">201–500</option>
-                  <option value="501,1000">501–1,000</option>
-                  <option value="1001,10000">1,000+</option>
-                </select>
-              </div>
-              <div class="field"><label>Target location</label><input id="lfLocation" placeholder="Taiwan, United States, Europe…" /></div>
+            <div class="field">
+              <label>Job titles</label>
+              <div class="lf-chips" id="lfTitleChips"></div>
+              <input id="lfTitle" list="lfTitleSugs" placeholder="or type your own — founder, head of marketing…" />
+              <datalist id="lfTitleSugs"></datalist>
+            </div>
+            <div class="field">
+              <label>Location</label>
+              <div class="lf-chips" id="lfLocChips"></div>
+              <input id="lfLocation" placeholder="or type your own — Taiwan, Europe…" />
+            </div>
+            <div class="field">
+              <label>Company size</label>
+              <select id="lfSize">
+                <option value="">Any size</option>
+                <option value="1,10">1–10</option>
+                <option value="11,50">11–50</option>
+                <option value="51,200">51–200</option>
+                <option value="201,500">201–500</option>
+                <option value="501,1000">501–1,000</option>
+                <option value="1001,10000">1,000+</option>
+              </select>
             </div>
             <div class="lead-actions">
-              <button class="btn btn-dark btn-s" id="leadFindBtn">✦ Find leads</button>
+              <button class="btn btn-dark btn-s" id="leadFindBtn">✦ Search leads</button>
               <div class="field" style="margin:0;width:160px;"><label style="margin:0;">Leads to find</label>
                 <select id="lfCount">
                   <option value="5">5</option>
@@ -260,12 +267,12 @@
                   </select>
                 </div>
               </div>
-              <p class="muted-note">Runs once a day using the search fields above. Only MX-verified deliverable addresses are enrolled — anything unknown is discarded to protect your sender reputation. Duplicates are skipped automatically.</p>
+              <p class="muted-note">Finds verified leads daily with the fields above and adds them to your campaign.</p>
               <span id="autopilotNote" class="import-note"></span>
             </div>
           </div>
           <div id="leadResults" hidden>
-            <p class="muted-note">Hit <strong>✦ Intel</strong> on any lead for company research — what they do, key features, how they compare, and your outreach angle.</p>
+            <p class="muted-note">Hit <strong>✦ Intel</strong> on a lead for company research and your outreach angle.</p>
             <table class="data-table" id="leadTable">
               <thead><tr><th></th><th>Email</th><th>Name</th><th>Company</th><th>Title</th><th>Checked</th><th>Research</th></tr></thead>
               <tbody></tbody>

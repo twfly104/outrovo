@@ -2254,7 +2254,11 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .lf-details > summary::after { content: "▾"; color: var(--ink-faint); font-size: 0.85rem; transition: transform 0.2s var(--ease-out); }
 .lf-details[open] > summary::after { transform: rotate(180deg); }
 .lf-details[open] > summary { margin-bottom: 14px; }
-.lf-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.lf-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 7px; }
+.lf-detected { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0 12px; }
+.lf-detected-tag { display: inline-block; padding: 7px 12px; border-radius: 999px; background: rgba(249, 115, 22, 0.1); border: 1px solid rgba(249, 115, 22, 0.35); color: var(--crest-deep, #ea580c); font-size: 0.85rem; font-weight: 600; }
+.lf-detected-edit { background: none; border: none; padding: 0; font: inherit; font-size: 0.82rem; color: var(--ink-faint); text-decoration: underline; cursor: pointer; }
+.lf-detected-edit:hover { color: var(--crest-deep, #ea580c); }
 .lf-chip {
   border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft);
   border-radius: 999px; padding: 3px 10px; font-size: 0.74rem; font-weight: 600; cursor: pointer;
