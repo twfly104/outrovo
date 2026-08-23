@@ -39,12 +39,14 @@ img{max-width:100%;display:block}
 
 /* hero */
 .hero{padding:88px 0 0;overflow:hidden}
-.hero-g{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+.hero-g{display:block;text-align:center}
+.hero-copy{max-width:780px;margin:0 auto}
+.hero .ctad,.hero .hmeta{justify-content:center}
 @keyframes up{to{opacity:1;transform:none}}
 .hero-copy>*{opacity:0;transform:translateY(22px);animation:up .8s cubic-bezier(.22,1,.36,1) forwards}
 .hero-copy>*:nth-child(1){animation-delay:.05s}.hero-copy>*:nth-child(2){animation-delay:.15s}.hero-copy>*:nth-child(3){animation-delay:.25s}.hero-copy>*:nth-child(4){animation-delay:.35s}.hero-copy>*:nth-child(5){animation-delay:.45s}.hero-copy>*:nth-child(6){animation-delay:.55s}.hero-copy>*:nth-child(7){animation-delay:.65s}
 .hero h1{margin:16px 0 18px}
-.hero-sub{color:var(--ink2);font-size:1.08rem;max-width:46ch}
+.hero-sub{color:var(--ink2);font-size:1.08rem;max-width:56ch;margin:0 auto}
 .kw{font-style:italic;background:linear-gradient(100deg,var(--accent),#e11d48,#f59e0b,var(--accent));background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:kw 9s linear infinite}
 @keyframes kw{to{background-position:300% 0}}
 .plist{display:grid;gap:11px;color:var(--ink2);font-size:1rem;margin:24px 0 30px}
@@ -59,7 +61,7 @@ img{max-width:100%;display:block}
 .rating small{color:var(--ink3);font-weight:500}
 
 /* mockup */
-.appm{background:var(--card);border:1px solid var(--line);border-radius:24px;box-shadow:0 20px 60px rgba(0,0,0,.08);overflow:hidden;transform:rotate(1.2deg)}
+.appm{background:var(--card);border:1px solid var(--line);border-radius:24px;box-shadow:0 20px 60px rgba(0,0,0,.08);overflow:hidden;max-width:880px;margin:56px auto 0;text-align:left}
 .appm-h{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--bg)}
 .dots span{width:9px;height:9px;border-radius:50%;background:var(--line);display:inline-block;margin-right:5px}
 .dots span:first-child{background:var(--accent)}
