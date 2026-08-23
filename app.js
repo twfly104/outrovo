@@ -1111,7 +1111,6 @@ function canonTitle(raw) {
   return raw.trim();
 }
 function fillTitleEl(val) { const el = $('lfTitle'); if (el && !el.value && val) { el.value = canonTitle(val); return true; } return false; }
-function setTitleEl(val) { const el = $('lfTitle'); if (el && val) el.value = canonTitle(val); }
 
 function bindTitlePresets() {
   const dl = $('lfTitleSugs');
@@ -1177,7 +1176,10 @@ async function loadLeadFinderStatus() {
 }
 
 // Scan & fill — explicit user action, so it OVERWRITES filled fields
-// (unlike the auto prefill, which only fills empty ones).
+// (unlike the auto prefill, which only fills empty ones). Blank scan
+// results must clear the field too, or the previous site's values linger
+// (scan sgidigi → "Taiwan", then scan vercel.com → location stayed
+// "Taiwan" because the new scan legitimately returned "").
 function bindLeadFinderScan() {
   $('lfScanBtn').addEventListener('click', async () => {
     const status = $('lfScanStatus');
@@ -1195,12 +1197,12 @@ function bindLeadFinderScan() {
       const { data } = await api('POST', '/api/app/lead-finder/scan-fill', { url });
       if (!data.ok || !data.prefill) throw new Error(data.error || 'Scan failed');
       const p = data.prefill;
-      if (p.service) $('lfService').value = p.service;
-      if (p.valueProp) $('lfValue').value = p.valueProp;
-      if (p.keywords) $('lfKeywords').value = p.keywords;
-      setTitleEl(p.title);
-      if (p.size) $('lfSize').value = p.size;
-      if (p.location) $('lfLocation').value = p.location;
+      $('lfService').value = p.service || '';
+      $('lfValue').value = p.valueProp || '';
+      $('lfKeywords').value = p.keywords || '';
+      $('lfTitle').value = p.title ? canonTitle(p.title) : '';
+      $('lfSize').value = p.size || '';
+      $('lfLocation').value = p.location || '';
       servicePitch = p.service || data.siteTitle || url;
       status.className = 'ai-status ok';
       const gaps = !p.keywords ? ' Could not infer the target industry — type it in step 2.' : '';

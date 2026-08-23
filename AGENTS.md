@@ -122,7 +122,10 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   exactly, e.g. `11,50`). The card also has an
   explicit **Your company website + Scan & fill** control posting to
   `POST /api/app/lead-finder/scan-fill` (same inference on an arbitrary URL;
-  overwrites fields, unlike the non-destructive auto prefill). Both share
+  overwrites fields, unlike the non-destructive auto prefill — and a blank
+  result CLEARS the field, otherwise the previous site's value lingers:
+  scanning sgidigi.com filled "Taiwan", then vercel.com legitimately
+  returned location "" but the UI kept showing "Taiwan"). Both share
   `inferIcpFromSite(domain)` in server.js. `heuristicIcp` (used without an
   LLM, and as the fallback when the LLM echoes the scanned domain back)
   rejects the canned ~30-category list Г”Г‡Г¶ keywords come from the site's own
