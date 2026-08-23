@@ -516,3 +516,16 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   STRIPE_SECRET_KEY the server returns {manual:true} and the modal shows
   a plain-language "Payments not configured" note instead of the curl
   spam the old flow displayed.
+
+## Iteration 11 — Lead Finder form simplification (Aug 2026)
+- Form rebuilt as 2 steps: (1) Your business = one URL input + "Auto-fill profile";
+  the service/value fields collapse into a "Detected: ..." summary pill (#lfDetected,
+  truncated to ~140 chars) with an Edit toggle (#lfOfferFields). (2) Target audience =
+  keywords input, job-title pills, location pills (LOC_PRESETS, multi-select
+  comma-stacked into #lfLocation), size select, Search leads.
+- All instruction paragraphs stripped from the card (lead finder, autopilot, Intel
+  note all one-liners now).
+- syncChips() resyncs pill .on states after every programmatic fill (scan/prefill/seed)
+  — otherwise pills clicked before a scan keep glowing after the scan overwrites the
+  input. syncDetected() + syncChips() are called from all three fill paths in app.js.
+- No server.js changes — search/autopilot payload shape unchanged.
