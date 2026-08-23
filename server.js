@@ -3025,13 +3025,27 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     // Legacy ownerless campaigns are shared; owned campaigns are tenant-private.
     const campaigns = load('campaigns').filter(c => !c.owner || c.owner === session.email);
     const prospects = load('prospects');
-    send(res, 200, { ok: true, campaigns: campaigns.map(c => ({
-      ...c, prospects: prospects.filter(p => p.campaignId === c.id).length,
-      finished: prospects.filter(p => p.campaignId === c.id && p.finished).length,
-      bounced: prospects.filter(p => p.campaignId === c.id && p.bounced).length,
-      sentToday: campaignUsedToday(c),
-      capToday: campaignDailyCap(c),
-    })) });
+    const replies = load('replies');
+    send(res, 200, { ok: true, campaigns: campaigns.map(c => {
+      const mine = prospects.filter(p => p.campaignId === c.id);
+      // Replies-per-day (last 7 days) for the card sparkline — matched by the
+      // campaign name stored on each reply record.
+      const days = Array(7).fill(0);
+      for (const r of replies) {
+        if (r.campaign !== c.name) continue;
+        const age = Date.now() - new Date(r.at).getTime();
+        if (age >= 0 && age < 7 * 86400000) days[6 - Math.floor(age / 86400000)]++;
+      }
+      return {
+        ...c, prospects: mine.length,
+        finished: mine.filter(p => p.finished).length,
+        bounced: mine.filter(p => p.bounced).length,
+        replied: mine.filter(p => p.replied).length,
+        repliesPastWeek: days,
+        sentToday: campaignUsedToday(c),
+        capToday: campaignDailyCap(c),
+      };
+    }) });
   },
 
   'POST /api/app/campaigns': async (req, res) => {
