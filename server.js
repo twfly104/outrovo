@@ -90,6 +90,16 @@ function readBody(req) {
     req.on('error', reject);
   });
 }
+// Stripe webhook bodies must stay raw: the signature is HMAC'd over the
+// exact bytes, so re-serializing parsed JSON would never verify.
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', c => { data += c; if (data.length > 5e5) req.destroy(); });
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+}
 const isEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
 const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company, owner: u.owner || null, whiteLabel: u.whiteLabel || null, mailingAddress: u.mailingAddress || '' });
 const newToken = () => crypto.randomBytes(24).toString('hex');
@@ -2016,10 +2026,19 @@ async function stripeCheckout(secret, { planId, email, amount, successUrl, cance
   return data;
 }
 
-function verifyStripeWebhook(req, body) {
-  // When STRIPE_WEBHOOK_SECRET is unset, accept (dev mode). In production,
-  // set it — verification with the signature header happens here.
-  return Boolean(process.env.STRIPE_WEBHOOK_SECRET ? req.headers['stripe-signature'] : true);
+function verifyStripeWebhook(req, rawBody) {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  // Dev mode without a secret: accept anything (documented; never in prod).
+  if (!secret) return true;
+  const header = req.headers['stripe-signature'] || '';
+  const parts = Object.fromEntries(header.split(',').map(p => p.split('=')));
+  const ts = Number(parts.t), sig = parts.v1;
+  if (!ts || !sig) return false;
+  // Reject replays older than 5 minutes.
+  if (Math.abs(Date.now() / 1000 - ts) > 300) return false;
+  const expected = crypto.createHmac('sha256', secret).update(`${ts}.${rawBody}`).digest('hex');
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 // ---------- campaign engine ----------
@@ -2505,12 +2524,13 @@ const router = {
   },
 
   'POST /api/billing/activate': async (req, res) => {
-    const b = await readBody(req);
     // Stripe webhook path (signed) or admin-key path
     const isWebhook = req.headers['stripe-signature'];
-    if (!isWebhook && !adminOk(req)) return send(res, 403, { ok: false, error: 'Forbidden' });
     if (isWebhook) {
-      if (!verifyStripeWebhook(req, b)) return send(res, 400, { ok: false, error: 'Invalid signature' });
+      const raw = await readRawBody(req);
+      if (!verifyStripeWebhook(req, raw)) return send(res, 400, { ok: false, error: 'Invalid signature' });
+      let b;
+      try { b = JSON.parse(raw); } catch { return send(res, 400, { ok: false, error: 'Invalid payload' }); }
       const email = b?.data?.object?.customer_email || b?.data?.object?.metadata?.email;
       const plan = normalizePlanId(b?.data?.object?.metadata?.plan);
       if (email && plan && PLANS[plan]) {
@@ -2523,6 +2543,8 @@ const router = {
       return send(res, 200, { received: true });
     }
     // Admin/manual activation
+    if (!adminOk(req)) return send(res, 403, { ok: false, error: 'Forbidden' });
+    const b = await readBody(req);
     const planId = normalizePlanId(b.plan);
     if (!b.email || (!PLANS[planId] && !TOPUP_PACKS[planId])) return send(res, 400, { ok: false, error: 'email and valid plan required' });
     if (TOPUP_PACKS[planId]) {

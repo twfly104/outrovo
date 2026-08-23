@@ -38,13 +38,17 @@ async function init() {
   }
   // Nothing above Agency to upgrade to — retire the upsell button.
   if (data.plan?.id === 'agency') document.querySelector('.app-upsell')?.remove();
-  // Returning from a successful checkout (?upgraded=<planId>) — confirm it.
+  // Returning from checkout (?upgraded=<planId>).
   const upgraded = new URLSearchParams(location.search).get('upgraded');
-  if (upgraded && data.plan && upgraded !== 'trial') {
-    const banner = $('engineBanner');
-    banner.hidden = false;
-    banner.innerHTML = `🎉 <strong>You're on ${esc(data.plan.name)} now</strong> — higher limits are active immediately.`;
+  if (upgraded) {
     history.replaceState(null, '', location.pathname);
+    const banner = $('engineBanner');
+    const aliases = { pro: 'growth' };
+    const applied = data.plan?.id === (aliases[upgraded] || upgraded);
+    banner.hidden = false;
+    banner.innerHTML = applied
+      ? `🎉 <strong>You're on ${esc(data.plan.name)} now</strong> — higher limits are active immediately.`
+      : '⏳ <strong>Payment received</strong> — your plan will activate once the billing confirmation arrives. If it doesn\u2019t update within a few minutes, contact support.';
   }
   if (data.engine === 'demo') $('engineBanner').hidden = false;
   const planLine = data.plan
