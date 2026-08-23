@@ -36,7 +36,7 @@
 
     <main class="app-main">
       <div class="engine-banner" id="engineBanner" hidden>
-        ⚠️ <strong>Demo mode</strong> — emails are logged, not sent. To go live, set SMTP_HOST/PORT/USER/PASS (or RESEND_API_KEY) in Render env vars.
+        ⚠️ <strong>Demo mode</strong> — emails are logged, not delivered. Connect your inbox in Settings → Sender accounts to send for real.
       </div>
 
       <!-- Overview -->
@@ -182,12 +182,13 @@
           </div>
         </div>
       
-        <div class="app-card-block">
-          <div class="li-meter-head">
+        <details class="app-card-block lf-details">
+          <summary class="li-meter-head">
             <h2>✦ Find new leads</h2>
+            <span class="sec-hint">AI sources verified prospects for you</span>
             <span id="leadFinderStatus" class="lead-status"></span>
-          </div>
-          <p class="muted-note">Describe your offer and your ideal customer — we find verified contacts, check every email before you send, then research each company: what they do, their services &amp; features, how they compare, and why buyers choose them — so every message lands with context. Without a data key, enter target company domains (e.g. acme.com, orbcall.io) and we pull published emails from their sites.</p>
+          </summary>
+          <p class="muted-note">Describe your offer and ideal customer — we find verified contacts and research each company, so every message lands with context. No data key? Enter target company domains (e.g. acme.com) and we pull published emails from their sites.</p>
 
           <div class="lf-group">
             <div class="lf-group-head"><span class="lf-step">1</span><h3>Your offer</h3><span class="lf-group-hint">auto-filled from your website</span></div>
@@ -269,7 +270,7 @@
               <button class="btn btn-primary btn-s" id="leadEnrollBtn">Add selected to campaign</button>
             </div>
           </div>
-        </div>
+        </details>
 
         <div class="subhead">
           <h2>People to email</h2>
@@ -387,7 +388,7 @@
           </div>
           <div class="setup-step" id="setupDomainStep">
             <div class="step-head"><span class="step-num">2</span><h3>Check your domain</h3></div>
-            <p>One DNS check before your first campaign catches SPF/DKIM/DMARC problems that land mail in spam.</p>
+            <p>One DNS check before your first campaign catches SPF/DKIM/DMARC problems that keep mail out of the inbox.</p>
             <div class="step-fields">
               <input id="sdDomain" placeholder="yourdomain.com" />
               <button class="btn btn-dark btn-s" id="sdAuditBtn">Run check</button>

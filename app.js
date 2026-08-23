@@ -752,7 +752,7 @@ function renderAudit(target, r) {
   target.innerHTML = r ? `
     <div class="score">${r.score}/100</div>
     <ul>${r.checks.map(c => `<li><span class="${c.ok ? 'ok-tag' : 'no-tag'}">${c.ok ? '✓' : '✗'}</span><div><strong>${esc(c.name)}</strong> — ${esc(c.detail)}</div></li>`).join('')}</ul>
-    ${r.score < 100 ? '<p class="settings-note">Fix the failing records in your DNS provider before sending at volume — otherwise most mail lands in spam.</p>' : ''}` : 'No result';
+    ${r.score < 100 ? '<p class="settings-note">Fix the failing records in your DNS provider before sending at volume.</p>' : ''}` : 'No result';
 }
 
 async function runDomainDiag(domain) {
