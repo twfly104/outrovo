@@ -2078,17 +2078,27 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .inbound-guide > summary::-webkit-details-marker { display: none; }
 .inbound-guide > summary::after { content: '▾'; margin-left: auto; color: var(--ink-faint); }
 .inbound-guide[open] > summary::after { content: '▴'; }
-.inbound-addr-row { display: flex; gap: 10px; align-items: center; margin: 12px 0 14px; }
-.inbound-addr-row code {
-  flex: 1;
-  background: var(--paper-deep);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-s);
-  padding: 11px 14px;
-  font-size: 0.9rem;
-  word-break: break-all;
+.fwd-checklist { margin: 14px 0 10px; display: grid; gap: 0; }
+.fwd-step { display: flex; gap: 12px; align-items: flex-start; padding: 10px 2px; border-left: 2px solid var(--line); margin-left: 13px; }
+.fwd-step:first-child { border-top: none; }
+.fwd-num {
+  flex: none; width: 26px; height: 26px; margin-left: -14px;
+  border-radius: 50%; background: var(--ink); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.78rem; font-weight: 700;
 }
-.inbound-steps { margin: 0; padding-left: 20px; color: var(--ink-soft); font-size: 0.92rem; display: grid; gap: 7px; }
+.fwd-step.done .fwd-num { background: var(--ok, #16a34a); }
+.fwd-step.done .fwd-num::before { content: '✓'; }
+.fwd-step.done .fwd-content { opacity: 0.65; }
+.fwd-content { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; font-size: 0.93rem; color: var(--ink-soft); }
+.fwd-addr { background: var(--paper-deep); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 0.83rem; word-break: break-all; }
+.fwd-gmail-mock { margin: 8px 0 2px 27px; max-width: 340px; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 10px 12px; font-size: 0.85rem; }
+.fwd-mock-head { font-weight: 700; color: var(--ink); display: block; margin-bottom: 8px; }
+.fwd-mock-row { display: flex; align-items: center; gap: 8px; }
+.fwd-mock-btn { border: 1px solid var(--line); background: #fff; border-radius: 6px; padding: 4px 10px; font-size: 0.8rem; color: var(--ink); cursor: default; }
+.fwd-mock-arrow { color: var(--crest-deep); font-size: 0.78rem; font-weight: 600; }
+.fwd-note { margin-top: 12px; font-size: 0.86rem; }
+.fwd-inbox-link { color: var(--crest-deep); font-weight: 600; text-decoration: underline; }
 .settings-section > summary {
   list-style: none;
   cursor: pointer;

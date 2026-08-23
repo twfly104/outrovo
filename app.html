@@ -458,19 +458,42 @@
           </form>
           <p class="settings-note">Campaigns rotate across every connected inbox, each with its own daily cap. Warmup ramp-up starts new inboxes small and grows the cap each day, so mailbox providers build trust in the address.</p>
           <details class="inbound-guide" id="inboundGuide">
-            <summary><strong>Last step: turn on the Unified Inbox</strong><span class="sec-hint">sync every reply into Outrovo automatically</span></summary>
+            <summary><strong>Last step: turn on the Unified Inbox</strong><span class="sec-hint">sync every reply into Outrovo automatically — 4 quick steps</span></summary>
             <div class="inbound-body">
               <p class="settings-note">Forward your incoming mail to your unique Outrovo address — replies land in the Inbox here and stop the prospect's sequence automatically.</p>
-              <div class="inbound-addr-row">
-                <code id="inboundAddr">…</code>
-                <button type="button" class="btn btn-ghost btn-s" id="copyInboundBtn">Copy</button>
+
+              <div class="fwd-checklist">
+                <div class="fwd-step" id="fwdStep1">
+                  <span class="fwd-num">1</span>
+                  <div class="fwd-content">
+                    <button type="button" class="btn btn-dark btn-s" id="copyInboundBtn">Copy address</button>
+                    <code id="inboundAddr" class="fwd-addr">…</code>
+                  </div>
+                </div>
+                <div class="fwd-step" id="fwdStep2">
+                  <span class="fwd-num">2</span>
+                  <div class="fwd-content">
+                    <a class="btn btn-ghost btn-s" href="https://mail.google.com/mail/u/0/#settings/fwdandpop" target="_blank" rel="noopener">Open Gmail settings ↗</a>
+                    <span>then click <strong>Add a forwarding address</strong> and paste.</span>
+                  </div>
+                </div>
+                <div class="fwd-gmail-mock" aria-hidden="true">
+                  <span class="fwd-mock-head">Forwarding</span>
+                  <div class="fwd-mock-row">
+                    <button type="button" class="fwd-mock-btn" tabindex="-1">Add a forwarding address</button>
+                    <span class="fwd-mock-arrow">← click this one</span>
+                  </div>
+                </div>
+                <div class="fwd-step" id="fwdStep3">
+                  <span class="fwd-num">3</span>
+                  <div class="fwd-content"><span>The confirmation arrives in your Outrovo <a href="#" class="fwd-inbox-link">Inbox</a> — click the link inside it.</span></div>
+                </div>
+                <div class="fwd-step" id="fwdStep4">
+                  <span class="fwd-num">4</span>
+                  <div class="fwd-content"><span>Back in Gmail, choose <strong>Forward a copy of incoming mail to</strong> and save. Done ✓</span></div>
+                </div>
               </div>
-              <ol class="inbound-steps">
-                <li>Copy your unique forwarding address above.</li>
-                <li>In Gmail open <strong>Settings → Forwarding and POP/IMAP → Add a forwarding address</strong> and paste it in.</li>
-                <li>The confirmation email arrives in your Outrovo <strong>Inbox</strong> — click the link inside it to verify.</li>
-                <li>Back in Gmail, choose <strong>Forward a copy of incoming mail to</strong> your address and save. Done.</li>
-              </ol>
+              <p class="settings-note fwd-note">Not on Gmail? Same pick-a-forwarding-address flow in any mail app — e.g. Outlook: <a href="https://outlook.live.com/mail/0/options/mail/forwarding" target="_blank" rel="noopener">Settings → Mail → Forwarding ↗</a>.</p>
             </div>
           </details>
         </div>

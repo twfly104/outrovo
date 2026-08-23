@@ -626,7 +626,12 @@ function bindSenders() {
     } catch {
       window.prompt('Copy your forwarding address:', addr);
     }
-    setTimeout(() => { $('copyInboundBtn').textContent = 'Copy'; }, 1500);
+    $('fwdStep1')?.classList.add('done');
+    setTimeout(() => { $('copyInboundBtn').textContent = 'Copy address'; }, 1500);
+  });
+  document.querySelector('.fwd-inbox-link')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.querySelector('[data-page="inbox"]')?.click();
   });
 }
 
