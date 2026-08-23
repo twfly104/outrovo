@@ -2007,6 +2007,22 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   margin-bottom: 14px;
   overflow: hidden;
 }
+.inbound-guide { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 6px; }
+.inbound-guide > summary { cursor: pointer; display: flex; align-items: baseline; gap: 10px; padding: 8px 2px; list-style: none; }
+.inbound-guide > summary::-webkit-details-marker { display: none; }
+.inbound-guide > summary::after { content: '▾'; margin-left: auto; color: var(--ink-faint); }
+.inbound-guide[open] > summary::after { content: '▴'; }
+.inbound-addr-row { display: flex; gap: 10px; align-items: center; margin: 12px 0 14px; }
+.inbound-addr-row code {
+  flex: 1;
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  padding: 11px 14px;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+.inbound-steps { margin: 0; padding-left: 20px; color: var(--ink-soft); font-size: 0.92rem; display: grid; gap: 7px; }
 .settings-section > summary {
   list-style: none;
   cursor: pointer;

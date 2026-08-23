@@ -563,6 +563,17 @@ function bindSenders() {
     $('sCustomFields').hidden = !panel.hidden && $('sProvider').value !== 'custom';
   });
   $('addSenderBtn').addEventListener('click', addSender);
+  $('copyInboundBtn').addEventListener('click', async () => {
+    const addr = $('inboundAddr').textContent;
+    if (!addr || addr === '…') return;
+    try {
+      await navigator.clipboard.writeText(addr);
+      $('copyInboundBtn').textContent = 'Copied ✓';
+    } catch {
+      window.prompt('Copy your forwarding address:', addr);
+    }
+    setTimeout(() => { $('copyInboundBtn').textContent = 'Copy'; }, 1500);
+  });
 }
 
 // OAuth availability is cached for the session — one fetch per Settings visit.
@@ -600,7 +611,7 @@ window.addEventListener('message', e => {
   $('senderResult').innerHTML = e.data.ok
     ? `<span class="ok-tag">✓ Connected</span> — ${esc(e.data.email)} added to the rotation.`
     : `<span class="no-tag">✗ ${esc(e.data.error || 'Authorization failed')}</span>`;
-  if (e.data.ok) { loadSenders(); refreshSetup(); }
+  if (e.data.ok) { loadSenders(); refreshSetup(); $('inboundGuide').open = true; }
 });
 
 function openSenderForm(provider) {
@@ -646,6 +657,7 @@ async function addSender() {
 async function loadSenders() {
   const { data } = await api('GET', '/api/app/senders');
   if (!data.ok) return;
+  if (data.inboundAddress) $('inboundAddr').textContent = data.inboundAddress;
   const rows = data.senders.map(s => {
     const pct = Math.min(100, Math.round((s.usedToday / Math.max(1, s.capToday)) * 100));
     const warm = s.warmup?.isWarming

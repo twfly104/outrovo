@@ -138,7 +138,9 @@ const OAUTH_PROVIDERS = {
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
     authUrl: process.env.GOOGLE_AUTH_URL || 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: process.env.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token',
-    scope: 'https://mail.google.com/ openid email',
+    // Send-only: replies arrive via the inbound webhook (/api/email/receive),
+    // so full mailbox access (mail.google.com) is never needed.
+    scope: 'https://www.googleapis.com/auth/gmail.send openid email',
     extraAuth: { access_type: 'offline', prompt: 'consent' },
     emailFromTokens: async tokens => {
       const r = await fetch(process.env.GOOGLE_USERINFO_URL || 'https://openidconnect.googleapis.com/v1/userinfo', {
@@ -176,6 +178,22 @@ function oauthCredsFor(senderProvider) {
 }
 function decodeJwt(token) {
   try { return JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString('utf8')); } catch { return {}; }
+}
+
+// ---------- unified inbox: per-user inbound routing addresses ----------
+// Each user gets a deterministic forwarding address (u-<hmac>@INBOUND_DOMAIN).
+// Customers point Gmail/Outlook auto-forwarding at it; the inbound parser
+// (Mailgun, SendGrid Inbound Parse, Postmark, Resend) POSTs to
+// /api/email/receive, which routes the message to the owner via `to`.
+const INBOUND_DOMAIN = (process.env.INBOUND_DOMAIN || 'inbound.outrovo.com').toLowerCase();
+function inboundAddressFor(email) {
+  const tag = crypto.createHmac('sha256', SENDER_KEY).update(`inbound:${email}`).digest('hex').slice(0, 16);
+  return `u-${tag}@${INBOUND_DOMAIN}`;
+}
+function ownerForInboundAddress(addr) {
+  if (!addr || !addr.toLowerCase().endsWith(`@${INBOUND_DOMAIN}`)) return null;
+  const target = addr.toLowerCase();
+  return load('users').find(u => inboundAddressFor(u.email) === target)?.email || null;
 }
 
 // Cap ramps up by this many extra emails per active day while warmup is on.
@@ -3222,7 +3240,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       if (s.warmup?.enabled) pub.warmup = { ...s.warmup, isWarming: pub.capToday < Number(s.dailyLimit || 50) };
       return pub;
     });
-    send(res, 200, { ok: true, senders, gateway: gatewaySender() ? { email: gatewaySender().email, resend: Boolean(RESEND_KEY) } : null });
+    send(res, 200, { ok: true, senders, gateway: gatewaySender() ? { email: gatewaySender().email, resend: Boolean(RESEND_KEY) } : null, inboundAddress: inboundAddressFor(session.email) });
   },
 
   'POST /api/app/senders': async (req, res) => {
@@ -3433,10 +3451,19 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const b = await readBody(req).catch(() => ({}));
     const secret = process.env.RESEND_SIGNING_SECRET;
     if (secret && b?.secret && b.secret !== secret) return send(res, 403, { ok: false, error: 'Invalid secret' });
-    const fromRaw = b?.from || b?.data?.from || 'unknown@unknown';
+    const fromRaw = b?.from || b?.data?.from || b?.From || b?.sender || b?.Sender || 'unknown@unknown';
     const from = (fromRaw.match(/[\w.+-]+@[\w-]+\.[\w.]+/) || [fromRaw])[0].toLowerCase();
-    const subject = b?.subject || b?.data?.subject || '(no subject)';
-    const body = b?.text || b?.data?.text || b?.html?.replace(/<[^>]+>/g, ' ') || '';
+    const subject = b?.subject || b?.data?.subject || b?.Subject || '(no subject)';
+    const body = b?.text || b?.data?.text || b?.['stripped-text'] || b?.['body-plain'] || b?.TextBody
+      || (b?.html || b?.HtmlBody || b?.['stripped-html'] || '').replace(/<[^>]+>/g, ' ') || '';
+
+    // Unified Inbox: a `to` address matching a user's forwarding address
+    // (u-<tag>@INBOUND_DOMAIN) identifies the account even when the sender
+    // isn't a tracked prospect. Covers Mailgun (recipient), SendGrid (to),
+    // Postmark (To) and Resend (data.to) payload shapes.
+    const toRaw = [b?.to, b?.data?.to, b?.recipient, b?.To, b?.envelope?.to].flat().filter(Boolean).join(',');
+    const toAddrs = (toRaw.match(/[\w.+-]+@[\w-]+\.[\w.]+/g) || []).map(a => a.toLowerCase());
+    const routedOwner = toAddrs.map(ownerForInboundAddress).find(Boolean) || null;
 
     // Match the reply to a prospect and stop their sequence.
     const campaigns = load('campaigns');
@@ -3457,6 +3484,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
         logEvent('reply', `${from} replied in “${campaignName}” — sequence stopped`, {}, owner);
       }
     }
+    if (!owner) owner = routedOwner;
     // Smart Unibox: categorize intent (LLM or heuristic) and auto-suppress
     // opt-out requests even if they never clicked the unsubscribe link.
     const intent = await classifyIntent({ subject, body });
@@ -3466,8 +3494,8 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     save('replies', replies);
     if (owner && intent === 'unsubscribe') suppressEmail(owner, from, 'intent-unsubscribe');
     if (owner) fireWebhooks(owner, 'reply', { from, subject, intent, campaign: campaignName });
-    if (!prospect) logEvent('received', `Reply from ${from}: ${subject}`);
-    send(res, 200, { received: true, matched: Boolean(prospect), intent });
+    if (!prospect) logEvent('received', `Reply from ${from}: ${subject}`, {}, owner);
+    send(res, 200, { received: true, matched: Boolean(prospect), routed: Boolean(routedOwner), intent });
   },
 
   'POST /api/app/inbox/:id/read': (req, res, id) => {
