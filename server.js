@@ -2844,10 +2844,14 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     if (idx >= 0) { users2[idx].leadFinder = user.leadFinder; save('users', users2); }
     // Seed the form: prefill the scan box with the signup email domain so
     // Scan & fill is one click. Never seed target keywords with the user's
-    // own domain — that searches for the user, not their customers.
-    const seed = user.leadFinderAutopilot?.keywords
+    // own domain — that searches for the user, not their customers. Skip the
+    // prefill entirely on free-mail domains (gmail.com etc.) — scanning them
+    // makes no sense as a company website.
+    const domain = (session.email.split('@')[1] || '').toLowerCase();
+    const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'hotmail.com', 'outlook.com', 'live.com', 'msn.com', 'aol.com', 'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com', 'pm.me', 'qq.com', '163.com', '126.com', 'yeah.net', 'foxmail.com', 'mail.com', 'gmx.com', 'gmx.net', 'zoho.com', 'yandex.com', 'yandex.ru']);
+    const seed = user.leadFinderAutopilot?.keywords || FREE_MAIL.has(domain)
       ? null
-      : { website: (session.email.split('@')[1] || '').slice(0, 120) };
+      : { website: domain.slice(0, 120) };
     send(res, 200, {
       ok: true, provider: leadFinderProvider() || 'builtin',
       used: usage.used, quota: usage.quota, month: usage.month,
@@ -3025,13 +3029,27 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     // Legacy ownerless campaigns are shared; owned campaigns are tenant-private.
     const campaigns = load('campaigns').filter(c => !c.owner || c.owner === session.email);
     const prospects = load('prospects');
-    send(res, 200, { ok: true, campaigns: campaigns.map(c => ({
-      ...c, prospects: prospects.filter(p => p.campaignId === c.id).length,
-      finished: prospects.filter(p => p.campaignId === c.id && p.finished).length,
-      bounced: prospects.filter(p => p.campaignId === c.id && p.bounced).length,
-      sentToday: campaignUsedToday(c),
-      capToday: campaignDailyCap(c),
-    })) });
+    const replies = load('replies');
+    send(res, 200, { ok: true, campaigns: campaigns.map(c => {
+      const mine = prospects.filter(p => p.campaignId === c.id);
+      // Replies-per-day (last 7 days) for the card sparkline — matched by the
+      // campaign name stored on each reply record.
+      const days = Array(7).fill(0);
+      for (const r of replies) {
+        if (r.campaign !== c.name) continue;
+        const age = Date.now() - new Date(r.at).getTime();
+        if (age >= 0 && age < 7 * 86400000) days[6 - Math.floor(age / 86400000)]++;
+      }
+      return {
+        ...c, prospects: mine.length,
+        finished: mine.filter(p => p.finished).length,
+        bounced: mine.filter(p => p.bounced).length,
+        replied: mine.filter(p => p.replied).length,
+        repliesPastWeek: days,
+        sentToday: campaignUsedToday(c),
+        capToday: campaignDailyCap(c),
+      };
+    }) });
   },
 
   'POST /api/app/campaigns': async (req, res) => {

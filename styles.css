@@ -1740,6 +1740,70 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .campaign-item .status.draft { background: rgba(249, 115, 22, 0.12); color: var(--crest-deep); }
 .campaign-item h3 { font-size: 1.08rem; }
 .campaign-item .meta { font-size: 0.82rem; color: var(--ink-faint); }
+
+/* ---------- Campaign cards (landing-mockup parity) ---------- */
+.campaign-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-m);
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.campaign-card:hover { border-color: rgba(249, 115, 22, 0.3); }
+.cp-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 16px 22px 12px;
+}
+.cp-head h3 { margin: 0; font-size: 1.08rem; }
+.cp-head .meta { font-size: 0.78rem; color: var(--ink-faint); margin-top: 3px; }
+.cp-body { display: grid; grid-template-columns: minmax(0, 1fr) 210px; border-top: 1px solid var(--line); }
+.cp-steps { padding: 14px 22px; display: grid; gap: 2px; align-content: start; min-width: 0; }
+.cp-step { position: relative; display: flex; align-items: center; gap: 12px; padding: 8px 0; min-width: 0; }
+.cp-step + .cp-step::before {
+  content: ""; position: absolute; left: 15px; top: -8px; height: 16px;
+  border-left: 2px solid var(--line);
+}
+.cp-ico {
+  flex: none; width: 32px; height: 32px; border-radius: 10px;
+  display: grid; place-items: center;
+  background: var(--paper-deep); color: var(--ink-soft);
+  font-size: 0.72rem; font-weight: 800;
+}
+.cp-ico.email { background: rgba(249, 115, 22, 0.14); color: var(--crest-deep); }
+.cp-ico.task { background: rgba(10, 102, 194, 0.12); color: #0a66c2; }
+.cp-stinfo { flex: 1; min-width: 0; }
+.cp-stinfo strong { display: block; font-size: 0.9rem; overflow-wrap: anywhere; }
+.cp-stinfo span { font-size: 0.78rem; color: var(--ink-faint); }
+.step-bdg {
+  flex: none; font-size: 0.68rem; font-weight: 700;
+  padding: 4px 11px; border-radius: 999px;
+  background: var(--paper-deep); color: var(--ink-soft);
+}
+.step-bdg.sent { background: rgba(249, 115, 22, 0.14); color: var(--crest-deep); }
+.step-bdg.done { background: var(--moss); color: var(--forest); }
+.step-bdg.check { background: rgba(10, 102, 194, 0.1); color: #0a66c2; }
+.cp-stats {
+  border-left: 1px solid var(--line);
+  padding: 18px 22px;
+  display: grid; gap: 14px; align-content: start;
+}
+.cp-kpi span, .cp-kpi-label {
+  display: block; font-size: 0.68rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-faint);
+}
+.cp-kpi strong { display: block; font-family: var(--font-display); font-size: 1.7rem; font-weight: 620; margin-top: 2px; }
+.cp-bars { display: flex; align-items: flex-end; gap: 5px; height: 44px; margin-top: 7px; }
+.cp-bars i { flex: 1; border-radius: 4px 4px 2px 2px; min-height: 8%; }
+.cp-bars i.a { background: rgba(249, 115, 22, 0.45); }
+.cp-bars i.b { background: var(--paper-deep); }
+.cp-foot {
+  display: flex; gap: 10px; justify-content: flex-end;
+  padding: 10px 22px 14px; border-top: 1px solid var(--line);
+}
+.campaign-card .ab-results { padding: 0 22px 12px; }
+@media (max-width: 900px) { .cp-body { grid-template-columns: 1fr; } .cp-stats { border-left: none; border-top: 1px solid var(--line); grid-template-columns: repeat(3, 1fr); } }
+
 .campaign-item .actions { margin-left: auto; display: flex; gap: 8px; }
 
 .icon-btn {
