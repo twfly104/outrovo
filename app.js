@@ -339,7 +339,7 @@ function campaignCardHtml(c) {
   const stepSub = s =>
     s.type === 'email' ? (s.variantB ? 'A/B test running' : 'Sends through your connected inbox')
     : s.type === 'task' ? ({ connect: 'Connection request', message: 'Direct message', view: 'Profile view' })[s.taskKind] || 'Manual action'
-    : 'Smart schedule — not spam pace';
+    : 'Natural, human-like pacing';
   const ico = s => s.type === 'email'
     ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></svg>`
     : s.type === 'task' ? 'in'
