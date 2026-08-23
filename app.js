@@ -83,6 +83,7 @@ async function init() {
   bindWhiteLabel();
   bindWebhooks();
   bindSettingsTabs();
+  bindTopup();
   bindBulkTools();
   // Agency plan → reveal the Agency nav
   if (data.plan?.id === 'agency' || me?.owner) $('agencyNavBtn').hidden = false;
@@ -113,6 +114,7 @@ function showPage(name) {
   if (name === 'campaigns') loadCampaigns();
   if (name === 'overview') { loadOverview(); loadActivity(); }
   if (name === 'settings') { loadEngine(); loadSenders(); refreshSetup(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadSuppression(); loadWebhooks(); }
+  loadCredits();
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
 
@@ -1149,6 +1151,52 @@ function bindBulkTools() {
 }
 
 // ---------- settings ----------
+async function loadCredits() {
+  const { data } = await api('GET', '/api/app/lead-finder/status');
+  if (!data.ok) return;
+  const remaining = Math.max(0, (data.quota || 0) - (data.used || 0));
+  const count = $('creditCount');
+  count.textContent = `${remaining.toLocaleString()} Credits`;
+  const badge = $('creditBadge');
+  badge.classList.toggle('low', remaining < 100 && remaining > 0);
+  badge.classList.toggle('crit', remaining === 0);
+}
+
+function bindTopup() {
+  const open = async () => {
+    const { data } = await api('GET', '/api/plans');
+    const packs = (data.ok && data.topups) ? data.topups.filter(t => !t.service) : [];
+    $('topupGrid').innerHTML = packs.length ? packs.map(t => `
+      <button type="button" class="topup-pack" data-pack="${t.id}">
+        <strong>${(t.credits || 0).toLocaleString()}</strong>
+        <span>credits</span>
+        <span class="pack-price">$${t.price}</span>
+      </button>`).join('') : '<span class="settings-note">Credit packs unavailable.</span>';
+    $('topupResult').innerHTML = '';
+    $('topupModal').hidden = false;
+  };
+  $('creditBadge').addEventListener('click', open);
+  $('topupOpenBtn').addEventListener('click', open);
+  $('topupCloseBtn').addEventListener('click', () => { $('topupModal').hidden = true; });
+  $('topupModal').addEventListener('click', e => { if (e.target === $('topupModal')) $('topupModal').hidden = true; });
+  $('topupGrid').addEventListener('click', async e => {
+    const packBtn = e.target.closest('.topup-pack');
+    if (!packBtn) return;
+    $('topupResult').innerHTML = 'Opening checkout…';
+    const { data } = await api('POST', '/api/billing/checkout', { plan: packBtn.dataset.pack });
+    if (data.ok && data.checkoutUrl) {
+      const a = document.createElement('a');
+      a.href = data.checkoutUrl; a.target = '_blank'; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      $('topupModal').hidden = true;
+      return;
+    }
+    $('topupResult').innerHTML = data.manual
+      ? '<span class="no-tag">Payments not configured yet</span> — your admin needs to connect Stripe before packs can be bought.'
+      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
+  });
+}
+
 async function loadEngine() {
   const { data } = await api('GET', '/api/app/engine');
   const el = $('engineInfo');

@@ -23,6 +23,11 @@
         <button data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
       </nav>
       <a class="app-upsell" href="pricing.html"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4L12 2z"/></svg>Upgrade for more sends</a>
+      <button type="button" class="credit-badge" id="creditBadge" title="Lead Finder credits — click to add more">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="8" cy="8" r="7"/><path d="M18.09 10.37A7 7 0 1 1 17.7 16.6"/></svg>
+        <span id="creditCount">…</span>
+      </button>
+      <button type="button" class="credit-topup" id="topupOpenBtn">+ Add Credits</button>
       <div class="app-user">
         <span class="avatar" id="userAvatar">–</span>
         <div>
@@ -647,6 +652,16 @@
       </section>
       <p style="text-align:center;font-size:0.8rem;color:#6b7280;margin:32px 0 8px;">© 2026 Outrovo Inc. · <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a></p>
     </main>
+  </div>
+
+  <div class="topup-modal" id="topupModal" hidden>
+    <div class="topup-card">
+      <button class="topup-close" id="topupCloseBtn" aria-label="Close">✕</button>
+      <h2>Add Credits</h2>
+      <p class="topup-sub">Lead Finder credits are spend-as-you-go — they stack on top of your monthly plan quota and never expire with the monthly reset.</p>
+      <div class="topup-grid" id="topupGrid"></div>
+      <div class="tool-result" id="topupResult"></div>
+    </div>
   </div>
 
   <script src="app.js"></script>

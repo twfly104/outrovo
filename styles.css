@@ -2052,6 +2052,54 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .adv-divider { margin: 34px 0 14px; }
 .adv-divider h2 { margin: 0 0 4px; font-size: 1.05rem; font-weight: 750; }
 
+/* ---------- Credits badge & Top Up modal ---------- */
+.credit-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  appearance: none; border: none; border-radius: 99px; cursor: pointer;
+  padding: 4px 10px; font: 650 0.78rem var(--font-body);
+  background: rgba(249, 115, 22, 0.12); color: var(--accent2);
+  transition: background .15s;
+}
+.credit-badge:hover { background: rgba(249, 115, 22, 0.2); }
+.credit-badge svg { width: 11px; height: 11px; }
+.credit-badge.low { background: #fff4e0; color: #a35c00; }
+.credit-badge.crit { background: #fee2e2; color: #b91c1c; }
+.credit-topup {
+  appearance: none; border: none; border-radius: 99px; cursor: pointer;
+  padding: 4px 10px; font: 650 0.78rem var(--font-body);
+  background: var(--forest); color: var(--paper); transition: background .15s;
+}
+.credit-topup:hover { background: #262a32; }
+.topup-modal {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(11, 12, 14, 0.45);
+  display: flex; align-items: center; justify-content: center;
+}
+.topup-modal[hidden] { display: none; }
+.topup-card {
+  background: var(--paper); border-radius: 18px; width: min(560px, 92vw);
+  padding: 28px 28px 22px; position: relative;
+  box-shadow: 0 18px 60px rgba(11, 12, 14, 0.28);
+}
+.topup-close {
+  position: absolute; top: 12px; right: 14px;
+  appearance: none; background: none; border: none; cursor: pointer;
+  color: var(--ink3); font-size: 1rem;
+}
+.topup-card h2 { margin: 0 0 8px; }
+.topup-sub { color: var(--ink3); font-size: 0.88rem; margin: 0 0 16px; }
+.topup-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.topup-pack {
+  appearance: none; background: #fff; border: 1.5px solid var(--line);
+  border-radius: 12px; cursor: pointer; padding: 14px 12px; text-align: center;
+  transition: border-color .15s, box-shadow .15s;
+}
+.topup-pack:hover { border-color: var(--crest); box-shadow: 0 4px 14px rgba(249, 115, 22, 0.15); }
+.topup-pack strong { display: block; font-size: 1.05rem; }
+.topup-pack span { display: block; color: var(--ink3); font-size: 0.78rem; margin: 3px 0 6px; }
+.topup-pack .pack-price { color: var(--accent2); font-weight: 700; font-size: 0.9rem; }
+@media (max-width: 720px) { .topup-grid { grid-template-columns: 1fr; } }
+
 /* ---------- Settings sub-tabs ---------- */
 .settings-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 22px 0 18px; border-bottom: 1px solid var(--line); padding-bottom: 0; }
 .settings-tab {

@@ -505,3 +505,14 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - Webhook receive field order gotcha: /api/email/receive reads b.text
   (Mailgun/SendGrid/Resend shapes), NOT b.body — test payloads must use
   "text" or intent classification sees an empty body.
+
+## Iteration 10 — Credits badge + Add Credits modal (Aug 2026)
+- Sidebar gets a live credits pill (GET /api/app/lead-finder/status →
+  quota−used, cached per page switch): orange pill, amber under 100
+  remaining, red at 0, always next to "+ Add Credits".
+- "+ Add Credits" opens an in-app modal (no page jump) listing the 3
+  non-service TOPUP_PACKS from GET /api/plans; a pack click posts
+  /api/billing/checkout and opens the Stripe URL in a new tab; without
+  STRIPE_SECRET_KEY the server returns {manual:true} and the modal shows
+  a plain-language "Payments not configured" note instead of the curl
+  spam the old flow displayed.
