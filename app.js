@@ -1575,11 +1575,21 @@ function bindLeadFinder() {
       note.textContent = data.error || 'Search failed.';
       return;
     }
-    note.textContent = data.leads.length
-      ? `Found ${data.leads.length} — every address is checked before it lands here. (${data.used}/${data.quota} credits)`
-      : (data.errors?.length
-        ? `Search hit a provider error: ${data.errors.join('; ')}`
-        : 'No leads matched — try broader keywords or a different title.');
+    note.textContent = '';
+    if (data.leads.length) {
+      note.textContent = `Found ${data.leads.length} — every address is checked before it lands here. (${data.used}/${data.quota} credits)`;
+    } else if (data.errors?.length) {
+      note.textContent = `Search hit a provider error: ${data.errors.join('; ')} `;
+      // Apollo Free-plan keys have no API access — give a direct way to fix it.
+      if (data.errors.some(e => /plan doesn't include API access/i.test(e))) {
+        const a = document.createElement('a');
+        a.href = 'https://www.apollo.io/pricing'; a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = 'Upgrade Apollo →';
+        note.appendChild(a);
+      }
+    } else {
+      note.textContent = 'No leads matched — try broader keywords or a different title.';
+    }
     renderLeadResults(data.leads);
     loadLeadFinderStatus();
   });
