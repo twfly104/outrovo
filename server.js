@@ -555,10 +555,9 @@ async function classifyIntent(reply) {
   return 'neutral';
 }
 
-// ---------- enrichment (Apollo / Hunter / Dropcontact) ----------
+// ---------- enrichment (Apollo / Dropcontact) ----------
 function enrichmentProvider() {
   if (process.env.APOLLO_API_KEY) return 'apollo';
-  if (process.env.HUNTER_API_KEY) return 'hunter';
   if (process.env.DROPCONTACT_API_KEY) return 'dropcontact';
   return null;
 }
@@ -567,25 +566,16 @@ async function callEnrichment(email, name = {}) {
   const domain = (email.split('@')[1] || '').toLowerCase();
   const base = { email, provider: provider || 'builtin', at: new Date().toISOString() };
   if (provider === 'apollo') {
-    const res = await fetch('https://api.apollo.io/api/v1/people/match', {
+    const res = await fetch(`${APOLLO_BASE()}/api/v1/people/match`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Api-Key': process.env.APOLLO_API_KEY },
       body: JSON.stringify({ email }),
     });
-    if (!res.ok) throw new Error(`Apollo ${res.status}`);
+    if (!res.ok) throw await apolloError(res, 'match');
     const p = (await res.json())?.person || {};
     return { ...base, firstName: p.first_name || name.firstName, lastName: p.last_name || name.lastName,
       company: p.organization?.name || '', title: p.title || '', linkedinUrl: p.linkedin_url || '',
       city: p.city || '', seniority: p.seniority || '', departments: p.departments || [] };
-  }
-  if (provider === 'hunter') {
-    const q = new URLSearchParams({ email, api_key: process.env.HUNTER_API_KEY });
-    const res = await fetch(`https://api.hunter.io/v2/email-verifier?${q}`);
-    if (!res.ok) throw new Error(`Hunter ${res.status}`);
-    const d = (await res.json())?.data || {};
-    return { ...base, firstName: d.first_name || name.firstName, lastName: d.last_name || name.lastName,
-      company: d.company || '', title: d.position || '', linkedinUrl: d.linkedin_url || '',
-      hunterStatus: d.status || '', hunterScore: d.score ?? null };
   }
   if (provider === 'dropcontact') {
     const res = await fetch('https://api.dropcontact.io/batch', {
@@ -623,16 +613,26 @@ async function callEnrichment(email, name = {}) {
 }
 function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
 
-// ---------- lead finder (Apollo / Hunter / builtin guess+verify) ----------
+// ---------- lead finder (Apollo / builtin guess+verify) ----------
 function leadFinderProvider() {
   if (process.env.APOLLO_API_KEY) return 'apollo';
-  if (process.env.HUNTER_API_KEY) return 'hunter';
   return null;
 }
-const LEAD_SOURCES = ['apollo', 'hunter', 'builtin'];
+const LEAD_SOURCES = ['apollo', 'builtin'];
 function leadFinderSourceOrder() {
   const p = leadFinderProvider();
   return p ? [p, 'builtin'] : ['builtin'];
+}
+
+const APOLLO_BASE = () => (process.env.APOLLO_BASE_URL || 'https://api.apollo.io').replace(/\/$/, '');
+// Apollo's error bodies carry a machine-readable code — surface the
+// free-plan API block as an actionable message instead of a bare status.
+async function apolloError(res, what) {
+  const payload = await res.json().catch(() => null);
+  if (payload?.error_code === 'API_INACCESSIBLE') {
+    return new Error("Apollo: your plan doesn't include API access — upgrade at apollo.io/pricing or unset APOLLO_API_KEY to use the built-in finder");
+  }
+  return new Error(`Apollo ${what} ${res.status}${payload?.error ? `: ${payload.error}` : ''}`);
 }
 
 async function apolloSearchLeads(f, perPage) {
@@ -646,12 +646,12 @@ async function apolloSearchLeads(f, perPage) {
     person_locations: f.location ? [f.location] : undefined,
     contact_email_status: ['verified'],
   };
-  const res = await fetch('https://api.apollo.io/api/v1/mixed_people/search', {
+  const res = await fetch(`${APOLLO_BASE()}/api/v1/mixed_people/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'X-Api-Key': key },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Apollo search ${res.status}`);
+  if (!res.ok) throw await apolloError(res, 'search');
   const data = await res.json();
   const people = [...(data.people || []), ...(data.contacts || [])];
   const seen = new Set();
@@ -676,120 +676,6 @@ function leadFinderDomains(keywords) {
   return (keywords || '')
     .split(/[,\s]+/).map(s => s.trim().replace(/^@/, '').replace(/^https?:\/\//, '').split('/')[0])
     .filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)).slice(0, 5);
-}
-
-const HUNTER_BASE = () => (process.env.HUNTER_BASE_URL || 'https://api.hunter.io').replace(/\/$/, '');
-// UI sizes are Apollo-style "low,high"; Hunter Discover headcount uses "low-high".
-const HUNTER_HEADCOUNT = {
-  '1,10': ['1-10'], '11,50': ['11-50'], '51,200': ['51-200'],
-  '201,500': ['201-500'], '501,1000': ['501-1000'],
-  '1001,10000': ['1001-5000', '5001-10000', '10001+'],
-};
-const HUNTER_COUNTRIES = {
-  'united states': 'US', usa: 'US', us: 'US', america: 'US', 'united kingdom': 'GB', uk: 'GB',
-  britain: 'GB', england: 'GB', canada: 'CA', germany: 'DE', france: 'FR', netherlands: 'NL',
-  australia: 'AU', india: 'IN', singapore: 'SG', spain: 'ES', italy: 'IT', brazil: 'BR',
-  mexico: 'MX', japan: 'JP', china: 'CN', taiwan: 'TW', israel: 'IL', ireland: 'IE',
-  sweden: 'SE', switzerland: 'CH', poland: 'PL', portugal: 'PT', austria: 'AT', belgium: 'BE',
-  denmark: 'DK', norway: 'NO', finland: 'FI', 'new zealand': 'NZ', 'south korea': 'KR',
-  korea: 'KR', 'united arab emirates': 'AE', uae: 'AE', 'south africa': 'ZA',
-};
-
-// Map a free-form job title onto Hunter's seniority/department filters.
-function hunterTitleFilters(title) {
-  const t = ` ${(title || '').toLowerCase()} `;
-  const out = {};
-  if (/founder|owner|ceo|chief|president|managing director|partner/.test(t)) {
-    out.seniority = 'executive'; out.department = 'executive';
-  } else if (/\bvp\b|vice president|\bhead\b|director|principal/.test(t)) {
-    out.seniority = 'executive,senior';
-  } else if (/manager|\blead\b/.test(t)) out.seniority = 'senior';
-  if (!out.department) {
-    if (/sales|revenue|business development|account exec/.test(t)) out.department = 'sales';
-    else if (/marketing|growth|brand|content|\bseo\b/.test(t)) out.department = 'marketing';
-    else if (/engineer|developer|software|\bdata\b|devops|\bit\b/.test(t)) out.department = 'it';
-    else if (/recruit|talent|\bhr\b|people/.test(t)) out.department = 'hr';
-    else if (/financ|accounting|\bcfo\b/.test(t)) out.department = 'finance';
-    else if (/operation|\bcoo\b/.test(t)) out.department = 'operations';
-    else if (/legal|counsel/.test(t)) out.department = 'legal';
-    else if (/support|customer success/.test(t)) out.department = 'support';
-    else if (/design/.test(t)) out.department = 'design';
-  }
-  return out;
-}
-
-// Hunter's domain-search only accepts a domain. For ICP input (keywords/title/
-// size/location) resolve matching companies through the free Discover endpoint,
-// then domain-search each. Discover is free; domain-search costs 1 credit per
-// domain (zero-result calls are free), so cap the fan-out.
-async function hunterDiscoverDomains(f) {
-  const key = process.env.HUNTER_API_KEY;
-  const filters = {};
-  const kws = (f.keywords || '').split(/[,;]+/)
-    .map(s => s.trim()).filter(s => s && s.length <= 60 && !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(s)).slice(0, 5);
-  if (kws.length) filters.keywords = { include: kws };
-  const cc = HUNTER_COUNTRIES[(f.location || '').toLowerCase().trim()];
-  if (cc) filters.headquarters_location = { include: [{ country: cc }] };
-  const hc = HUNTER_HEADCOUNT[(f.size || '').trim()];
-  if (hc) filters.headcount = { include: hc };
-  const attempts = [];
-  if (Object.keys(filters).length) attempts.push({ api_key: key, limit: 100, filters });
-  // Fallback: natural-language query (covers cities and keyword phrasing the
-  // structured tags don't match).
-  const nl = [f.keywords, f.location].filter(Boolean).join(' in ');
-  if (nl) attempts.push({ api_key: key, limit: 100, query: nl });
-  let lastError = null, anySuccess = false;
-  for (const body of attempts) {
-    try {
-      const res = await fetch(`${HUNTER_BASE()}/v2/discover`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-      });
-      const payload = await res.json().catch(() => null);
-      if (!res.ok || payload?.errors?.length) {
-        lastError = new Error(`Hunter: ${payload?.errors?.[0]?.details || `discover ${res.status}`}`);
-        continue;
-      }
-      anySuccess = true;
-      const domains = (payload?.data || []).map(d => d.domain)
-        .filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d || ''));
-      if (domains.length) return [...new Set(domains)].slice(0, 5);
-    } catch (err) { lastError = err; }
-  }
-  if (lastError && !anySuccess) throw lastError;
-  return [];
-}
-
-async function hunterSearchLeads(f, perPage) {
-  const key = process.env.HUNTER_API_KEY;
-  // One domain per Hunter call — split multi-domain input into separate calls.
-  let domains = leadFinderDomains(f.keywords);
-  if (!domains.length) {
-    domains = await hunterDiscoverDomains(f);
-    if (!domains.length) return [];
-  }
-  const tf = hunterTitleFilters(f.title);
-  const out = [];
-  for (const domain of domains) {
-    if (out.length >= perPage * 3) break;
-    // Free plan caps at 10 results per domain search; more is rejected.
-    const q = new URLSearchParams({ domain, api_key: key, limit: String(Math.min(10, perPage)), type: 'personal' });
-    if (tf.seniority) q.set('seniority', tf.seniority);
-    if (tf.department) q.set('department', tf.department);
-    const res = await fetch(`${HUNTER_BASE()}/v2/domain-search?${q}`);
-    if (!res.ok) throw new Error(`Hunter search ${res.status}`);
-    const payload = await res.json();
-    if (payload?.errors?.length) throw new Error(`Hunter: ${payload.errors[0].details || 'API error'}`);
-    const data = payload?.data || {};
-    for (const e of data.emails || []) {
-      out.push({
-        email: (e.value || '').trim().toLowerCase(), source: 'hunter',
-        firstName: e.first_name || '', lastName: e.last_name || '',
-        company: data.organization || domain, title: e.position || '',
-        linkedinUrl: e.linkedin || '', emailStatus: e.confidence >= 50 ? 'verified' : '',
-      });
-    }
-  }
-  return out.filter(l => isEmail(l.email));
 }
 
 const GENERIC_LOCALS = new Set(['info', 'contact', 'hello', 'support', 'sales', 'team', 'office', 'mail', 'admin', 'no-reply', 'noreply']);
@@ -877,7 +763,6 @@ async function searchLeads(f, perPage, sessionEmail) {
   for (const src of order) {
     try {
       if (src === 'apollo') leads = await apolloSearchLeads(f, perPage);
-      else if (src === 'hunter') leads = await hunterSearchLeads(f, perPage);
       else leads = await builtinSearchLeads(f, perPage, sessionEmail);
       if (leads.length) break;
     } catch (err) { errors.push(`${src}: ${err.message}`); }
@@ -1415,7 +1300,7 @@ function extractMarketPhrases(highText, domainName = '') {
   const push = (p, kind) => {
     p = cleanPhrase(p);
     // Never echo the scanned brand — a phrase containing the domain is
-    // self-description, not a market ("hunter is the leading…").
+    // self-description, not a market ("acme is the leading…").
     if (p && domainName && p.toLowerCase().includes(domainName)) return;
     if (p && p.length > 3 && p.length <= 60 && isSpecificPhrase(p) && !seen.has(p.toLowerCase())) {
       seen.add(p.toLowerCase());

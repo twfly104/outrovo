@@ -96,18 +96,17 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   `GET /api/app/oauth/:id/start` (302 to consent, HMAC state binds session),
   `GET /api/app/oauth/:id/callback` (upserts sender, postMessages result to
   the opener popup). `publicSender` returns `oauth:true` and strips tokens.
-- `APOLLO_API_KEY` or `HUNTER_API_KEY` Г”Г‡Г¶ powers Lead Finder search
+- `APOLLO_API_KEY` — powers Lead Finder search
   (Campaigns page), including optional daily auto-pilot
-  (`PUT /api/app/lead-finder/autopilot`). Without one, Lead Finder falls back to crawling the
+  (`PUT /api/app/lead-finder/autopilot`). Without it, Lead Finder falls back to crawling the
   target company domains the user types in and MX-verifies what it finds.
-  Hunter path: `domain-search` only accepts a DOMAIN, so ICP input
-  (keywords/title/size/location) first goes through the free
-  `POST /v2/discover` (`hunterDiscoverDomains` Г”Г‡Г¶ keywords/headcount/country
-  filters, natural-language `query` fallback) to resolve companies, then
-  domain-searches each (cap 5, `type=personal` + seniority/department mapped
-  from the title by `hunterTitleFilters`). `HUNTER_BASE_URL` env overrides
-  the API origin for mock-server tests. Domain-looking keywords skip
-  Discover entirely. Empty-search responses carry `errors[]` Г”Г‡Г¶ the UI shows
+  Apollo path: `POST /api/v1/mixed_people/search` maps the ICP filters
+  directly (keywords/title/headcount-range/location, `contact_email_status:
+  verified`). NOTE: Apollo's Free plan includes NO API access — the search
+  and match endpoints return `API_INACCESSIBLE`; `apolloError()` surfaces
+  that as an actionable message and search falls through to builtin.
+  `APOLLO_BASE_URL` env overrides the API origin for mock-server tests.
+  Empty-search responses carry `errors[]` — the UI shows
   them instead of the generic "no leads matched" note.
   Quotas per plan: trial 25, starter 100, growth 1,000, scale/agency 10,000
   credits/month (1 credit per returned lead), tracked on `user.leadFinder`.
@@ -168,7 +167,7 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   every B2B contact page); bot-walled sites answering with a markdown
   render (no <h1> tags) get headings from "#" lines instead. Regression
   checks: vercel.com Г”Д‡Дє AI startups/head of engineering/blank size+location;
-  hunter.io Г”Д‡Дє United States/founder; stripe.com Г”Д‡Дє United States/head of
+  apollo.io → United States/founder; stripe.com Г”Д‡Дє United States/head of
   sales; example.com Г”Д‡Дє empty keywords (no domain echo). Each result row
   also has a **Г”ЕҐЕЅ Intel** column: clicking calls
   `POST /api/app/lead-finder/intel` (`leadIntel()` in server.js; cached in
@@ -322,8 +321,7 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   auto-suppress. Replies carry `intent`; inbox UI renders chips and an
   Г”ЕҐЕЅ AI draft button (POST /api/app/inbox/:id/draft Г”Г‡Г¶ LLM with reply
   context + user identity, or intent-keyed heuristic templates).
-- Enrichment: `callEnrichment` picks Apollo (APOLLO_API_KEY) Г”Д‡Дє Hunter
-  (HUNTER_API_KEY) Г”Д‡Дє Dropcontact (DROPCONTACT_API_KEY) Г”Д‡Дє builtin
+- Enrichment: `callEnrichment` picks Apollo (APOLLO_API_KEY) → Dropcontact (DROPCONTACT_API_KEY) Г”Д‡Дє builtin
   (MX + Gravatar). Single: POST /api/app/prospects/:id/enrich. Bulk:
   POST /api/app/campaigns/:id/enrich-all (50/batch). Stores `enriched`
   on the prospect and backfills empty name/company fields.
@@ -379,7 +377,7 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - Enrichment real provider path: mocked Apollo fetch proved the full flow Г”Г‡Г¶
   `X-Api-Key` header, payload email, response parsing into
   { firstName, lastName, company, title, city, seniority }, and storage on
-  the prospect. Real Apollo/Hunter endpoints respond 401 to invalid keys
+  the prospect. Real Apollo endpoints respond 401 to invalid keys
   (reachable, auth-gated). No user-supplied keys exist to do a live call.
 - CNAME white-label: raw HTTP request with `Host: outrovo.work` returns
   `<title>CN Brand Г”Г‡Г¶ Outreach</title>` with brand logo/name replaced
