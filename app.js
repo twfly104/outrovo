@@ -1128,6 +1128,22 @@ function bindTitlePresets() {
 }
 bindTitlePresets();
 
+// Pay-as-you-go credit bundles — checkout rides the same billing endpoint
+// as plan upgrades; packs arrive from GET /api/plans (topups).
+$('lfTopupBtn')?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const { data } = await api('GET', '/api/plans');
+  const packs = data?.topups || [];
+  if (!packs.length) return alert('Credit bundles are not available right now.');
+  const menu = packs.map((p, i) => `${i + 1}) ${p.name} — $${p.price}`).join('\n');
+  const pick = parseInt(prompt(`Top up Lead Finder credits (never expire):\n${menu}\n\nEnter 1-${packs.length}:`) || '', 10);
+  if (!pick || pick < 1 || pick > packs.length) return;
+  const res = await api('POST', '/api/billing/checkout', { plan: packs[pick - 1].id });
+  if (res.data?.checkoutUrl) window.location.href = res.data.checkoutUrl;
+  else alert(res.data?.message || res.data?.error || 'Checkout unavailable.');
+});
+
 async function loadLeadFinderStatus() {
   const { data } = await api('GET', '/api/app/lead-finder/status');
   if (!data.ok) return;

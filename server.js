@@ -946,7 +946,7 @@ function leadFinderUsage(user, plan) {
   if (!user.leadFinder || user.leadFinder.month !== monthKey) {
     user.leadFinder = { month: monthKey, used: 0 };
   }
-  return { used: user.leadFinder.used, quota: plan.leadFinderCredits ?? 100, month: monthKey };
+  return { used: user.leadFinder.used, quota: (plan.leadFinderCredits ?? 100) + (user.leadFinderBonus || 0), month: monthKey };
 }
 
 function enrollLeads(sessionEmail, campaignId, leads) {
@@ -1916,10 +1916,18 @@ async function aiGenerateSequence(input) {
 // set; otherwise a manual activation path (admin key) keeps the flow usable.
 const PLANS = {
   trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, leadFinderCredits: 25, linkedIn: true, agency: false, whiteLabel: false },
-  starter: { name: 'Starter', priceMonthly: 29, maxProspects: 2000, maxCampaigns: 3, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false },
-  growth: { name: 'Growth', priceMonthly: 49, maxProspects: 10000, maxCampaigns: 10, leadFinderCredits: 1000, linkedIn: true, agency: false, whiteLabel: false },
-  scale: { name: 'Scale', priceMonthly: 99, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: false, whiteLabel: true },
+  starter: { name: 'Starter', priceMonthly: 39, maxProspects: 2000, maxCampaigns: 3, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false },
+  growth: { name: 'Pro', priceMonthly: 99, maxProspects: 10000, maxCampaigns: 10, leadFinderCredits: 1000, linkedIn: true, agency: false, whiteLabel: false },
+  scale: { name: 'Scale', priceMonthly: 149, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: false, whiteLabel: true },
   agency: { name: 'Agency', priceMonthly: 249, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: true, whiteLabel: true },
+};
+
+// Pay-as-you-go Lead Finder credit bundles — high-margin add-on revenue on
+// top of subscriptions. Bonus credits never expire at month rollover.
+const TOPUP_PACKS = {
+  credits_500: { name: '500 Lead Finder credits', credits: 500, price: 19 },
+  credits_2000: { name: '2,000 Lead Finder credits', credits: 2000, price: 49 },
+  credits_10000: { name: '10,000 Lead Finder credits', credits: 10000, price: 149 },
 };
 
 function planOf(user) {
@@ -1945,21 +1953,35 @@ function upgradeUser(email, planId) {
   return user;
 }
 
+// Top-up credits live outside user.leadFinder (which resets monthly) so
+// purchased bundles never expire at the month rollover.
+function creditTopup(email, packId) {
+  const pack = TOPUP_PACKS[packId];
+  if (!pack) return null;
+  const users = load('users');
+  const user = users.find(u => u.email === email.trim().toLowerCase());
+  if (!user) return null;
+  user.leadFinderBonus = (user.leadFinderBonus || 0) + pack.credits;
+  save('users', users);
+  return user;
+}
+
 // Minimal Stripe integration via fetch (no SDK dependency).
 async function stripeCheckout(secret, { planId, email, amount, successUrl, cancelUrl }) {
+  const topup = TOPUP_PACKS[planId];
   const params = new URLSearchParams({
-    mode: 'subscription',
+    mode: topup ? 'payment' : 'subscription',
     success_url: successUrl,
     cancel_url: cancelUrl,
     customer_email: email,
     'line_items[0][quantity]': '1',
     'line_items[0][price_data][currency]': 'usd',
     'line_items[0][price_data][unit_amount]': String(amount * 100),
-    'line_items[0][price_data][recurring][interval]': 'month',
-    'line_items[0][price_data][product_data][name]': `Outrovo ${PLANS[planId].name}`,
+    'line_items[0][price_data][product_data][name]': topup ? `Outrovo ${topup.name}` : `Outrovo ${PLANS[planId].name}`,
     'metadata[plan]': planId,
     'metadata[email]': email,
   });
+  if (!topup) params.set('line_items[0][price_data][recurring][interval]', 'month');
   const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: `Bearer ${secret}` },
@@ -2230,11 +2252,15 @@ async function domainAudit(domain) {
 // LLM_BASE_URL/LLM_MODEL as elsewhere) selects an OpenAI-compatible endpoint.
 // Without a key the route signals "unavailable" and the client falls back to
 // its built-in keyword answers, so the page never dead-ends.
-const ASSISTANT_PERSONA = `You are the Outrovo assistant on a website for Outrovo, a cold email and LinkedIn outreach tool. Answer like a knowledgeable, honest salesperson: warm, brief (1-2 sentences, 3 max), never promise what isn't in the FACTS below. Greetings get a warm reply plus an invite to ask about the product. If a question is outside the FACTS, say so briefly and point to the on-page FAQ (href="#faq") or booking a demo (signup.html). Format with ONLY these HTML tags: <strong>, <em>, <br>, <a href="pricing.html">, <a href="signup.html">, <a href="#faq" data-asst-close>. No markdown.`;
+const ASSISTANT_PERSONA = `You are the Outrovo agent — the built-in product expert on Outrovo's website, a cold email and LinkedIn outreach platform. You represent the product the way its best founder would: direct, warm, confident, never salesy, never a shrug. Rules: (1) Answer the actual question first, in 1-3 short sentences. (2) "What do you do / what are your services / tell me about Outrovo" ALWAYS gets the one-line pitch: Outrovo finds leads, sends email + LinkedIn sequences, and puts every reply in one inbox — with verification, warm-up and domain checks built in. (3) Never say "I can't answer that" without immediately offering the closest thing you CAN answer plus a next step (free trial, pricing page, FAQ). (4) Never promise numbers or features not in the FACTS. (5) Greetings get a warm reply plus an invite to ask about the product. Format with ONLY these HTML tags: <strong>, <em>, <br>, <a href="pricing.html">, <a href="signup.html">, <a href="#faq" data-asst-close>. No markdown.`;
 
 const ASSISTANT_FACTS = [
-  'Outrovo is a simple cold-outreach tool: add people, write (or AI-draft) a sequence, press run, read every reply in one inbox. Email + LinkedIn to-dos in one campaign.',
-  'Pricing: Starter $29/slot/mo, Growth $49 (most popular), Scale $99 — less billed annually. Agency $249/mo with client workspaces and white-labeling.',
+  'Outrovo is a cold-outreach platform: find leads with the built-in Lead Finder, send email + LinkedIn sequences (AI-drafted if you want), and read every reply in one unified inbox. Verification, warm-up and domain checks are built in, not paid add-ons.',
+  'Services in one line: lead finding, email + LinkedIn sequences, AI copywriting, email verification, warm-up, domain health checks, unified inbox, CRM integrations.',
+  'Pricing: Starter $39/slot/mo, Pro $99 (most popular), Scale $149 — less billed annually. Agency $249/mo with client workspaces and white-labeling.',
+  'Unlike per-seat tools (Lemlist charges $50-90+ per sender seat), every Outrovo plan includes UNLIMITED sending inboxes — connect as many as you like, campaigns rotate across them, no per-inbox fees.',
+  'Lead Finder credit top-ups: pay-as-you-go bundles (500 credits $19, 2,000 $49, 10,000 $149) that never expire, on top of the monthly plan credits.',
+  'AI features are focused micro-AI, not a bloated autonomous agent: AI sequence writer (drafts from your website), AI reply drafts, reply intent tagging (interested / not interested / unsubscribe / out-of-office), spintax generation for deliverability, and 1-line website personalization.',
   'Every plan starts with a 14-day free trial, no credit card needed. Cancel anytime in one click.',
   'Deliverability: no tool can guarantee inbox placement — anyone claiming it is selling something. Outrovo verifies every email before sending, checks SPF/DKIM/DMARC with a one-click domain health check, and paces sends so nothing looks bot-like.',
   'Warm-up is free on every plan: new inboxes start small and the daily sending cap grows automatically so mailbox providers build trust before volume ramps.',
@@ -2243,11 +2269,11 @@ const ASSISTANT_FACTS = [
   'AI writer: give it your website and it drafts a sequence based on what you sell and who you target. You review and edit everything before a single send.',
   'Getting started takes four steps: add people (verified on import), pick a template or let AI write it, hit run (Outrovo paces the sends), read replies in one inbox.',
   'Integrations on every plan: CRM integrations (HubSpot, Pipedrive and others) plus API access, webhooks, MCP and a CLI.',
-  'Lead Finder is built in with monthly credits: 100 on Starter, 1,000 on Growth, 10,000 on Scale.',
-  'Volume is per contacted prospect: 2,000/mo Starter, 10,000/mo Growth, unlimited on Scale. Unlimited email accounts and warm-up on all plans.',
+  'Lead Finder is built in with monthly credits: 100 on Starter, 1,000 on Pro, 10,000 on Scale.',
+  'Volume is per contacted prospect: 2,000/mo Starter, 10,000/mo Pro, unlimited on Scale. Unlimited email accounts and warm-up on all plans.',
   'Connecting a sender: users connect their own Gmail or Microsoft inbox with one-click authorize, or an app password. Campaigns rotate across all connected inboxes, each with its own daily cap.',
   'Compliance: every email carries a one-click unsubscribe (List-Unsubscribe) and the sender\'s mailing address automatically (CAN-SPAM).',
-  'A/B testing is included from the Growth plan up.',
+  'A/B testing is included from the Pro plan up.',
   'Outrovo does email plus LinkedIn to-dos only — no SMS, no cold calling.',
   'Replies from every campaign land in one unified inbox.',
   'Versus other cold-email tools: verification, domain health, and warm-up are built in free on every plan rather than paid add-ons; LinkedIn stays compliant as manual to-do steps instead of risky auto-clicking.',
@@ -2422,21 +2448,22 @@ const router = {
 
   // --- billing ---
   'GET /api/plans': (req, res) => {
-    send(res, 200, { ok: true, plans: Object.entries(PLANS).map(([id, p]) => ({ id, ...p })) });
+    send(res, 200, { ok: true, plans: Object.entries(PLANS).map(([id, p]) => ({ id, ...p })), topups: Object.entries(TOPUP_PACKS).map(([id, t]) => ({ id, ...t })) });
   },
 
   'POST /api/billing/checkout': async (req, res) => {
     if (!requireAuth(req, res)) return;
     const b = await readBody(req);
     const planId = b.plan;
-    if (!PLANS[planId] || planId === 'trial') return send(res, 400, { ok: false, error: 'Unknown plan' });
+    const topup = TOPUP_PACKS[planId];
+    if ((!PLANS[planId] || planId === 'trial') && !topup) return send(res, 400, { ok: false, error: 'Unknown plan' });
     const user = load('users').find(u => u.email === getSession(req).email);
     if (!user) return send(res, 404, { ok: false, error: 'User not found' });
 
     const key = process.env.STRIPE_SECRET_KEY;
     if (key) {
       try {
-        const price = PLANS[planId].priceMonthly;
+        const price = topup ? topup.price : PLANS[planId].priceMonthly;
         const session = await stripeCheckout(key, {
           planId, email: user.email, amount: price,
           successUrl: `${publicBase(req)}/app.html?upgraded=${planId}`,
@@ -2464,11 +2491,20 @@ const router = {
       if (email && plan && PLANS[plan]) {
         upgradeUser(email, plan);
         logEvent('billing', `Plan activated via Stripe: ${email} → ${plan}`, {}, email);
+      } else if (email && plan && TOPUP_PACKS[plan]) {
+        creditTopup(email, plan);
+        logEvent('billing', `Credit top-up via Stripe: ${email} → ${plan}`, {}, email);
       }
       return send(res, 200, { received: true });
     }
     // Admin/manual activation
-    if (!b.email || !PLANS[b.plan]) return send(res, 400, { ok: false, error: 'email and valid plan required' });
+    if (!b.email || (!PLANS[b.plan] && !TOPUP_PACKS[b.plan])) return send(res, 400, { ok: false, error: 'email and valid plan required' });
+    if (TOPUP_PACKS[b.plan]) {
+      const user = creditTopup(b.email, b.plan);
+      if (!user) return send(res, 404, { ok: false, error: 'User not found' });
+      logEvent('billing', `Credit top-up (manual): ${b.email} → ${b.plan}`, {}, b.email);
+      return send(res, 200, { ok: true, topup: b.plan, credits: TOPUP_PACKS[b.plan].credits });
+    }
     const user = upgradeUser(b.email, b.plan);
     if (!user) return send(res, 404, { ok: false, error: 'User not found' });
     logEvent('billing', `Plan activated (manual): ${b.email} → ${b.plan}`, {}, b.email);
