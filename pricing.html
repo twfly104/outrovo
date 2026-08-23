@@ -235,13 +235,20 @@
     // Pricing page: if signed in, upgrade buttons open checkout; otherwise sign up
     fetch('/api/me').then(r => r.json()).then(d => {
       if (!d.ok || !d.user) return;
+      // Card titles are display names; the server keeps legacy plan ids
+      // (e.g. "Pro" is stored as "growth"), so map before comparing.
+      const aliases = { pro: 'growth' };
       document.querySelectorAll('.plan a[href="signup.html"]').forEach(a => {
         const plan = a.closest('.plan');
         const name = plan.querySelector('h3').textContent.trim().toLowerCase();
-        a.textContent = d.plan?.id === name ? 'Current plan' : `Upgrade to ${plan.querySelector('h3').textContent}`;
+        const id = aliases[name] || name;
+        const isCurrent = d.plan?.id === id;
+        a.textContent = isCurrent ? 'Current plan' : `Upgrade to ${plan.querySelector('h3').textContent}`;
         a.href = '#';
+        if (isCurrent) a.style.pointerEvents = 'none';
         a.addEventListener('click', async e => {
           e.preventDefault();
+          if (isCurrent) return;
           const res = await fetch('/api/billing/checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

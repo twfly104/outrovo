@@ -32,6 +32,20 @@ async function init() {
   me = data.user;
   $('userName').textContent = me ? `${me.firstName} ${me.lastName}` : 'User';
   $('userAvatar').textContent = ((me?.firstName || 'U')[0] + (me?.lastName || '')[0]).toUpperCase();
+  if (data.plan?.name) {
+    $('planPill').textContent = data.plan.name;
+    $('planPill').hidden = false;
+  }
+  // Nothing above Agency to upgrade to — retire the upsell button.
+  if (data.plan?.id === 'agency') document.querySelector('.app-upsell')?.remove();
+  // Returning from a successful checkout (?upgraded=<planId>) — confirm it.
+  const upgraded = new URLSearchParams(location.search).get('upgraded');
+  if (upgraded && data.plan && upgraded !== 'trial') {
+    const banner = $('engineBanner');
+    banner.hidden = false;
+    banner.innerHTML = `🎉 <strong>You're on ${esc(data.plan.name)} now</strong> — higher limits are active immediately.`;
+    history.replaceState(null, '', location.pathname);
+  }
   if (data.engine === 'demo') $('engineBanner').hidden = false;
   const planLine = data.plan
     ? `Plan: ${data.plan.name}${data.plan.id === 'trial' && data.plan.trialEnds ? ` (trial ends ${new Date(data.plan.trialEnds).toLocaleDateString()})` : ''}`
