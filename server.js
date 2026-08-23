@@ -1924,10 +1924,13 @@ const PLANS = {
 
 // Pay-as-you-go Lead Finder credit bundles — high-margin add-on revenue on
 // top of subscriptions. Bonus credits never expire at month rollover.
+// One-time services (e.g. DNS setup done-for-you) ride the same
+// checkout/activate flow; `service: true` marks non-credit packs.
 const TOPUP_PACKS = {
   credits_500: { name: '500 Lead Finder credits', credits: 500, price: 19 },
   credits_2000: { name: '2,000 Lead Finder credits', credits: 2000, price: 49 },
   credits_10000: { name: '10,000 Lead Finder credits', credits: 10000, price: 149 },
+  dns_setup: { name: 'Done-for-you domain setup (SPF · DKIM · DMARC)', price: 99, service: true },
 };
 
 function planOf(user) {
@@ -1958,10 +1961,24 @@ function upgradeUser(email, planId) {
 function creditTopup(email, packId) {
   const pack = TOPUP_PACKS[packId];
   if (!pack) return null;
+  if (pack.service) return fulfillService(email, packId);
   const users = load('users');
   const user = users.find(u => u.email === email.trim().toLowerCase());
   if (!user) return null;
   user.leadFinderBonus = (user.leadFinderBonus || 0) + pack.credits;
+  save('users', users);
+  return user;
+}
+
+// One-time service fulfillment (DNS setup pack): recorded purchases are
+// listed in Settings alongside the billing actions the admin runs.
+function fulfillService(email, packId) {
+  const pack = TOPUP_PACKS[packId];
+  if (!pack?.service) return null;
+  const users = load('users');
+  const user = users.find(u => u.email === email.trim().toLowerCase());
+  if (!user) return null;
+  user.servicePurchases = [...(user.servicePurchases || []), { pack: packId, name: pack.name, price: pack.price, at: new Date().toISOString() }];
   save('users', users);
   return user;
 }
@@ -2260,6 +2277,7 @@ const ASSISTANT_FACTS = [
   'Pricing: Starter $39/slot/mo, Pro $99 (most popular), Scale $149 — less billed annually. Agency $249/mo with client workspaces and white-labeling.',
   'Unlike per-seat tools (Lemlist charges $50-90+ per sender seat), every Outrovo plan includes UNLIMITED sending inboxes — connect as many as you like, campaigns rotate across them, no per-inbox fees.',
   'Lead Finder credit top-ups: pay-as-you-go bundles (500 credits $19, 2,000 $49, 10,000 $149) that never expire, on top of the monthly plan credits.',
+  'Done-for-you domain setup is a $99 one-time service: we configure SPF, DKIM, DMARC and secondary domain DNS with you instead of trial-and-error. Purchased inside the app.',
   'AI features are focused micro-AI, not a bloated autonomous agent: AI sequence writer (drafts from your website), AI reply drafts, reply intent tagging (interested / not interested / unsubscribe / out-of-office), spintax generation for deliverability, and 1-line website personalization.',
   'Every plan starts with a 14-day free trial, no credit card needed. Cancel anytime in one click.',
   'Deliverability: no tool can guarantee inbox placement — anyone claiming it is selling something. Outrovo verifies every email before sending, checks SPF/DKIM/DMARC with a one-click domain health check, and paces sends so nothing looks bot-like.',
@@ -2500,10 +2518,11 @@ const router = {
     // Admin/manual activation
     if (!b.email || (!PLANS[b.plan] && !TOPUP_PACKS[b.plan])) return send(res, 400, { ok: false, error: 'email and valid plan required' });
     if (TOPUP_PACKS[b.plan]) {
+      const pack = TOPUP_PACKS[b.plan];
       const user = creditTopup(b.email, b.plan);
       if (!user) return send(res, 404, { ok: false, error: 'User not found' });
-      logEvent('billing', `Credit top-up (manual): ${b.email} → ${b.plan}`, {}, b.email);
-      return send(res, 200, { ok: true, topup: b.plan, credits: TOPUP_PACKS[b.plan].credits });
+      logEvent('billing', `Top-up purchased (manual): ${b.email} → ${b.plan}`, {}, b.email);
+      return send(res, 200, { ok: true, topup: b.plan, service: !!pack.service, credits: pack.credits || 0 });
     }
     const user = upgradeUser(b.email, b.plan);
     if (!user) return send(res, 404, { ok: false, error: 'User not found' });

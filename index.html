@@ -382,6 +382,8 @@
           a: 'Honest take: tools like Lemlist charge <strong>$50–90 per sender seat</strong> — scale to 10 inboxes and the bill explodes. Every Outrovo plan includes <strong>unlimited sending inboxes</strong>, plus verification, domain health and warm-up built in free. <a href="pricing.html">Compare the plans</a>.' },
         { k: ['top up', 'top-up', 'topup', 'more credits', 'extra credits', 'buy credits', 'credit bundle', 'run out of credits'],
           a: 'Lead Finder top-ups are <strong>pay-as-you-go and never expire</strong>: 500 credits <strong>$19</strong>, 2,000 <strong>$49</strong>, 10,000 <strong>$149</strong> — on any plan, straight from the app.' },
+        { k: ['dns setup', 'domain setup', 'done for you', 'done-for-you', 'set up my domain', 'setup my domain', 'configure dns', 'dns help', 'secondary domain'],
+          a: 'Yes — <strong>done-for-you domain setup, $99 one time</strong>: we configure SPF, DKIM, DMARC and your secondary domain with you, instead of burning deliverability on trial-and-error. Details on the <a href="pricing.html">pricing page</a>.' },
         { k: ['open rate', 'reply rate', 'how many meetings', 'how many replies', 'results', 'roi', 'will it work', 'does it work', 'actually work', 'does it really', 'success'],
           a: 'Straight answer: that depends on your list and message more than any tool. What Outrovo controls is the deliverability side — <strong>verification, domain health, pacing, warm-up</strong> — so your good emails actually get seen instead of filtered.' },
         { k: ['personaliz', 'first line', 'icebreaker', 'custom intro'],
@@ -446,7 +448,10 @@
         };
         const tokens = t.replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length >= 4);
         const fuzzy = kw => /^\w+$/.test(kw) && kw.length >= 5 && tokens.some(w => lev(kw, w) <= 1);
-        const ehit = e => e.k.reduce((n, kw) => n + ((hit(kw) || fuzzy(kw)) ? 1 : 0), 0);
+        // Multi-word phrases weigh double so a specific entry ("set up my
+        // domain") beats a generic single-word hit ("domain") on the same
+        // question.
+        const ehit = e => e.k.reduce((n, kw) => n + ((hit(kw) || fuzzy(kw)) ? (kw.includes(' ') ? 2 : 1) : 0), 0);
         let best = null, bestScore = 0;
         for (const e of QA) {
           const s = ehit(e);

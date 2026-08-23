@@ -46,7 +46,10 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   /api/billing/checkout + /api/billing/activate flow (Stripe mode=payment
   vs subscription); credits land on `user.leadFinderBonus` (survives the
   monthly leadFinder reset) and `GET /api/plans` exposes `topups` — the
-  Lead Finder card has a "+ Top up credits" button.
+  Lead Finder card has a "+ Top up credits" button. Packs with
+  `service: true` (e.g. `dns_setup` $99 one-time done-for-you
+  SPF/DKIM/DMARC setup, listed on pricing.html) skip credits and are
+  recorded on `user.servicePurchases` via `fulfillService` instead.
 - Signup auto-assigns `plan: 'trial'` + `trialEnds`. `planOf()` marks
   expiry; campaign & prospect creation return 402 with `upgrade: true`.
 - Billing: `POST /api/billing/checkout` Г”Д‡Дє Stripe Checkout when
