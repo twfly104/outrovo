@@ -90,6 +90,15 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   (Campaigns page), including optional daily auto-pilot
   (`PUT /api/app/lead-finder/autopilot`). Without one, Lead Finder falls back to crawling the
   target company domains the user types in and MX-verifies what it finds.
+  Hunter path: `domain-search` only accepts a DOMAIN, so ICP input
+  (keywords/title/size/location) first goes through the free
+  `POST /v2/discover` (`hunterDiscoverDomains` Г”Г‡Г¶ keywords/headcount/country
+  filters, natural-language `query` fallback) to resolve companies, then
+  domain-searches each (cap 5, `type=personal` + seniority/department mapped
+  from the title by `hunterTitleFilters`). `HUNTER_BASE_URL` env overrides
+  the API origin for mock-server tests. Domain-looking keywords skip
+  Discover entirely. Empty-search responses carry `errors[]` Г”Г‡Г¶ the UI shows
+  them instead of the generic "no leads matched" note.
   Quotas per plan: trial 25, starter 100, growth 1,000, scale/agency 10,000
   credits/month (1 credit per returned lead), tracked on `user.leadFinder`.
   `GET /api/app/lead-finder/status` also returns `seed = { website }` (the
