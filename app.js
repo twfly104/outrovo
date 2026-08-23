@@ -531,8 +531,8 @@ function bindTools() {
     $('verifyResult').innerHTML = r && `
       <div class="score ${r.verdict === 'deliverable' ? 'ok-tag' : 'no-tag'}">${esc(r.verdict)}</div>
       <ul>
-        <li><span class="${r.syntax ? 'ok-tag' : 'no-tag'}">${r.syntax ? '✓' : '✗'}</span> Syntax valid</li>
-        <li><span class="${r.mx?.length ? 'ok-tag' : 'no-tag'}">${r.mx?.length ? '✓' : '✗'}</span> MX records ${r.mx?.length ? esc(r.mx.join(', ')) : 'none'}</li>
+        <li><span class="${r.syntax ? 'ok-tag' : 'no-tag'}">${r.syntax ? '✓' : '✗'}</span><div>Syntax valid</div></li>
+        <li><span class="${r.mx?.length ? 'ok-tag' : 'no-tag'}">${r.mx?.length ? '✓' : '✗'}</span><div>MX records ${r.mx?.length ? esc(r.mx.join(', ')) : 'none'}</div></li>
       </ul>`;
   });
   $('auditBtn').addEventListener('click', async () => {

@@ -1502,7 +1502,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .app-user button:hover { background: var(--crest); color: #fff; }
 
 /* ---------- Main canvas ---------- */
-.app-main { padding: 34px 40px 64px; max-width: 1120px; width: 100%; }
+.app-main { padding: 34px 40px 64px; max-width: 1120px; width: 100%; min-width: 0; }
 .app-main h1 {
   font-size: clamp(1.55rem, 2.4vw, 1.9rem);
   font-weight: 560;
@@ -1873,8 +1873,9 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .tool-result { margin-top: 16px; font-size: 0.88rem; }
 .tool-result .score { font-family: var(--font-display); font-size: 1.6rem; font-weight: 620; margin-bottom: 10px; }
 .tool-result ul { display: grid; gap: 7px; }
-.tool-result li { display: flex; gap: 9px; align-items: baseline; }
-.tool-result li > div { flex: 1; min-width: 0; }
+.tool-result li { display: flex; gap: 9px; align-items: baseline; overflow-wrap: anywhere; }
+.tool-result li > span { flex: none; }
+.tool-result li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .tool-result .ok-tag { color: var(--forest); font-weight: 700; }
 .tool-result .no-tag { color: #c22; font-weight: 700; }
 .settings-note { font-size: 0.85rem; color: var(--ink-soft); margin-top: 10px; }
@@ -1899,12 +1900,13 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .page-sub { font-size: 0.95rem; color: var(--ink-soft); margin: -14px 0 22px; }
 .setup-wizard {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 22px;
 }
 .setup-step {
   position: relative;
+  min-width: 0;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 20px;
