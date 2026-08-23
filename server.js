@@ -2308,7 +2308,7 @@ const ASSISTANT_FACTS = [
   'Services in one line: lead finding, email + LinkedIn sequences, AI copywriting, email verification, warm-up, domain health checks, unified inbox, CRM integrations.',
   'Pricing: Starter $39/slot/mo, Pro $99 (most popular), Scale $149 — less billed annually. Agency $249/mo with client workspaces and white-labeling.',
   'Unlike per-seat tools (Lemlist charges $50-90+ per sender seat), every Outrovo plan includes UNLIMITED sending inboxes — connect as many as you like, campaigns rotate across them, no per-inbox fees.',
-  'Lead Finder credit top-ups: pay-as-you-go bundles (500 credits $19, 2,000 $49, 10,000 $149) that never expire, on top of the monthly plan credits.',
+  'Lead Finder “Add Credits” packs: pay-as-you-go bundles (500 credits $19, 2,000 $49, 10,000 $149) that never expire, on top of the monthly plan credits.',
   'Done-for-you domain setup is a $99 one-time service: we configure SPF, DKIM, DMARC and secondary domain DNS with you instead of trial-and-error. Purchased inside the app.',
   'AI features are focused micro-AI, not a bloated autonomous agent: AI sequence writer (drafts from your website), AI reply drafts, reply intent tagging (interested / not interested / unsubscribe / out-of-office), spintax generation for deliverability, and 1-line website personalization.',
   'Every plan starts with a 14-day free trial, no credit card needed. Cancel anytime in one click.',

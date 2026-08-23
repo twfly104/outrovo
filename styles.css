@@ -2052,7 +2052,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .adv-divider { margin: 34px 0 14px; }
 .adv-divider h2 { margin: 0 0 4px; font-size: 1.05rem; font-weight: 750; }
 
-/* ---------- Credits badge & Top Up modal ---------- */
+/* ---------- Credits badge & Add Credits modal ---------- */
 .credit-badge {
   display: inline-flex; align-items: center; gap: 5px;
   appearance: none; border: none; border-radius: 99px; cursor: pointer;
