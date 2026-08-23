@@ -85,6 +85,7 @@ async function init() {
   bindSettingsTabs();
   bindTopup();
   bindBulkTools();
+  loadCredits();
   // Agency plan → reveal the Agency nav
   if (data.plan?.id === 'agency' || me?.owner) $('agencyNavBtn').hidden = false;
   loadAll();
@@ -114,7 +115,6 @@ function showPage(name) {
   if (name === 'campaigns') loadCampaigns();
   if (name === 'overview') { loadOverview(); loadActivity(); }
   if (name === 'settings') { loadEngine(); loadSenders(); refreshSetup(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadSuppression(); loadWebhooks(); }
-  loadCredits();
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
 
@@ -1156,7 +1156,7 @@ async function loadCredits() {
   if (!data.ok) return;
   const remaining = Math.max(0, (data.quota || 0) - (data.used || 0));
   const count = $('creditCount');
-  count.textContent = `${remaining.toLocaleString()} Credits`;
+  count.textContent = remaining.toLocaleString();
   const badge = $('creditBadge');
   badge.classList.toggle('low', remaining < 100 && remaining > 0);
   badge.classList.toggle('crit', remaining === 0);
@@ -1176,7 +1176,6 @@ function bindTopup() {
     $('topupModal').hidden = false;
   };
   $('creditBadge').addEventListener('click', open);
-  $('topupOpenBtn').addEventListener('click', open);
   $('topupCloseBtn').addEventListener('click', () => { $('topupModal').hidden = true; });
   $('topupModal').addEventListener('click', e => { if (e.target === $('topupModal')) $('topupModal').hidden = true; });
   $('topupGrid').addEventListener('click', async e => {
@@ -1262,7 +1261,7 @@ bindTitlePresets();
 
 // Pay-as-you-go credit bundles — checkout rides the same billing endpoint
 // as plan upgrades; packs arrive from GET /api/plans (topups).
-$('lfTopupBtn')?.addEventListener('click', () => { $('topupOpenBtn').click(); });
+$('lfTopupBtn')?.addEventListener('click', () => { $('creditBadge').click(); });
 
 async function loadLeadFinderStatus() {
   const { data } = await api('GET', '/api/app/lead-finder/status');

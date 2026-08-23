@@ -2064,12 +2064,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .credit-badge svg { width: 11px; height: 11px; }
 .credit-badge.low { background: #fff4e0; color: #a35c00; }
 .credit-badge.crit { background: #fee2e2; color: #b91c1c; }
-.credit-topup {
-  appearance: none; border: none; border-radius: 99px; cursor: pointer;
-  padding: 4px 10px; font: 650 0.78rem var(--font-body);
-  background: var(--forest); color: var(--paper); transition: background .15s;
-}
-.credit-topup:hover { background: #262a32; }
 .topup-modal {
   position: fixed; inset: 0; z-index: 100;
   background: rgba(11, 12, 14, 0.45);
