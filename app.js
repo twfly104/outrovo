@@ -610,10 +610,7 @@ function bindTools() {
   $('auditBtn').addEventListener('click', async () => {
     $('auditResult').innerHTML = 'Running DNS checks…';
     const { data } = await api('GET', `/api/app/tools/domain-audit?domain=${encodeURIComponent($('dDomain').value)}`);
-    const r = data.result;
-    $('auditResult').innerHTML = r ? `
-      <div class="score">${r.score}/100</div>
-      <ul>${r.checks.map(c => `<li><span class="${c.ok ? 'ok-tag' : 'no-tag'}">${c.ok ? '✓' : '✗'}</span><div><strong>${esc(c.name)}</strong> — ${esc(c.detail)}</div></li>`).join('')}</ul>` : 'No result';
+    renderAudit($('auditResult'), data.result, $('dDomain').value);
   });
 }
 
@@ -823,20 +820,65 @@ function bindSetup() {
 // ---------- domain health (onboarding diagnostic) ----------
 function bindDomainDiag() {
   $('sdAuditBtn').addEventListener('click', () => runDomainDiag($('sdDomain').value));
+  document.addEventListener('click', async e => {
+    const btn = e.target.closest('.audit-copy');
+    if (!btn) return;
+    try {
+      await navigator.clipboard.writeText(btn.dataset.record);
+      btn.textContent = 'Copied ✓';
+    } catch {
+      window.prompt('Copy this DNS record:', btn.dataset.record);
+    }
+    setTimeout(() => { btn.textContent = 'Copy record'; }, 1500);
+  });
 }
 
-function renderAudit(target, r) {
-  target.innerHTML = r ? `
+// Plain-English rendering of DNS checks: badges up front, raw records behind
+// a "Technical details" toggle, and a concrete fix (copy-paste record where
+// we can generate one) for whatever fails. Matched by server check-name
+// prefix so renamed server labels fall back to the raw name.
+const AUDIT_CHECKS = [
+  { match: /^mx/i, label: 'MX Records', okText: 'Passed', failText: 'Missing',
+    fix: d => `No mail server is configured for <strong>${esc(d)}</strong>. Add the MX records your email provider gives you (Google Workspace, Microsoft 365, …) — they look like <code>10 mail.provider.com</code>.` },
+  { match: /^spf/i, label: 'SPF Record', okText: 'Passed', failText: 'Missing',
+    fix: d => `Add this TXT record at <strong>${esc(d)}</strong>. If you send through Google or Microsoft, use their <em>include</em> instead of <code>mx</code> (their setup pages list it).`,
+    record: () => 'v=spf1 mx ~all' },
+  { match: /^dmarc/i, label: 'DMARC Policy', okText: 'Passed', failText: 'Missing',
+    fix: d => `Add this TXT record at <strong>_dmarc.${esc(d)}</strong>:`,
+    record: d => `v=DMARC1; p=quarantine; rua=mailto:postmaster@${d}` },
+  { match: /^dkim/i, label: 'DKIM Signature', okText: 'Verified', failText: 'Not found',
+    fix: () => `DKIM keys are issued by your email provider — there's nothing generic to copy. Turn on DKIM signing where your mail is hosted, then publish the TXT record they generate: <strong>Google Workspace</strong> → Admin console → Apps → Google Workspace → Gmail → Authenticate email. <strong>Microsoft 365</strong> → Defender portal → Email &amp; collaboration → DKIM.` },
+];
+
+function renderAudit(target, r, fallbackDomain) {
+  if (!r) { target.innerHTML = 'No result'; return; }
+  const domain = r.domain || fallbackDomain || 'your domain';
+  const row = c => {
+    const meta = AUDIT_CHECKS.find(m => m.match.test(c.name)) || { label: c.name, okText: 'Passed', failText: 'Failed', fix: null };
+    const record = !c.ok && meta.record ? meta.record(domain) : null;
+    return `<li>
+      <span class="${c.ok ? 'ok-tag' : 'no-tag'}">${c.ok ? '✓' : '✗'}</span>
+      <div>
+        <strong>${esc(meta.label)}</strong> — <span class="audit-status ${c.ok ? 'ok' : 'bad'}">${c.ok ? meta.okText : meta.failText}</span>
+        ${!c.ok && meta.fix ? `<p class="audit-fix">${meta.fix(domain)}</p>` : ''}
+        ${record ? `<code class="audit-record">${esc(record)}</code><button type="button" class="btn btn-s btn-dark audit-copy" data-record="${esc(record)}">Copy record</button>` : ''}
+        <details class="audit-raw"><summary>Technical details</summary><code>${esc(c.detail)}</code></details>
+      </div>
+    </li>`;
+  };
+  target.innerHTML = `
     <div class="score">${r.score}/100</div>
-    <ul>${r.checks.map(c => `<li><span class="${c.ok ? 'ok-tag' : 'no-tag'}">${c.ok ? '✓' : '✗'}</span><div><strong>${esc(c.name)}</strong> — ${esc(c.detail)}</div></li>`).join('')}</ul>
-    ${r.score < 100 ? '<p class="settings-note">Fix the failing records in your DNS provider before sending at volume.</p>' : ''}` : 'No result';
+    <ul class="audit-list">${r.checks.map(row).join('')}</ul>
+    ${r.score === 100
+      ? '<p class="settings-note"><span class="ok-tag">✓</span> Your domain is ready to send.</p>'
+      : '<p class="settings-note">Fix the failing items above in your DNS provider (GoDaddy, Namecheap, Cloudflare…), then run the check again. DNS changes can take a few minutes to show up.</p>'}`;
 }
 
 async function runDomainDiag(domain) {
   const out = $('sdAuditResult');
   out.innerHTML = 'Running DNS checks…';
   const { data } = await api('GET', `/api/app/tools/domain-audit?domain=${encodeURIComponent(domain || '')}`);
-  renderAudit(out, data.result);
+  renderAudit(out, data.result, domain);
   if (data.result) markStepDone('domain');
 }
 
@@ -851,7 +893,7 @@ async function loadDomainDiag() {
   // instantly instead of re-running DNS lookups.
   const { data } = await api('GET', '/api/app/activity');
   const audit = (data.events || []).find(e => e.type === 'domain-audit' && e.meta?.checks);
-  if (audit) renderAudit($('sdAuditResult'), { score: audit.meta.score, checks: audit.meta.checks });
+  if (audit) renderAudit($('sdAuditResult'), { score: audit.meta.score, checks: audit.meta.checks }, domain);
 }
 
 // ---------- Compliance & account data rights ----------

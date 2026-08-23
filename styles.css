@@ -1953,6 +1953,25 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .tool-result li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .tool-result .ok-tag { color: var(--forest); font-weight: 700; }
 .tool-result .no-tag { color: #c22; font-weight: 700; }
+.audit-status.ok { color: var(--forest); font-weight: 600; }
+.audit-status.bad { color: #c22; font-weight: 600; }
+.audit-fix { margin: 6px 0 2px; font-size: 0.85rem; color: var(--ink-soft); line-height: 1.55; }
+.audit-fix code { background: var(--paper-deep); padding: 1px 6px; border-radius: 5px; font-size: 0.8rem; }
+.audit-record {
+  display: inline-block;
+  margin: 6px 10px 6px 0;
+  padding: 7px 11px;
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.audit-copy { vertical-align: middle; }
+.audit-raw { margin-top: 6px; font-size: 0.78rem; }
+.audit-raw summary { cursor: pointer; color: var(--ink-faint); font-size: 0.76rem; user-select: none; }
+.audit-raw summary:hover { color: var(--ink-soft); }
+.audit-raw code { display: block; margin-top: 5px; padding: 7px 10px; background: var(--paper-deep); border-radius: 7px; color: var(--ink-soft); overflow-wrap: anywhere; }
 .settings-note { font-size: 0.85rem; color: var(--ink-soft); margin-top: 10px; }
 .settings-note code { background: var(--paper-deep); padding: 1px 6px; border-radius: 5px; font-size: 0.82rem; }
 
