@@ -458,9 +458,10 @@
           </form>
           <p class="settings-note">Campaigns rotate across every connected inbox, each with its own daily cap. Warmup ramp-up starts new inboxes small and grows the cap each day, so mailbox providers build trust in the address.</p>
           <details class="inbound-guide" id="inboundGuide">
-            <summary><strong>Last step: turn on the Unified Inbox</strong><span class="sec-hint">sync every reply into Outrovo automatically — 4 quick steps</span></summary>
+            <summary><strong>Optional: sync replies into Outrovo</strong><span class="sec-hint">needs a one-time domain setup by your admin</span></summary>
             <div class="inbound-body">
-              <p class="settings-note">Forward your incoming mail to your unique Outrovo address — replies land in the Inbox here and stop the prospect's sequence automatically.</p>
+              <p class="settings-note">Replies to your campaigns <strong>already arrive in your own Gmail/Outlook inbox as usual</strong> — nothing breaks without this. Forwarding is only needed if you also want them synced into Outrovo's Inbox (auto-stops the sequence, AI drafts, intent labels).</p>
+              <p class="settings-note fwd-dns-note">⚠️ This address only becomes valid once your admin points the inbound domain's DNS mail records at Outrovo (<code>INBOUND_DOMAIN</code> + MX). Gmail will show "invalid forwarding address" until that one-time setup is done.</p>
 
               <div class="fwd-checklist">
                 <div class="fwd-step" id="fwdStep1">
