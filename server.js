@@ -2844,10 +2844,14 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     if (idx >= 0) { users2[idx].leadFinder = user.leadFinder; save('users', users2); }
     // Seed the form: prefill the scan box with the signup email domain so
     // Scan & fill is one click. Never seed target keywords with the user's
-    // own domain — that searches for the user, not their customers.
-    const seed = user.leadFinderAutopilot?.keywords
+    // own domain — that searches for the user, not their customers. Skip the
+    // prefill entirely on free-mail domains (gmail.com etc.) — scanning them
+    // makes no sense as a company website.
+    const domain = (session.email.split('@')[1] || '').toLowerCase();
+    const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'hotmail.com', 'outlook.com', 'live.com', 'msn.com', 'aol.com', 'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com', 'pm.me', 'qq.com', '163.com', '126.com', 'yeah.net', 'foxmail.com', 'mail.com', 'gmx.com', 'gmx.net', 'zoho.com', 'yandex.com', 'yandex.ru']);
+    const seed = user.leadFinderAutopilot?.keywords || FREE_MAIL.has(domain)
       ? null
-      : { website: (session.email.split('@')[1] || '').slice(0, 120) };
+      : { website: domain.slice(0, 120) };
     send(res, 200, {
       ok: true, provider: leadFinderProvider() || 'builtin',
       used: usage.used, quota: usage.quota, month: usage.month,

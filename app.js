@@ -817,8 +817,13 @@ async function runDomainDiag(domain) {
   if (data.result) markStepDone('domain');
 }
 
+const FREE_MAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'hotmail.com', 'outlook.com', 'live.com', 'msn.com', 'aol.com', 'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com', 'pm.me', 'qq.com', '163.com', '126.com', 'yeah.net', 'foxmail.com', 'mail.com', 'gmx.com', 'gmx.net', 'zoho.com', 'yandex.com', 'yandex.ru']);
+
 async function loadDomainDiag() {
-  if (me?.email && !$('sdDomain').value) $('sdDomain').value = me.email.split('@')[1];
+  const domain = (me?.email.split('@')[1] || '').toLowerCase();
+  // Gmail/Outlook etc. sign DKIM themselves — checking their domain here only
+  // confuses users with a failing DKIM probe. Leave the field empty instead.
+  if (domain && !FREE_MAIL_DOMAINS.has(domain) && !$('sdDomain').value) $('sdDomain').value = domain;
   // The signup-time diagnostic result is logged in the activity feed — show it
   // instantly instead of re-running DNS lookups.
   const { data } = await api('GET', '/api/app/activity');
