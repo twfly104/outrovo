@@ -28,9 +28,12 @@ img{max-width:100%;display:block}
 .btn-l:hover{background:var(--bg2)}
 .s{font:13px/1.4em}
 
-/* header */
-.hdr{position:sticky;top:0;z-index:50;background:rgba(248,246,242,.88);backdrop-filter:blur(12px);border-bottom:1px solid transparent;transition:.3s}
+/* header — fixed at the top; the page scrolls away beneath it */
+.hdr{position:fixed;top:0;left:0;right:0;z-index:50;background:rgba(248,246,242,.88);backdrop-filter:blur(12px);border-bottom:1px solid transparent;transition:.3s}
 .hdr.sc{border-color:var(--line);box-shadow:0 6px 20px rgba(0,0,0,.04)}
+body{padding-top:70px}
+/* anchor jumps must clear the fixed header */
+section[id]{scroll-margin-top:86px}
 .nav{display:flex;align-items:center;gap:4px;height:70px}
 .logo{display:flex;align-items:center;gap:9px;font-family:var(--fd);font-size:1.35rem;font-weight:620}
 .logo img{width:34px;height:34px}
