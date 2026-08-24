@@ -382,12 +382,49 @@ function hourInTz(tz) {
   }
 }
 
+function dayInTz(tz) {
+  try {
+    return new Date(new Date().toLocaleString('en-US', { timeZone: tz || 'UTC' })).getDay();
+  } catch {
+    return new Date().getUTCDay();
+  }
+}
+
 function campaignWindowOk(campaign) {
+  const days = Array.isArray(campaign.sendDays) && campaign.sendDays.length ? campaign.sendDays : [0, 1, 2, 3, 4, 5, 6];
+  if (!days.includes(dayInTz(campaign.timezone))) return false;
   const start = Number(campaign.sendWindowStart ?? 9);
   const end = Number(campaign.sendWindowEnd ?? 17);
   if (start === end) return true; // window disabled
   const hour = hourInTz(campaign.timezone);
   return start < end ? (hour >= start && hour < end) : (hour >= start || hour < end);
+}
+
+// Shared step-shape check for campaign create (POST) and step edits (PATCH).
+// Returns an error message, or null when the sequence is valid.
+function validateSteps(steps) {
+  for (const s of steps) {
+    if (!['email', 'task', 'wait'].includes(s.type)) return `Unknown step type "${s.type}"`;
+    if (s.type === 'email' && (!s.subject || !s.body)) return 'Email steps need subject and body.';
+    if (s.type === 'task' && !s.note) return 'Task steps need a note.';
+    if (s.variantB && (!s.variantB.subject || !s.variantB.body)) return 'A/B variant B needs both subject and body.';
+  }
+  return null;
+}
+
+// Active weekdays (0=Sun..6=Sat) for the send window. New campaigns default
+// to weekdays; anything invalid falls back to weekdays too.
+function sanitizeSendDays(days) {
+  if (!Array.isArray(days)) return [1, 2, 3, 4, 5];
+  const clean = [...new Set(days.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
+  return clean.length ? clean : [1, 2, 3, 4, 5];
+}
+
+// Randomized gap between sends so campaigns don't fire in machine-tight bursts.
+function campaignGapMs(campaign) {
+  const min = Math.max(0, Math.min(120, Number(campaign.gapMin ?? 4)));
+  const max = Math.max(min, Math.min(240, Number(campaign.gapMax ?? 9)));
+  return Math.round((min + Math.random() * (max - min)) * 60000);
 }
 
 function campaignUsedToday(campaign) {
@@ -408,6 +445,16 @@ function recordCampaignSend(campaignId, bounced = false) {
   c.sentLog = { date: today, count: campaignUsedToday(c) + 1 };
   c.sentCount = Number(c.sentCount || 0) + 1;
   if (bounced) c.bounceCount = Number(c.bounceCount || 0) + 1;
+  save('campaigns', campaigns);
+}
+
+// Persists the per-campaign send-gap timestamp without touching other fields —
+// engineTick's in-memory campaign list is stale the moment a send records.
+function setCampaignNextSendAt(campaignId, nextSendAt) {
+  const campaigns = load('campaigns');
+  const c = campaigns.find(x => x.id === campaignId);
+  if (!c) return;
+  c.nextSendAt = nextSendAt;
   save('campaigns', campaigns);
 }
 
@@ -969,8 +1016,9 @@ if (smtpConfigured && nodemailer) {
     auth: { user: SMTP.user, pass: SMTP.pass },
   });
 }
-async function sendViaResend(to, subject, text, from = RESEND_FROM, headers = null) {
+async function sendViaResend(to, subject, text, from = RESEND_FROM, headers = null, html = null) {
   const payload = { from, to: [to], subject, text };
+  if (html) payload.html = html;
   if (headers) payload.headers = headers;
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -1017,6 +1065,8 @@ function senderTransport(sender) {
   });
 }
 
+const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 // Send one campaign step to one prospect through the rotation.
 // opts.sender picks a specific inbox (test-email), opts.fallback is the
 // legacy env SMTP transport kept for backward compatibility.
@@ -1041,6 +1091,12 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
     'List-Unsubscribe': `<${link}>`,
     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
   } : null;
+  // Open tracking (Settings → "Track opens"): an invisible pixel in an HTML
+  // companion part. Plain-text purists disable it per campaign.
+  const openPixel = withUnsub && campaign.trackOpens !== false ? `${PUBLIC_URL}/api/app/o/${prospect.id}` : null;
+  const html = openPixel
+    ? `<div style="font-family:sans-serif;font-size:14px;line-height:1.5;color:#111">${escapeHtml(body).replace(/\n/g, '<br>')}</div><img src="${openPixel}" width="1" height="1" alt="" style="display:none">`
+    : null;
   const label = `“${campaign.name}”: email to ${prospect.email}`;
 
   let sender = opts.sender || null;
@@ -1059,7 +1115,7 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
   }
 
   if (sender.resend) {
-    await sendViaResend(prospect.email, subject, body, senderDisplayName(sender), unsubHeaders);
+    await sendViaResend(prospect.email, subject, body, senderDisplayName(sender), unsubHeaders, html);
     recordCampaignSend(campaign.id);
     logEvent('sent', `${label} (via Resend)`, { subject, sender: sender.email }, campaign.owner || null);
     if (campaign.owner) fireWebhooks(campaign.owner, 'sent', { email: prospect.email, campaign: campaign.name, subject, sender: sender.email });
@@ -1077,7 +1133,7 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
     return { demo: true, sender: sender.email };
   }
   const from = senderHasSmtp ? senderDisplayName(sender) : (SMTP.from || senderDisplayName(sender));
-  await t.sendMail({ from, to: prospect.email, subject, text: body, headers: unsubHeaders || undefined });
+  await t.sendMail({ from, to: prospect.email, subject, text: body, ...(html ? { html } : {}), headers: unsubHeaders || undefined });
   recordSend(sender);
   recordCampaignSend(campaign.id);
   logEvent('sent', `${label} (via ${sender.email})`, { subject, sender: sender.email }, campaign.owner || null);
@@ -1974,7 +2030,8 @@ function engineTick() {
         // routes replies into a hot-follow-up branch (event-driven). The
         // reroute consumes the event, then re-checks the sequence continues
         // from the routed position (not an infinite hot-step loop).
-        if (prospect.replied && !prospect.branchConsumedReply) {
+        // Campaigns with "Stop on reply" off keep sending even after a reply.
+        if (prospect.replied && campaign.stopOnReply !== false && !prospect.branchConsumedReply) {
           const hotLabel = step.branchNext?.onReplied;
           const hotIdx = hotLabel ? campaign.steps.findIndex(s => s.label === hotLabel) : -1;
           if (hotIdx >= 0) {
@@ -2000,6 +2057,12 @@ function engineTick() {
           changed = true;
           continue;
         }
+        // Randomized gap between individual sends (Settings → Sending limits).
+        if (campaign.nextSendAt && campaign.nextSendAt > now) {
+          prospect.nextRunAt = campaign.nextSendAt;
+          changed = true;
+          continue;
+        }
         let sender = campaign.owner ? pickSender(campaign.owner, prospect) : gatewaySender();
         if (!sender) {
           if (hasRealSender(campaign.owner)) {
@@ -2012,11 +2075,14 @@ function engineTick() {
           sender = demoSender();
         }
         dispatchedThisTick++;
+        campaign.nextSendAt = now + campaignGapMs(campaign);
+        setCampaignNextSendAt(campaign.id, campaign.nextSendAt);
         sendEmail(campaign, prospect, step, { sender }).catch(err => {
           const kind = classifySendError(err);
           if (kind === 'hard') {
             prospect.bounced = { kind: 'hard', at: new Date().toISOString(), reason: err.message.slice(0, 200) };
-            prospect.finished = true; prospect.nextRunAt = null;
+            // "Stop on bounce" off → log the bounce but keep the sequence going.
+            if (campaign.stopOnBounce !== false) { prospect.finished = true; prospect.nextRunAt = null; }
             recordCampaignSend(campaign.id, true);
             logEvent('bounce', `Hard bounce: ${prospect.email} — sequence stopped`, { reason: err.message.slice(0, 200) }, campaign.owner || null);
             if (campaign.owner) fireWebhooks(campaign.owner, 'bounce', { email: prospect.email, campaign: campaign.name, reason: err.message.slice(0, 200) });
@@ -2455,6 +2521,28 @@ const router = {
     if (!user) return send(res, 404, { ok: false, error: 'User not found' });
     logEvent('billing', `Plan activated (manual): ${b.email} → ${planId}`, {}, b.email);
     send(res, 200, { ok: true, user: publicUser(user), plan: planId });
+  },
+
+  // --- open tracking pixel (public; prospect ids are unguessable UUIDs) ---
+  // Mail clients fetch this 1x1 gif when a recipient opens a campaign email.
+  'GET /api/app/o/:id': (req, res, id) => {
+    const prospects = load('prospects');
+    const p = prospects.find(x => x.id === id);
+    if (p && !p.opened) {
+      p.opened = true;
+      p.openedAt = new Date().toISOString();
+      save('prospects', prospects);
+      const c = load('campaigns').find(x => x.id === p.campaignId);
+      logEvent('open', `${p.email} opened an email${c ? ` in “${c.name}”` : ''}`, {}, c?.owner || null);
+    }
+    const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+    res.writeHead(200, {
+      'Content-Type': 'image/gif',
+      'Content-Length': gif.length,
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+    });
+    res.end(gif);
   },
 
   // --- one-click unsubscribe (public, HMAC-signed) ---
@@ -3071,6 +3159,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
         finished: mine.filter(p => p.finished).length,
         bounced: mine.filter(p => p.bounced).length,
         replied: mine.filter(p => p.replied).length,
+        opened: mine.filter(p => p.opened).length,
         repliesPastWeek: days,
         sentToday: campaignUsedToday(c),
         capToday: campaignDailyCap(c),
@@ -3088,12 +3177,8 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     if (plan.expired) return send(res, 402, { ok: false, error: 'Your trial has ended — upgrade to keep building campaigns.', upgrade: true });
     const campaigns = load('campaigns');
     if (campaigns.filter(c => c.owner === session.email).length >= plan.maxCampaigns) return send(res, 402, { ok: false, error: `${plan.name} plan allows ${plan.maxCampaigns} campaign${plan.maxCampaigns > 1 ? 's' : ''} — upgrade for more.`, upgrade: true });
-    for (const s of b.steps) {
-      if (!['email', 'task', 'wait'].includes(s.type)) return send(res, 400, { ok: false, error: `Unknown step type "${s.type}"` });
-      if (s.type === 'email' && (!s.subject || !s.body)) return send(res, 400, { ok: false, error: 'Email steps need subject and body.' });
-      if (s.type === 'task' && !s.note) return send(res, 400, { ok: false, error: 'Task steps need a note.' });
-      if (s.variantB && (!s.variantB.subject || !s.variantB.body)) return send(res, 400, { ok: false, error: 'A/B variant B needs both subject and body.' });
-    }
+    const stepError = validateSteps(b.steps);
+    if (stepError) return send(res, 400, { ok: false, error: stepError });
     const campaign = {
       id: crypto.randomUUID(), name: b.name.trim(), status: 'draft', owner: session.email,
       steps: b.steps.map(s => ({ ...s, delayMinutes: Number(s.delayMinutes || 0) })),
@@ -3101,9 +3186,16 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       sendWindowStart: Math.max(0, Math.min(23, Number(b.sendWindowStart ?? 9))),
       sendWindowEnd: Math.max(0, Math.min(23, Number(b.sendWindowEnd ?? 17))),
       timezone: typeof b.timezone === 'string' && b.timezone ? b.timezone : 'UTC',
+      sendDays: sanitizeSendDays(b.sendDays),
+      gapMin: Math.max(0, Math.min(120, Number(b.gapMin ?? 4))),
+      gapMax: Math.max(0, Math.min(240, Number(b.gapMax ?? 9))),
+      stopOnReply: b.stopOnReply !== false,
+      stopOnBounce: b.stopOnBounce !== false,
+      trackOpens: b.trackOpens !== false,
       sentCount: 0, bounceCount: 0,
       createdAt: new Date().toISOString(),
     };
+    if (campaign.gapMax < campaign.gapMin) campaign.gapMax = campaign.gapMin;
     campaigns.push(campaign); save('campaigns', campaigns);
     send(res, 201, { ok: true, campaign });
   },
@@ -3127,6 +3219,26 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     if (b.sendWindowStart != null) c.sendWindowStart = Math.max(0, Math.min(23, Number(b.sendWindowStart)));
     if (b.sendWindowEnd != null) c.sendWindowEnd = Math.max(0, Math.min(23, Number(b.sendWindowEnd)));
     if (typeof b.timezone === 'string') c.timezone = b.timezone || 'UTC';
+    if (b.sendDays != null) c.sendDays = sanitizeSendDays(b.sendDays);
+    if (b.gapMin != null) c.gapMin = Math.max(0, Math.min(120, Number(b.gapMin)));
+    if (b.gapMax != null) c.gapMax = Math.max(0, Math.min(240, Number(b.gapMax)));
+    if (c.gapMax < c.gapMin) c.gapMax = c.gapMin;
+    if (b.stopOnReply != null) c.stopOnReply = Boolean(b.stopOnReply);
+    if (b.stopOnBounce != null) c.stopOnBounce = Boolean(b.stopOnBounce);
+    if (b.trackOpens != null) c.trackOpens = Boolean(b.trackOpens);
+    if (Array.isArray(b.steps)) {
+      if (!b.steps.length) return send(res, 400, { ok: false, error: 'At least one step required.' });
+      const stepError = validateSteps(b.steps);
+      if (stepError) return send(res, 400, { ok: false, error: stepError });
+      c.steps = b.steps.map(s => ({ ...s, delayMinutes: Number(s.delayMinutes || 0) }));
+      // Keep prospects pointed at real steps after a rewrite.
+      const prospects = load('prospects');
+      let touched = false;
+      for (const p of prospects.filter(p => p.campaignId === id && !p.finished)) {
+        if (p.stepIndex >= c.steps.length) { p.stepIndex = c.steps.length - 1; touched = true; }
+      }
+      if (touched) save('prospects', prospects);
+    }
     save('campaigns', campaigns);
     send(res, 200, { ok: true, campaign: c });
   },

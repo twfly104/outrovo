@@ -67,33 +67,45 @@
       <section class="app-page" id="page-campaigns" hidden>
         <div id="campaignListView">
           <div class="page-head">
-            <h1>Campaigns</h1>
-            <button class="btn btn-primary btn-s" id="newCampaignBtn">+ New campaign</button>
+            <div>
+              <h1>Campaigns</h1>
+              <p class="page-sub">Sequences, performance and delivery — nothing else.</p>
+            </div>
+            <button class="btn btn-primary" id="newCampaignBtn">+ New Campaign</button>
           </div>
-          <div id="campaignList" class="campaign-list"></div>
+          <div id="campaignList" class="campaign-table-wrap"></div>
         </div>
 
         <!-- Campaign detail: one campaign, three tabs -->
         <div id="campaignDetail" hidden>
           <div class="cd-head">
-            <button class="btn btn-ghost btn-s" id="cdBackBtn">← All campaigns</button>
+            <button class="cd-back" id="cdBackBtn" aria-label="Back to campaigns"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg></button>
             <h1 id="cdName"></h1>
             <span class="status" id="cdStatus"></span>
             <span class="cd-spacer"></span>
+            <button class="btn btn-ghost btn-s" id="cdValidateBtn"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Validate</button>
             <button class="btn btn-primary btn-s" id="cdRunBtn">Run campaign</button>
-            <button class="btn btn-ghost btn-s" id="cdDeleteBtn">Delete</button>
           </div>
           <div class="settings-tabs" id="cdTabs">
             <button class="settings-tab active" data-ctab="steps">Steps</button>
-            <button class="settings-tab" data-ctab="contacts">Contacts <span id="cdContactCount"></span></button>
+            <button class="settings-tab" data-ctab="contacts">Contacts <span class="tab-count" id="cdContactCount" hidden></span></button>
             <button class="settings-tab" data-ctab="settings">Settings</button>
           </div>
 
           <div class="ctab-pane" id="ctab-steps">
-            <div class="app-card-block cd-steps-card">
-              <div class="cp-body">
-                <div class="cp-steps" id="cdSteps"></div>
-                <div class="cp-stats" id="cdStats"></div>
+            <div class="seq-stats" id="cdStats"></div>
+            <div class="seq-divider"><span>SEQUENCE STARTS WHEN A LEAD IS ADDED</span></div>
+            <div class="seq-timeline" id="cdSteps"></div>
+            <div class="seq-add-row">
+              <button class="btn btn-ghost btn-s" id="cdAddStepBtn">+ Add step</button>
+            </div>
+            <div class="app-card-block" id="cdStepEditor" hidden>
+              <h2>New step</h2>
+              <div id="cdStepEditorRows"></div>
+              <div class="modal-actions cd-settings-actions">
+                <button class="btn btn-primary btn-s" id="cdSaveStepBtn">Save step</button>
+                <button class="btn btn-ghost btn-s" id="cdCancelStepBtn">Cancel</button>
+                <span class="import-note" id="cdStepNote"></span>
               </div>
             </div>
             <div class="app-card-block" id="cdAbBlock" hidden>
@@ -104,15 +116,21 @@
 
           <div class="ctab-pane" id="ctab-contacts" hidden>
             <div class="subhead cd-contacts-head">
-              <h2>All people <span id="prospectCount"></span></h2>
+              <p class="cd-contacts-sub">Leads enrolled in this campaign.</p>
               <div class="cd-actions">
                 <button class="btn btn-ghost btn-s" id="verifyAllBtn">Verify all</button>
                 <button class="btn btn-ghost btn-s" id="enrichAllBtn">Enrich all</button>
-                <button class="btn btn-primary btn-s" id="addLeadsBtn">+ Add leads</button>
+                <button class="btn btn-primary btn-s" id="addLeadsBtn">+ Add Leads</button>
               </div>
             </div>
             <div class="tool-result" id="bulkToolResult"></div>
-            <div class="app-card-block">
+            <div class="empty-state" id="prospectEmpty" hidden>
+              <div class="empty-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+              <h3>No contacts yet</h3>
+              <p>Add leads from a CSV or pull them straight from Find Leads.</p>
+              <button class="btn btn-primary btn-s" id="emptyAddLeadsBtn">+ Add Leads</button>
+            </div>
+            <div class="app-card-block" id="prospectTableWrap">
               <table class="data-table" id="prospectTable">
                 <thead><tr><th>Email</th><th>Name</th><th>Company</th><th>Step</th><th>Verification</th><th></th></tr></thead>
                 <tbody></tbody>
@@ -121,41 +139,91 @@
           </div>
 
           <div class="ctab-pane" id="ctab-settings" hidden>
-            <div class="app-card-block">
-              <h2>Sending pace</h2>
-              <p class="settings-note">Emails only go out inside this window, in this timezone, and stop at the daily cap. Queued prospects roll over to the next day automatically.</p>
-              <div class="field-row">
-                <div class="field">
-                  <label>Daily email cap</label>
-                  <input id="cdDailyCap" type="number" min="1" max="500" />
+            <div class="cd-settings-grid">
+              <div class="app-card-block">
+                <h2>Sending limits</h2>
+                <p class="settings-note">Protect deliverability with sane pacing.</p>
+                <div class="cd-setting-row">
+                  <div class="cd-setting-label">
+                    <strong>Daily send limit</strong>
+                    <span class="cd-field-sub">Max emails per day, workspace-wide</span>
+                  </div>
+                  <input type="range" id="cdDailyCap" min="5" max="200" step="5" />
+                  <span class="cd-slider-val"><strong id="cdDailyCapVal">25</strong> /day</span>
                 </div>
-                <div class="field">
-                  <label>Window start (hour)</label>
-                  <input id="cdWindowStart" type="number" min="0" max="23" />
-                </div>
-                <div class="field">
-                  <label>Window end (hour)</label>
-                  <input id="cdWindowEnd" type="number" min="0" max="23" />
+                <div class="cd-setting-row">
+                  <div class="cd-setting-label">
+                    <strong>Delay between emails</strong>
+                    <span class="cd-field-sub">Randomized gap to look human</span>
+                  </div>
+                  <span class="cd-gap-inputs"><input id="cdGapMin" type="number" min="0" max="120" />–<input id="cdGapMax" type="number" min="0" max="240" />&nbsp;min</span>
                 </div>
               </div>
-              <div class="field">
-                <label>Timezone</label>
-                <select id="cdTimezone">
-                  <option value="UTC">UTC</option>
-                  <option value="America/New_York">Eastern (New York)</option>
-                  <option value="America/Chicago">Central (Chicago)</option>
-                  <option value="America/Denver">Mountain (Denver)</option>
-                  <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
-                  <option value="Europe/London">London</option>
-                  <option value="Europe/Berlin">Berlin</option>
-                  <option value="Asia/Singapore">Singapore</option>
-                  <option value="Australia/Sydney">Sydney</option>
-                </select>
+              <div class="app-card-block">
+                <h2>Sending window</h2>
+                <p class="settings-note">Only send when prospects are awake.</p>
+                <div class="cd-setting-row">
+                  <div class="cd-setting-label">
+                    <strong>Time window</strong>
+                    <span class="cd-field-sub">Campaign timezone</span>
+                  </div>
+                  <span class="cd-hour-selects"><select id="cdWindowStart"></select><span class="cd-arrow">→</span><select id="cdWindowEnd"></select></span>
+                </div>
+                <div class="cd-setting-row">
+                  <div class="cd-setting-label">
+                    <strong>Active days</strong>
+                    <span class="cd-field-sub">Weekdays recommended</span>
+                  </div>
+                  <span class="cd-days" id="cdDays">
+                    <button type="button" data-day="1">M</button>
+                    <button type="button" data-day="2">T</button>
+                    <button type="button" data-day="3">W</button>
+                    <button type="button" data-day="4">T</button>
+                    <button type="button" data-day="5">F</button>
+                    <button type="button" data-day="6">S</button>
+                    <button type="button" data-day="0">S</button>
+                  </span>
+                </div>
+                <div class="field" style="margin-top:16px;margin-bottom:0;">
+                  <label>Timezone</label>
+                  <select id="cdTimezone">
+                    <option value="UTC">UTC</option>
+                    <option value="America/New_York">Eastern (New York)</option>
+                    <option value="America/Chicago">Central (Chicago)</option>
+                    <option value="America/Denver">Mountain (Denver)</option>
+                    <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
+                    <option value="Europe/London">London</option>
+                    <option value="Europe/Berlin">Berlin</option>
+                    <option value="Asia/Singapore">Singapore</option>
+                    <option value="Australia/Sydney">Sydney</option>
+                  </select>
+                </div>
               </div>
-              <div class="modal-actions cd-settings-actions">
-                <button class="btn btn-primary" id="cdSaveSettings">Save settings</button>
-                <span class="import-note" id="cdSettingsNote"></span>
+              <div class="app-card-block cd-rules-card">
+                <h2>Automation rules</h2>
+                <p class="settings-note">Guardrails for the sequence.</p>
+                <label class="cd-toggle-row">
+                  <span class="cd-setting-label"><strong>Stop on reply</strong><span class="cd-field-sub">Pause sequence the moment a lead responds</span></span>
+                  <span class="switch"><input type="checkbox" id="cdStopOnReply" /><i></i></span>
+                </label>
+                <label class="cd-toggle-row">
+                  <span class="cd-setting-label"><strong>Track opens</strong><span class="cd-field-sub">Invisible pixel — disable for plain-text purists</span></span>
+                  <span class="switch"><input type="checkbox" id="cdTrackOpens" /><i></i></span>
+                </label>
+                <label class="cd-toggle-row">
+                  <span class="cd-setting-label"><strong>Stop on bounce</strong><span class="cd-field-sub">Remove hard bounces instantly</span></span>
+                  <span class="switch"><input type="checkbox" id="cdStopOnBounce" /><i></i></span>
+                </label>
               </div>
+            </div>
+            <div class="modal-actions cd-settings-actions">
+              <button class="btn btn-primary" id="cdSaveSettings">Save settings</button>
+              <span class="import-note" id="cdSettingsNote"></span>
+            </div>
+            <div class="app-card-block cd-danger">
+              <h2>Danger zone</h2>
+              <p class="settings-note">Deleting removes the campaign and everyone enrolled in it. This cannot be undone.</p>
+              <button class="btn btn-ghost btn-s" id="cdDeleteBtn">Delete campaign</button>
             </div>
           </div>
         </div>

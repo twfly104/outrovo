@@ -280,11 +280,11 @@ function bindAbToggle(row) {
   });
 }
 
-function addStepRow(type, data = {}) {
+function addStepRow(type, data = {}, container) {
   const wrap = document.createElement('div');
   wrap.innerHTML = stepRowHtml(type);
   const row = wrap.firstElementChild;
-  $('stepsEditor').appendChild(row);
+  (container || $('stepsEditor')).appendChild(row);
   row.querySelector('.remove-step').addEventListener('click', () => row.remove());
   row.querySelector('.step-type').addEventListener('change', e => {
     row.querySelector('.step-fields').innerHTML = e.target.value === 'email'
@@ -377,8 +377,8 @@ function bindAiGenerate() {
   });
 }
 
-async function saveCampaign() {
-  const steps = [...document.querySelectorAll('.step-row')].map(row => {
+function collectSteps(container) {
+  return [...container.querySelectorAll('.step-row')].map(row => {
     const type = row.querySelector('.step-type').value;
     const delayMinutes = Number(row.querySelector('.delay').value || 0);
     const label = row.querySelector('.step-label')?.value.trim() || undefined;
@@ -396,6 +396,10 @@ async function saveCampaign() {
     if (type === 'task') return { type, note: row.querySelector('.note').value, taskKind: row.querySelector('.task-kind')?.value || 'connect', delayMinutes, label };
     return { type, delayMinutes, label };
   }).filter(s => (s.type !== 'email' || (s.subject && s.body)) && (s.type !== 'task' || s.note));
+}
+
+async function saveCampaign() {
+  const steps = collectSteps($('stepsEditor'));
 
   const { data } = await api('POST', '/api/app/campaigns', {
     name: $('cName').value,
@@ -412,48 +416,68 @@ async function saveCampaign() {
   openCampaign(data.campaign.id);
 }
 
-function stepVisuals(c) {
-  const mins = s => Math.max(0, Number(s.delayMinutes || 0));
-  const waitText = s => {
-    const m = mins(s);
-    if (m >= 1440 && m % 1440 === 0) return `Wait ${m / 1440} day${m === 1440 ? '' : 's'}`;
-    if (m >= 60 && m % 60 === 0) return `Wait ${m / 60} hour${m === 60 ? '' : 's'}`;
-    return `Wait ${m} min`;
-  };
-  const stepTitle = (s, i) => s.label || (
-    s.type === 'email' ? `Email ${c.steps.slice(0, i + 1).filter(x => x.type === 'email').length} — ${s.subject || 'No subject'}`
-    : s.type === 'task' ? `LinkedIn to-do`
-    : waitText(s));
-  const stepSub = s =>
-    s.type === 'email' ? (s.variantB ? 'A/B test running' : 'Sends through your connected inbox')
-    : s.type === 'task' ? ({ connect: 'Connection request', message: 'Direct message', view: 'Profile view' })[s.taskKind] || 'Manual action'
-    : 'Natural, human-like pacing';
-  const ico = s => s.type === 'email'
-    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></svg>`
-    : s.type === 'task' ? 'in'
-    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
-  const badge = s =>
-    s.type === 'email' ? (c.status === 'active' ? '<span class="step-bdg sent">Auto</span>' : '<span class="step-bdg">Queued</span>')
-    : s.type === 'task' ? '<span class="step-bdg check">Manual</span>'
-    : '<span class="step-bdg done">Auto</span>';
-  return { stepTitle, stepSub, ico, badge };
+const CLOCK_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
+
+function waitLabel(delayMinutes) {
+  const m = Math.max(0, Number(delayMinutes || 0));
+  if (m >= 1440 && m % 1440 === 0) return `Wait ${m / 1440} day${m === 1440 ? '' : 's'}`;
+  if (m >= 60 && m % 60 === 0) return `Wait ${m / 60} hour${m === 60 ? '' : 's'}`;
+  return `Wait ${m} min`;
 }
 
+const waitPillHtml = delayMinutes => `
+  <div class="seq-item seq-item-wait">
+    <div class="seq-node"><span class="seq-ico wait">${CLOCK_SVG}</span></div>
+    <div class="seq-wait-pill">${CLOCK_SVG} ${waitLabel(delayMinutes)}</div>
+  </div>`;
+
 function campaignStepsHtml(c) {
-  const { stepTitle, stepSub, ico, badge } = stepVisuals(c);
-  return c.steps.map((s, i) => `
-    <div class="cp-step">
-      <span class="cp-ico ${s.type}">${ico(s)}</span>
-      <div class="cp-stinfo"><strong>${esc(stepTitle(s, i))}</strong><span>${esc(stepSub(s))}</span></div>
-      ${badge(s)}
-    </div>`).join('');
+  const totalEmails = c.steps.filter(s => s.type === 'email').length;
+  let emailIdx = 0;
+  const out = [];
+  c.steps.forEach((s, i) => {
+    // delayMinutes lives on the step it precedes — render it as a wait pill
+    // between cards, like the sequence mockups.
+    if (s.type !== 'wait' && i > 0 && Number(s.delayMinutes) > 0) out.push(waitPillHtml(s.delayMinutes));
+    if (s.type === 'wait') { out.push(waitPillHtml(s.delayMinutes)); return; }
+    if (s.type === 'task') {
+      const kind = ({ connect: 'Connection request', message: 'Direct message', view: 'Profile view' })[s.taskKind] || 'Manual action';
+      out.push(`
+        <div class="seq-item">
+          <div class="seq-node"><span class="seq-ico li">in</span></div>
+          <div class="seq-card">
+            <div class="seq-card-head"><strong>LinkedIn task</strong><span class="status task">MANUAL</span><span class="seq-when">${esc(kind)}</span></div>
+            <div class="seq-preview">${esc(s.note)}</div>
+          </div>
+        </div>`);
+      return;
+    }
+    emailIdx++;
+    const badge = c.status === 'active'
+      ? '<span class="status active"><i></i>LIVE</span>'
+      : '<span class="status draft"><i></i>DRAFT</span>';
+    const when = (c.sentCount || 0) ? `${c.sentCount} sent so far` : 'not sent yet';
+    const preview = (s.body || '').replace(/\s+/g, ' ').trim();
+    out.push(`
+      <div class="seq-item">
+        <div class="seq-node"><span class="seq-num">${emailIdx}</span></div>
+        <div class="seq-card">
+          <div class="seq-card-head"><strong>Email ${emailIdx} of ${totalEmails}</strong>${badge}${s.variantB ? '<span class="status task">A/B</span>' : ''}<span class="seq-when">${when}</span></div>
+          <div class="seq-subject">Subject: ${esc(s.subject || '—')}</div>
+          <div class="seq-preview">${esc(preview.slice(0, 110))}${preview.length > 110 ? '…' : ''}</div>
+        </div>
+      </div>`);
+  });
+  return out.join('');
 }
 
 function campaignStatsHtml(c) {
   const sent = c.sentCount || 0;
   const bounced = c.bounced || 0;
   const replied = c.replied || 0;
+  const opened = c.opened || 0;
   const placed = sent ? Math.round((Math.max(0, sent - bounced) / sent) * 100) : null;
+  const openRate = sent ? Math.round((opened / sent) * 100) : null;
   const replyRate = sent ? Math.round((replied / sent) * 100) : null;
   const days = Array.isArray(c.repliesPastWeek) ? c.repliesPastWeek : [];
   const peak = Math.max(1, ...days);
@@ -462,22 +486,28 @@ function campaignStatsHtml(c) {
     : '';
   return `
     <div class="cp-kpi"><span>Landing in inbox</span><strong>${placed === null ? '—' : placed + '%'}</strong></div>
+    <div class="cp-kpi"><span>Open rate</span><strong>${openRate === null ? '—' : openRate + '%'}</strong></div>
     <div class="cp-kpi"><span>Reply rate</span><strong>${replyRate === null ? '—' : replyRate + '%'}</strong></div>
     <div><span class="cp-kpi-label">Replies · 7 days</span>${bars}</div>`;
 }
 
-function campaignCardHtml(c) {
+function campaignRowHtml(c) {
+  const emails = c.steps.filter(s => s.type === 'email').length;
+  const sent = c.sentCount || 0;
+  const openRate = sent ? Math.round(((c.opened || 0) / sent) * 100) : null;
+  const replyRate = sent ? Math.round(((c.replied || 0) / sent) * 1000) / 10 : null;
+  const progress = c.prospects ? Math.round(((c.finished || 0) / c.prospects) * 100) : 0;
   return `
-    <div class="campaign-card cp-clickable" data-open="${c.id}" role="button" tabindex="0">
-      <div class="cp-head">
-        <div>
-          <h3>${esc(c.name)}</h3>
-          <div class="meta">${c.steps.length} steps · ${c.prospects} prospects · ${c.finished} finished · today ${c.sentToday ?? 0}/${c.capToday ?? 25}</div>
-        </div>
-        <span class="status ${esc(c.status)}">${esc(c.status)}</span>
-      </div>
-      <div class="cp-open-hint">Open campaign →</div>
-    </div>`;
+    <tr class="campaign-row" data-open="${c.id}" tabindex="0">
+      <td><span class="c-name"><span class="c-dot ${esc(c.status)}"></span><strong>${esc(c.name)}</strong></span></td>
+      <td><span class="status ${esc(c.status)}"><i></i>${esc(c.status)}</span></td>
+      <td>${emails} email${emails === 1 ? '' : 's'}</td>
+      <td>${c.prospects}</td>
+      <td>${sent}</td>
+      <td>${openRate === null ? '—' : openRate + '%'}</td>
+      <td>${replyRate === null ? '—' : replyRate + '%'}</td>
+      <td><span class="c-progress"><span class="c-bar"><i style="width:${progress}%"></i></span><span class="c-pct">${progress}%</span></span></td>
+    </tr>`;
 }
 
 async function loadCampaigns() {
@@ -486,9 +516,12 @@ async function loadCampaigns() {
   campaigns = data.campaigns;
   const list = $('campaignList');
   if (!campaigns.length) {
-    list.innerHTML = '<div class="app-card-block" style="color:var(--ink-faint)">No campaigns yet — press <strong>New campaign</strong> above and the step builder opens. Emails go out automatically once you hit Run.</div>';
+    list.innerHTML = '<div class="empty-state"><h3>No campaigns yet</h3><p>Press <strong>+ New Campaign</strong> above and the step builder opens. Emails go out automatically once you hit Run.</p></div>';
   } else {
-    list.innerHTML = campaigns.map(c => campaignCardHtml(c)).join('');
+    list.innerHTML = `<table class="campaign-table">
+      <thead><tr><th>Campaign</th><th>Status</th><th>Steps</th><th>Contacts</th><th>Sent</th><th>Open</th><th>Reply</th><th>Progress</th></tr></thead>
+      <tbody>${campaigns.map(c => campaignRowHtml(c)).join('')}</tbody>
+    </table>`;
   }
 
   list.querySelectorAll('[data-open]').forEach(card => {
@@ -514,16 +547,27 @@ function renderCampaignDetail(c) {
   $('cdName').textContent = c.name;
   const status = $('cdStatus');
   status.className = `status ${c.status}`;
-  status.textContent = c.status;
+  status.innerHTML = `<i></i>${esc(c.status)}`;
   const active = c.status === 'active';
   $('cdRunBtn').innerHTML = `${active ? '<svg class="tab-ico" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4.5" height="16" rx="1"/><rect x="15" y="4" width="4.5" height="16" rx="1"/></svg>Pause campaign'
     : '<svg class="tab-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Run campaign'}`;
   $('cdSteps').innerHTML = campaignStepsHtml(c);
   $('cdStats').innerHTML = campaignStatsHtml(c);
+  $('cdStepEditor').hidden = true;
+  $('cdStepNote').textContent = '';
+  // Settings tab — every control mirrors the saved campaign settings.
   $('cdDailyCap').value = c.dailyCap ?? 25;
-  $('cdWindowStart').value = c.sendWindowStart ?? 9;
-  $('cdWindowEnd').value = c.sendWindowEnd ?? 17;
+  $('cdDailyCapVal').textContent = c.dailyCap ?? 25;
+  $('cdGapMin').value = c.gapMin ?? 4;
+  $('cdGapMax').value = c.gapMax ?? 9;
+  $('cdWindowStart').value = String(c.sendWindowStart ?? 9).padStart(2, '0');
+  $('cdWindowEnd').value = String(c.sendWindowEnd ?? 17).padStart(2, '0');
   $('cdTimezone').value = c.timezone || 'UTC';
+  const days = Array.isArray(c.sendDays) ? c.sendDays.map(Number) : [0, 1, 2, 3, 4, 5, 6];
+  $('cdDays').querySelectorAll('button').forEach(b => b.classList.toggle('on', days.includes(Number(b.dataset.day))));
+  $('cdStopOnReply').checked = c.stopOnReply !== false;
+  $('cdTrackOpens').checked = c.trackOpens !== false;
+  $('cdStopOnBounce').checked = c.stopOnBounce !== false;
   $('cdSettingsNote').textContent = '';
   loadAbResults(c);
 }
@@ -563,6 +607,13 @@ function backToList() {
 }
 
 function bindCampaignDetail() {
+  // Hour dropdowns for the send window (00:00–23:00).
+  for (const id of ['cdWindowStart', 'cdWindowEnd']) {
+    $(id).innerHTML = Array.from({ length: 24 }, (_, h) => {
+      const v = String(h).padStart(2, '0');
+      return `<option value="${v}">${v}:00</option>`;
+    }).join('');
+  }
   $('cdBackBtn').addEventListener('click', () => { backToList(); loadCampaigns(); });
   $('cdTabs').addEventListener('click', e => {
     const tab = e.target.closest('.settings-tab');
@@ -577,29 +628,87 @@ function bindCampaignDetail() {
     $('cdRunBtn').disabled = false;
     loadCampaigns();
   });
+  $('cdValidateBtn').addEventListener('click', validateCampaign);
   $('cdDeleteBtn').addEventListener('click', async () => {
     if (!confirm('Delete this campaign and its prospects?')) return;
     await api('DELETE', `/api/app/campaigns/${selectedCampaign}`);
     backToList();
     loadCampaigns();
   });
+  // Settings tab interactivity
+  $('cdDailyCap').addEventListener('input', () => { $('cdDailyCapVal').textContent = $('cdDailyCap').value; });
+  $('cdDays').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-day]');
+    if (btn) btn.classList.toggle('on');
+  });
   $('cdSaveSettings').addEventListener('click', async () => {
+    const sendDays = [...$('cdDays').querySelectorAll('button.on')].map(b => Number(b.dataset.day));
+    if (!sendDays.length) { $('cdSettingsNote').textContent = 'Pick at least one active day.'; return; }
     const { data } = await api('PATCH', `/api/app/campaigns/${selectedCampaign}`, {
       dailyCap: Number($('cdDailyCap').value) || 25,
+      gapMin: Number($('cdGapMin').value ?? 4),
+      gapMax: Number($('cdGapMax').value ?? 9),
       sendWindowStart: Number($('cdWindowStart').value ?? 9),
       sendWindowEnd: Number($('cdWindowEnd').value ?? 17),
       timezone: $('cdTimezone').value || 'UTC',
+      sendDays,
+      stopOnReply: $('cdStopOnReply').checked,
+      trackOpens: $('cdTrackOpens').checked,
+      stopOnBounce: $('cdStopOnBounce').checked,
     });
     $('cdSettingsNote').textContent = data.ok ? 'Saved.' : (data.error || 'Could not save.');
     if (data.ok) loadCampaigns();
   });
-  $('addLeadsBtn').addEventListener('click', () => {
+  // Inline "+ Add step" editor — appends to the live sequence via PATCH.
+  $('cdAddStepBtn').addEventListener('click', () => {
+    $('cdStepEditorRows').innerHTML = '';
+    addStepRow('email', {}, $('cdStepEditorRows'));
+    $('cdStepNote').textContent = '';
+    $('cdStepEditor').hidden = false;
+    $('cdStepEditor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+  $('cdCancelStepBtn').addEventListener('click', () => { $('cdStepEditor').hidden = true; });
+  $('cdSaveStepBtn').addEventListener('click', async () => {
+    const c = campaigns.find(x => x.id === selectedCampaign);
+    if (!c) return;
+    const newSteps = collectSteps($('cdStepEditorRows'));
+    if (!newSteps.length) { $('cdStepNote').textContent = 'Fill in the step first — emails need a subject and body.'; return; }
+    $('cdSaveStepBtn').disabled = true;
+    const { data } = await api('PATCH', `/api/app/campaigns/${selectedCampaign}`, { steps: [...c.steps, ...newSteps] });
+    $('cdSaveStepBtn').disabled = false;
+    if (!data.ok) { $('cdStepNote').textContent = data.error || 'Could not save the step.'; return; }
+    $('cdStepEditor').hidden = true;
+    toast('Step added to the sequence');
+    loadCampaigns();
+  });
+  const openAddLeads = () => {
     $('importNote').textContent = '';
     $('addLeadsModal').hidden = false;
-  });
+  };
+  $('addLeadsBtn').addEventListener('click', openAddLeads);
+  $('emptyAddLeadsBtn').addEventListener('click', openAddLeads);
   $('closeAddLeadsModal').addEventListener('click', () => { $('addLeadsModal').hidden = true; });
   $('addLeadsModal').addEventListener('click', e => { if (e.target === $('addLeadsModal')) $('addLeadsModal').hidden = true; });
   $('goFindLeadsBtn').addEventListener('click', () => { $('addLeadsModal').hidden = true; showPage('leads'); });
+}
+
+// Pre-flight check: steps complete, contacts enrolled, window sane, inbox connected.
+async function validateCampaign() {
+  const c = campaigns.find(x => x.id === selectedCampaign);
+  if (!c) return;
+  const issues = [];
+  if (!c.steps?.length) issues.push('add at least one step');
+  const incomplete = c.steps.filter(s => (s.type === 'email' && (!s.subject || !s.body)) || (s.type === 'task' && !s.note));
+  if (incomplete.length) issues.push(`${incomplete.length} step${incomplete.length > 1 ? 's are' : ' is'} missing content`);
+  if (Number(c.sendWindowStart ?? 9) === Number(c.sendWindowEnd ?? 17)) issues.push('send window is 00:00–00:00 (sends any hour — set a window if that is not intended)');
+  const [{ data: pr }, { data: sn }] = await Promise.all([
+    api('GET', `/api/app/prospects?campaignId=${selectedCampaign}`),
+    api('GET', '/api/app/senders'),
+  ]);
+  if (pr?.ok && !pr.prospects.length) issues.push('no contacts enrolled yet');
+  if (sn?.ok && !(sn.senders || []).length) issues.push('no sender inbox connected — sends run in demo mode until you connect one in Settings');
+  if (issues.length) toast(`Not ready: ${issues.join(' · ')}`, 'err');
+  else toast('All good — this campaign is ready to run.');
 }
 
 // ---------- prospects ----------
@@ -612,8 +721,10 @@ async function loadProspects() {
   if (!selectedCampaign) return;
   const { data } = await api('GET', `/api/app/prospects?campaignId=${selectedCampaign}`);
   if (!data.ok) return;
-  $('prospectCount').textContent = `(${data.prospects.length})`;
-  $('cdContactCount').textContent = `(${data.prospects.length})`;
+  const empty = !data.prospects.length;
+  $('prospectEmpty').hidden = !empty;
+  $('prospectTableWrap').hidden = empty;
+  $('cdContactCount').textContent = data.prospects.length;
   const tbody = $('prospectTable').querySelector('tbody');
   tbody.innerHTML = data.prospects.map(p => {
     const v = p.verified?.verdict;
