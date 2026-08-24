@@ -1884,21 +1884,30 @@ function bindLeadFinder() {
 
   // "Add selected to Campaign" — the button opens a campaign picker popover;
   // choosing one enrolls straight away (select stays as the value holder).
+  // Feedback always goes to #leadEnrollHint (right next to the button) so the
+  // user never wonders whether the click registered.
+  const enrollHint = msg => { const h = $('leadEnrollHint'); if (h) { h.textContent = msg; } };
   $('leadEnrollBtn').addEventListener('click', () => {
     const selected = [...document.querySelectorAll('#leadTable input[data-lead]:checked')]
       .map(cb => leadFinderLeads[Number(cb.dataset.lead)]).filter(Boolean);
-    if (!selected.length) { $('leadFindNote').textContent = 'Select at least one lead.'; return; }
+    if (!selected.length) { enrollHint('Select at least one lead below first.'); return; }
     const picker = $('leadCampaignPicker');
-    if (!campaigns.length) { $('leadFindNote').textContent = 'Create a campaign first, then push leads into it.'; return; }
-    if (!picker.hidden) { picker.hidden = true; return; }
+    if (!campaigns.length) {
+      enrollHint('No campaigns yet — create one first, then push leads into it.');
+      $('leadFindNote').textContent = 'Create a campaign first, then push leads into it.';
+      return;
+    }
+    if (!picker.hidden) { picker.hidden = true; enrollHint(''); return; }
     picker.innerHTML = '<p>Push into…</p>' + campaigns.map(c =>
       `<button type="button" data-pick="${c.id}">${esc(c.name)}<span>${esc(c.status)}</span></button>`).join('');
     picker.hidden = false;
+    enrollHint('Choose a campaign below ↓');
     picker.onclick = e => {
       const btn = e.target.closest('[data-pick]');
       if (!btn) return;
       picker.hidden = true;
       $('leadEnrollCampaign').value = btn.dataset.pick;
+      enrollHint('');
       enrollSelectedLeads();
     };
   });
@@ -1911,18 +1920,25 @@ function bindLeadFinder() {
     const selected = [...document.querySelectorAll('#leadTable input[data-lead]:checked')]
       .map(cb => leadFinderLeads[Number(cb.dataset.lead)]).filter(Boolean);
     const campaignId = $('leadEnrollCampaign').value;
-    if (!campaignId) { $('leadFindNote').textContent = 'Choose a campaign first.'; return; }
-    if (!selected.length) { $('leadFindNote').textContent = 'Select at least one lead.'; return; }
-    const { status, data } = await api('POST', '/api/app/lead-finder/enroll', { campaignId, leads: selected });
-    $('leadFindNote').textContent = status === 200 && data.ok
-      ? `✓ Added ${data.added} to “${data.campaignName}”${data.skippedSuppressed ? ` · ${data.skippedSuppressed} suppressed skipped` : ''}.`
-      : (data.error || 'Enroll failed.');
-    if (status === 200 && data.ok) {
-      toast(`Added ${data.added} lead${data.added === 1 ? '' : 's'} to “${data.campaignName}”`);
-      $('leadResults').hidden = true;
-      leadFinderLeads = [];
-      loadCampaigns();
-      loadProspects();
+    if (!campaignId) { enrollHint('Choose a campaign first.'); return; }
+    if (!selected.length) { enrollHint('Select at least one lead.'); return; }
+    enrollHint('Adding…');
+    try {
+      const { status, data } = await api('POST', '/api/app/lead-finder/enroll', { campaignId, leads: selected });
+      const msg = status === 200 && data.ok
+        ? `✓ Added ${data.added} to “${data.campaignName}”${data.skippedSuppressed ? ` · ${data.skippedSuppressed} suppressed skipped` : ''}.`
+        : (data.error || 'Enroll failed.');
+      $('leadFindNote').textContent = msg;
+      enrollHint(status === 200 && data.ok ? '' : msg);
+      if (status === 200 && data.ok) {
+        toast(`Added ${data.added} lead${data.added === 1 ? '' : 's'} to “${data.campaignName}”`);
+        $('leadResults').hidden = true;
+        leadFinderLeads = [];
+        loadCampaigns();
+        loadProspects();
+      }
+    } catch (err) {
+      enrollHint('Enroll failed — check your connection and try again.');
     }
   }
 

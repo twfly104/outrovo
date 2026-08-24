@@ -3007,9 +3007,10 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   flex-wrap: wrap; margin: 26px 2px 12px;
 }
 .lf-results-bar > span { font-size: 0.9rem; color: var(--ink-soft); }
-.lf-enroll { position: relative; }
+.lf-enroll { position: relative; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .lf-enroll .btn-dark { display: inline-flex; align-items: center; gap: 8px; }
 .lf-enroll .tab-ico { width: 15px; height: 15px; }
+.lf-enroll-hint { font-size: 0.82rem; font-weight: 600; color: var(--ink-soft); }
 .lf-campaign-picker {
   position: absolute; right: 0; top: calc(100% + 8px); z-index: 30;
   min-width: 260px; background: #fff; border: 1px solid var(--line);
