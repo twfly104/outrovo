@@ -2137,7 +2137,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .app-body .notif-row { padding: 18px 0; }
 .app-body .notif-card h2 { margin-bottom: 2px; }
 
-/* Developer section */
+/* Integrations & API section */
 .dev-block { padding: 18px 0; border-top: 1px solid #f0ebe2; }
 .dev-block:first-of-type { border-top: none; padding-top: 0; }
 .dev-block-head { margin-bottom: 10px; }
@@ -2162,6 +2162,34 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .wh-item .wh-meta { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
 .wh-item .wh-provider { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--crest); background: rgba(232,93,4,0.08); padding: 2px 8px; border-radius: 10px; }
 .wh-item button { background: none; border: none; color: #d93025; cursor: pointer; font-size: 0.8rem; font-weight: 600; padding: 2px 6px; }
+
+/* Quick connect buttons */
+.quick-connect-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.quick-connect-btn {
+  display: flex; align-items: center; gap: 10px; padding: 14px;
+  border: 1px solid #e5dfd2; border-radius: 12px; background: #fff;
+  text-decoration: none; color: inherit; transition: box-shadow 0.15s, border-color 0.15s;
+}
+.quick-connect-btn:hover { border-color: #c7ccd1; box-shadow: 0 4px 12px rgba(11,12,14,0.08); }
+.quick-connect-btn div { display: flex; flex-direction: column; }
+.quick-connect-btn strong { font-size: 0.88rem; }
+.quick-connect-btn span { font-size: 0.75rem; color: var(--ink-faint); }
+@media (max-width: 600px) { .quick-connect-grid { grid-template-columns: 1fr; } }
+
+/* Advanced / developer drawer */
+.dev-advanced { margin-top: 8px; }
+.dev-advanced summary {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 0; cursor: pointer; list-style: none;
+  border-top: 1px solid #f0ebe2;
+}
+.dev-advanced summary::-webkit-details-marker { display: none; }
+.dev-advanced summary::after {
+  content: ''; width: 8px; height: 8px; border-right: 2px solid var(--ink-faint); border-bottom: 2px solid var(--ink-faint);
+  transform: rotate(45deg); transition: transform 0.2s; flex-shrink: 0; margin-left: 12px;
+}
+.dev-advanced[open] summary::after { transform: rotate(225deg); }
+.dev-advanced-body { padding-top: 4px; }
 
 .app-body .mailbox-main, .app-body .integ-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .app-body .integ-main { display: block; }

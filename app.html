@@ -631,53 +631,56 @@
 
         <div class="settings-pane" id="stab-developer">
         <div class="app-card-block" id="secDeveloper">
-          <h2>Developer</h2>
-          <p class="sec-hint" style="margin-bottom:16px;">API key · webhooks · MCP &amp; CLI</p>
+          <h2>Integrations &amp; API</h2>
+          <p class="sec-hint" style="margin-bottom:16px;">Connect your tools · automate workflows</p>
 
           <div class="dev-block">
             <div class="dev-block-head">
               <div>
-                <div class="integ-name">API key</div>
-                <div class="integ-desc">Authenticate the REST API, MCP server and CLI. Treat it like a password.</div>
+                <div class="integ-name">Quick connect</div>
+                <div class="integ-desc">One click — no URLs to paste.</div>
               </div>
             </div>
-            <div id="apiKeyArea">
-              <div id="apiKeyStatus" class="settings-note">Checking…</div>
-              <div id="apiKeyNew" hidden>
-                <code id="apiKeyValue" class="dev-key"></code>
-                <button type="button" class="btn btn-dark btn-s" id="copyApiKeyBtn">Copy</button>
-                <p class="settings-note">Shown once — store it somewhere safe. Generating a new key revokes the old one.</p>
-              </div>
-              <div style="display:flex;gap:10px;margin-top:10px;">
-                <button type="button" class="btn btn-primary btn-s" id="genApiKeyBtn">Generate key</button>
-                <button type="button" class="btn btn-ghost btn-s" id="revokeApiKeyBtn" hidden style="color:#d93025;border-color:#d93025;">Revoke</button>
-              </div>
+            <div class="quick-connect-grid">
+              <a class="quick-connect-btn" href="https://zapier.com/apps/outrovo/integrations" target="_blank" rel="noopener">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 0L0 12h8v12L20 12h-8V0z" fill="#FF4A00"/></svg>
+                <div><strong>Zapier</strong><span>6,000+ apps</span></div>
+              </a>
+              <a class="quick-connect-btn" href="https://www.make.com/en/integrations" target="_blank" rel="noopener">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#6D00CC"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">M</text></svg>
+                <div><strong>Make</strong><span>Visual automation</span></div>
+              </a>
+              <a class="quick-connect-btn" href="https://www.n8n.io" target="_blank" rel="noopener">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="12" rx="6" fill="#EA4B71"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="9" font-weight="700">n8n</text></svg>
+                <div><strong>n8n</strong><span>Self-hosted</span></div>
+              </a>
             </div>
+            <p class="settings-note" style="margin-top:8px;">Use your webhook URL (below) as the trigger in any of these tools.</p>
           </div>
 
           <div class="dev-block">
             <div class="dev-block-head">
               <div>
                 <div class="integ-name">Webhooks</div>
-                <div class="integ-desc">Push events (sent, reply, bounce, unsubscribe…) to Zapier, HubSpot, Pipedrive or any URL.</div>
+                <div class="integ-desc">Get notified when something happens — a reply, a bounce, an unsubscribe.</div>
               </div>
             </div>
             <div id="webhookList"></div>
             <form id="webhookForm" style="margin-top:12px;">
-              <div class="field"><label>Endpoint URL</label><input id="whUrl" placeholder="https://hooks.zapier.com/…" /></div>
+              <div class="field"><label>Endpoint URL</label><input id="whUrl" placeholder="Paste the URL from Zapier, Make, or your own app" /></div>
               <div class="field-row">
-                <div class="field"><label>Provider</label>
+                <div class="field"><label>Service</label>
                   <select id="whProvider">
-                    <option value="webhook">Generic webhook</option>
+                    <option value="webhook">Other / my own app</option>
                     <option value="zapier">Zapier</option>
                     <option value="hubspot">HubSpot</option>
                     <option value="pipedrive">Pipedrive</option>
                     <option value="salesforce">Salesforce</option>
                   </select>
                 </div>
-                <div class="field"><label>Signing secret (optional)</label><input id="whSecret" placeholder="verify payloads" /></div>
+                <div class="field"><label>Secret (optional)</label><input id="whSecret" placeholder="Extra security — verify payloads" /></div>
               </div>
-              <div class="field"><label>Events</label>
+              <div class="field"><label>Notify me when…</label>
                 <div class="wh-events" id="whEvents"></div>
               </div>
               <button type="submit" class="btn btn-primary btn-s">Add webhook</button>
@@ -685,16 +688,44 @@
             </form>
           </div>
 
-          <div class="dev-block">
-            <div class="dev-block-head">
-              <div>
-                <div class="integ-name">MCP &amp; CLI</div>
-                <div class="integ-desc">Drive Outrovo from Claude, Cursor, or your terminal.</div>
+          <details class="dev-advanced">
+            <summary><strong>Advanced — API key, MCP &amp; CLI</strong><span class="sec-hint">for developers</span></summary>
+            <div class="dev-advanced-body">
+
+              <div class="dev-block">
+                <div class="dev-block-head">
+                  <div>
+                    <div class="integ-name">API key</div>
+                    <div class="integ-desc">Authenticate the REST API, MCP server and CLI.</div>
+                  </div>
+                </div>
+                <div id="apiKeyArea">
+                  <div id="apiKeyStatus" class="settings-note">Checking…</div>
+                  <div id="apiKeyNew" hidden>
+                    <code id="apiKeyValue" class="dev-key"></code>
+                    <button type="button" class="btn btn-dark btn-s" id="copyApiKeyBtn">Copy</button>
+                    <p class="settings-note">Shown once — store it somewhere safe. Generating a new key revokes the old one.</p>
+                  </div>
+                  <div style="display:flex;gap:10px;margin-top:10px;">
+                    <button type="button" class="btn btn-primary btn-s" id="genApiKeyBtn">Generate key</button>
+                    <button type="button" class="btn btn-ghost btn-s" id="revokeApiKeyBtn" hidden style="color:#d93025;border-color:#d93025;">Revoke</button>
+                  </div>
+                </div>
               </div>
+
+              <div class="dev-block">
+                <div class="dev-block-head">
+                  <div>
+                    <div class="integ-name">MCP &amp; CLI</div>
+                    <div class="integ-desc">Drive Outrovo from Claude, Cursor, or your terminal.</div>
+                  </div>
+                </div>
+                <p class="settings-note">MCP endpoint: <code id="mcpUrl"></code> — authenticate with header <code>Authorization: Bearer &lt;your API key&gt;</code> or <code>x-integration-token</code>.</p>
+                <p class="settings-note">CLI: <code>npm i -g outrovo</code> then <code>outrovo login</code> with the same key.</p>
+              </div>
+
             </div>
-            <p class="settings-note">MCP endpoint: <code id="mcpUrl"></code> — authenticate with header <code>Authorization: Bearer &lt;your API key&gt;</code> or <code>x-integration-token</code>.</p>
-            <p class="settings-note">CLI: <code>npm i -g outrovo</code> then <code>outrovo login</code> with the same key.</p>
-          </div>
+          </details>
         </div>
         </div><!-- /stab-developer -->
 
