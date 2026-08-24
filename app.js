@@ -1684,9 +1684,7 @@ function bindLeadFinderScan() {
       syncChips();
       status.className = 'ai-status ok';
       const gaps = !p.keywords ? ' Could not infer the target industry — type it in step 2.' : '';
-      status.textContent = (data.source === 'llm'
-        ? `Filled from ${url} — review, then hit Search leads.`
-        : `Filled from ${url} (heuristic — set LLM_API_KEY for AI-quality fills).`) + gaps;
+      status.textContent = `Filled from ${url} — review, then hit Find Leads.` + gaps;
     } catch (err) {
       status.className = 'ai-status err';
       status.textContent = `✕ ${err.message || 'Could not scan that site — fill manually.'}`;
@@ -1715,6 +1713,9 @@ async function applyLeadFinderPrefill() {
     syncChips();
     if (filled > 0 && $('lfPrefillNote')) {
       $('lfPrefillNote').textContent = `Pre-filled from your website — tweak anything before searching.`;
+      // It's a note, not a result — clear it once the user searches so it
+      // doesn't linger next to the search outcome.
+      $('leadFindBtn').addEventListener('click', () => { $('lfPrefillNote').textContent = ''; }, { once: true });
     }
   } catch {}
 }
@@ -1910,7 +1911,7 @@ function bindLeadFinder() {
     const selected = [...document.querySelectorAll('#leadTable input[data-lead]:checked')]
       .map(cb => leadFinderLeads[Number(cb.dataset.lead)]).filter(Boolean);
     const campaignId = $('leadEnrollCampaign').value;
-    if (!campaignId) { $('leadFindNote').textContent = 'Pick a campaign to add them to.'; return; }
+    if (!campaignId) { $('leadFindNote').textContent = 'Choose a campaign first.'; return; }
     if (!selected.length) { $('leadFindNote').textContent = 'Select at least one lead.'; return; }
     const { status, data } = await api('POST', '/api/app/lead-finder/enroll', { campaignId, leads: selected });
     $('leadFindNote').textContent = status === 200 && data.ok

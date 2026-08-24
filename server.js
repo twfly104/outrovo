@@ -820,7 +820,19 @@ async function hunterSearchLeads(f, perPage) {
     err.code = 'NO_DOMAINS';
     throw err;
   }
-  const seniority = EXEC_TITLES.test(f.title || '') ? '&seniority=executive' : '';
+  const titles = splitFilter(f.title);
+  const isExec = EXEC_TITLES.test(f.title || '');
+  const titleTerms = titles.map(t => t.toLowerCase().replace(/[^a-z\s]/g, '').trim()).filter(Boolean);
+  // Hunter's seniority=executive spans C-level through directors, so a
+  // "founder / CEO" search still surfaces Directors of AI. Post-filter by
+  // word boundary so the lead's title must contain one of the requested
+  // title words ("director of sales" matches "sales", never "founder").
+  const titleMatches = leadTitle => {
+    if (!titleTerms.length) return true;
+    const t = (leadTitle || '').toLowerCase();
+    return titleTerms.some(term => new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(t));
+  };
+  const seniority = isExec ? '&seniority=executive' : '';
   const out = [];
   const seen = new Set();
   for (const domain of domains) {
@@ -837,6 +849,7 @@ async function hunterSearchLeads(f, perPage) {
       const email = (e.value || '').trim().toLowerCase();
       if (!isEmail(email) || seen.has(email)) continue;
       if (e.verification?.status && e.verification.status !== 'valid') continue;
+      if (!titleMatches(e.position)) continue;
       seen.add(email);
       out.push({
         email, source: 'hunter',
