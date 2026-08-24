@@ -688,15 +688,31 @@ async function apolloError(res, what) {
   return new Error(`Apollo ${what} ${res.status}${payload?.error ? `: ${payload.error}` : ''}`);
 }
 
+// Tag inputs send comma-joined values — Apollo wants an array per filter.
+const splitFilter = v => (v || '').split(',').map(s => s.trim()).filter(Boolean);
+
+function empRangeLabel(n) {
+  const e = Number(n);
+  if (!e) return '';
+  if (e <= 10) return '1–10';
+  if (e <= 50) return '11–50';
+  if (e <= 200) return '51–200';
+  if (e <= 500) return '201–500';
+  if (e <= 1000) return '501–1,000';
+  return '1,000+';
+}
+
 async function apolloSearchLeads(f, perPage, user = null) {
   const key = userApolloKey(user) || process.env.APOLLO_API_KEY;
   const pageSize = Math.min(100, Math.max(10, perPage * 3));
+  const titles = splitFilter(f.title);
+  const locations = splitFilter(f.location);
   const body = {
     page: 1, per_page: pageSize,
     q_keywords: f.keywords || undefined,
-    person_titles: f.title ? [f.title] : undefined,
+    person_titles: titles.length ? titles : undefined,
     organization_num_employees_ranges: f.size ? [f.size] : undefined,
-    person_locations: f.location ? [f.location] : undefined,
+    person_locations: locations.length ? locations : undefined,
     contact_email_status: ['verified'],
   };
   const res = await fetch(`${APOLLO_BASE()}/api/v1/mixed_people/search`, {
@@ -715,6 +731,8 @@ async function apolloSearchLeads(f, perPage, user = null) {
       firstName: p.first_name || '', lastName: p.last_name || '',
       company: p.organization?.name || p.organization_name || '',
       title: p.title || '', linkedinUrl: p.linkedin_url || '',
+      size: empRangeLabel(p.organization?.estimated_num_employees),
+      country: p.country || p.organization?.country || '',
       emailStatus: p.email_status || '',
     };
   }).filter(l => {

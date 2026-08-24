@@ -1532,39 +1532,79 @@ function canonTitle(raw) {
 }
 function fillTitleEl(val) { const el = $('lfTitle'); if (el && !el.value && val) { el.value = canonTitle(val); return true; } return false; }
 
-function bindTitlePresets() {
-  const dl = $('lfTitleSugs');
-  if (dl) dl.innerHTML = TITLE_PRESETS.flatMap(p => p.value.split(', ')).map(t => `<option value="${t}">`).join('');
-  const wrap = $('lfTitleChips');
-  if (!wrap) return;
-  wrap.innerHTML = TITLE_PRESETS.map(p => `<button type="button" class="lf-chip" data-val="${p.value}">+ ${p.label}</button>`).join('');
-  wrap.addEventListener('click', (e) => {
-    const chip = e.target.closest('.lf-chip');
-    if (!chip) return;
-    $('lfTitle').value = chip.dataset.val;
-    [...wrap.children].forEach(c => c.classList.toggle('on', c === chip));
-  });
-}
-bindTitlePresets();
+// Tag inputs — chips backed by a hidden comma-joined input (the value the
+// search/autopilot code already reads). Enter/comma/paste adds; × removes;
+// the input carries a datalist of preset suggestions.
+const LOC_PRESETS = ['United States', 'United Kingdom', 'Germany', 'France', 'Europe', 'Canada', 'Australia', 'Singapore', 'Taiwan'];
 
-// Quick location pills — multi-value, comma-separated like the search field.
-const LOC_PRESETS = ['United States', 'United Kingdom', 'Europe', 'Canada', 'Australia', 'Taiwan', 'Singapore'];
-function bindLocPresets() {
-  const wrap = $('lfLocChips');
+function tagValues(wrap) {
+  const hidden = $(wrap.dataset.target);
+  return (hidden?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function setTagValues(wrap, values) {
+  $(wrap.dataset.target).value = values.join(', ');
+  renderTags(wrap);
+}
+
+function renderTags(wrap) {
+  const values = tagValues(wrap);
+  const inputId = wrap.dataset.input;
+  const placeholder = values.length ? '+ add' : (wrap.dataset.placeholder || '+ add');
+  wrap.innerHTML = values.map(v =>
+    `<span class="lf-tag">${esc(v)}<button type="button" class="lf-tag-x" data-remove="${esc(v)}" aria-label="Remove ${esc(v)}">✕</button></span>`
+  ).join('') + `<input id="${inputId}" class="lf-tag-input" list="${wrap.dataset.list || ''}" placeholder="${esc(placeholder)}" autocomplete="off" />`;
+  const input = wrap.querySelector('.lf-tag-input');
+  input.addEventListener('keydown', e => {
+    if ((e.key === 'Enter' || e.key === ',') && input.value.trim()) {
+      e.preventDefault();
+      addTag(wrap, input.value);
+    } else if (e.key === 'Backspace' && !input.value && values.length) {
+      setTagValues(wrap, values.slice(0, -1));
+    }
+  });
+  input.addEventListener('change', () => { if (input.value.trim()) addTag(wrap, input.value); });
+  input.addEventListener('blur', () => { if (input.value.trim()) addTag(wrap, input.value); });
+}
+
+function addTag(wrap, raw) {
+  const v = raw.trim().replace(/,+$/, '');
+  if (!v) return;
+  const values = tagValues(wrap);
+  if (values.some(x => x.toLowerCase() === v.toLowerCase())) { renderTags(wrap); return; }
+  setTagValues(wrap, [...values, v]);
+}
+
+function bindTagInput(wrapId, { listId, suggestions, placeholder }) {
+  const wrap = $(wrapId);
   if (!wrap) return;
-  wrap.innerHTML = LOC_PRESETS.map(l => `<button type="button" class="lf-chip" data-val="${l}">+ ${l}</button>`).join('');
-  wrap.addEventListener('click', (e) => {
-    const chip = e.target.closest('.lf-chip');
-    if (!chip) return;
-    const el = $('lfLocation');
-    const parts = el.value.split(',').map(s => s.trim()).filter(Boolean);
-    const i = parts.findIndex(p => p.toLowerCase() === chip.dataset.val.toLowerCase());
-    if (i >= 0) parts.splice(i, 1); else parts.push(chip.dataset.val);
-    el.value = parts.join(', ');
-    chip.classList.toggle('on', i < 0);
+  wrap.dataset.placeholder = placeholder || '+ add';
+  if (listId && suggestions?.length) {
+    wrap.dataset.list = listId;
+    const dl = $(listId);
+    if (dl) dl.innerHTML = suggestions.map(s => `<option value="${esc(s)}">`).join('');
+  }
+  renderTags(wrap);
+  wrap.addEventListener('click', e => {
+    const rm = e.target.closest('[data-remove]');
+    if (rm) {
+      setTagValues(wrap, tagValues(wrap).filter(v => v !== rm.dataset.remove));
+      return;
+    }
+    wrap.querySelector('.lf-tag-input')?.focus();
   });
 }
-bindLocPresets();
+
+bindTagInput('lfTitleTags', {
+  listId: 'lfTitleSugs',
+  suggestions: TITLE_PRESETS.flatMap(p => p.value.split(', ')),
+  placeholder: '+ add',
+});
+bindTagInput('lfLocTags', {
+  listId: 'lfLocSugs',
+  suggestions: LOC_PRESETS,
+  placeholder: '+ add',
+});
 
 // "Detected:" summary tag — shows the auto-filled offer profile as one glanceable
 // line; the raw service/value fields stay tucked behind the Edit toggle.
@@ -1580,13 +1620,11 @@ function syncDetected() {
   box.hidden = false;
 }
 
-// Programmatic fills (scan/prefill/seed) change the inputs behind the chips'
-// backs — resync the highlight states so a stale pill never glows.
+// Programmatic fills (scan/prefill/seed) write to the hidden inputs behind
+// the tags' backs — re-render so the chips always mirror the real value.
 function syncChips() {
-  const titleVal = $('lfTitle')?.value.trim();
-  [...($('lfTitleChips')?.children || [])].forEach(c => c.classList.toggle('on', c.dataset.val === titleVal));
-  const locs = ($('lfLocation')?.value || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-  [...($('lfLocChips')?.children || [])].forEach(c => c.classList.toggle('on', locs.includes(c.dataset.val.toLowerCase())));
+  if ($('lfTitleTags')) renderTags($('lfTitleTags'));
+  if ($('lfLocTags')) renderTags($('lfLocTags'));
 }
 $('lfDetectedEdit')?.addEventListener('click', () => {
   const row = $('lfOfferFields');
@@ -1701,10 +1739,15 @@ async function applyLeadFinderPrefill() {
   } catch {}
 }
 
+// Industry select + free-text ICP feed Apollo's single keywords field.
+function leadSearchKeywords() {
+  return [$('lfIndustry')?.value.trim(), $('lfKeywords').value.trim()].filter(Boolean).join(', ');
+}
+
 async function saveAutopilot(enabled) {
   const body = {
     enabled,
-    keywords: $('lfKeywords').value.trim(),
+    keywords: leadSearchKeywords(),
     title: canonTitle($('lfTitle').value),
     size: $('lfSize').value,
     location: $('lfLocation').value.trim(),
@@ -1786,23 +1829,47 @@ function closeLeadIntel() {
   setTimeout(() => { if (!drawer.classList.contains('open')) drawer.hidden = true; }, 280);
 }
 
-function renderLeadResults(leads) {
+const LEAD_AVATAR_COLORS = ['#7c3aed', '#db2777', '#0891b2', '#059669', '#d97706', '#4f46e5', '#dc2626', '#0d9488'];
+function leadAvatar(name, email) {
+  const src = (name || email || '?').trim();
+  const initials = name
+    ? name.split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('')
+    : src.slice(0, 2).toUpperCase();
+  let h = 0;
+  for (const ch of src) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return `<span class="lf-avatar" style="background:${LEAD_AVATAR_COLORS[h % LEAD_AVATAR_COLORS.length]}">${esc(initials)}</span>`;
+}
+
+function renderLeadResults(leads, keywords = '') {
   leadFinderLeads = leads;
   leadIntelCache = {};
   const box = $('leadResults');
   if (!leads.length) { box.hidden = true; return; }
   box.hidden = false;
+  $('leadResultsMeta').textContent = `${leads.length} lead${leads.length === 1 ? '' : 's'} found${keywords ? ` · ${keywords}` : ''} · select leads to push into a campaign`;
   const tbody = $('leadTable').querySelector('tbody');
-  tbody.innerHTML = leads.map((l, i) => `
+  tbody.innerHTML = leads.map((l, i) => {
+    const name = [l.firstName, l.lastName].filter(Boolean).join(' ');
+    return `
     <tr>
-      <td><input type="checkbox" data-lead="${i}" checked /></td>
-      <td>${esc(l.email)}</td>
-      <td>${esc([l.firstName, l.lastName].filter(Boolean).join(' ')) || '—'}</td>
-      <td>${esc(l.company) || '—'}</td>
+      <td class="lf-check-col"><input type="checkbox" data-lead="${i}" checked /></td>
+      <td>
+        <div class="lf-person">
+          ${leadAvatar(name, l.email)}
+          <div class="lf-person-info">
+            <strong>${esc(name) || '—'}</strong>
+            <span>${esc(l.email)}${l.verified === 'valid' ? ' <i class="lf-verified">✓ deliverable</i>' : ''}</span>
+          </div>
+        </div>
+      </td>
       <td>${esc(l.title) || '—'}</td>
-      <td>${l.verified === 'valid' ? '<span class="ok-tag">✓ deliverable</span>' : '<span class="warn-tag">unknown</span>'}</td>
-      <td><button class="btn btn-intel btn-xs" data-intel="${i}"><svg class="tab-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l1.8 6.2 6.2 1.8-6.2 1.8-1.8 6.2-1.8-6.2-6.2-1.8 6.2-1.8z"/></svg>Intel</button></td>
-    </tr>`).join('');
+      <td><strong>${esc(l.company) || '—'}</strong></td>
+      <td>${esc(l.size) || '—'}</td>
+      <td>${esc(l.country) || '—'}</td>
+      <td><button class="btn btn-intel" data-intel="${i}"><svg class="tab-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l1.8 6.2 6.2 1.8-6.2 1.8-1.8 6.2-1.8-6.2-6.2-1.8z"/></svg>Intel</button></td>
+    </tr>`;
+  }).join('');
+  $('leadSelectAll').checked = true;
   tbody.onclick = e => {
     const btn = e.target.closest('[data-intel]');
     if (btn) openLeadIntel(btn);
@@ -1829,8 +1896,9 @@ function bindLeadFinder() {
     btn.disabled = true;
     note.textContent = 'Searching and checking emails…';
     $('leadResults').hidden = true;
+    const keywords = leadSearchKeywords();
     const body = {
-      keywords: $('lfKeywords').value.trim(),
+      keywords,
       title: canonTitle($('lfTitle').value),
       size: $('lfSize').value,
       location: $('lfLocation').value.trim(),
@@ -1858,11 +1926,36 @@ function bindLeadFinder() {
     } else {
       note.textContent = 'No leads matched — try broader keywords or a different title.';
     }
-    renderLeadResults(data.leads);
+    renderLeadResults(data.leads, keywords);
     loadLeadFinderStatus();
   });
 
-  $('leadEnrollBtn').addEventListener('click', async () => {
+  // "Add selected to Campaign" — the button opens a campaign picker popover;
+  // choosing one enrolls straight away (select stays as the value holder).
+  $('leadEnrollBtn').addEventListener('click', () => {
+    const selected = [...document.querySelectorAll('#leadTable input[data-lead]:checked')]
+      .map(cb => leadFinderLeads[Number(cb.dataset.lead)]).filter(Boolean);
+    if (!selected.length) { $('leadFindNote').textContent = 'Select at least one lead.'; return; }
+    const picker = $('leadCampaignPicker');
+    if (!campaigns.length) { $('leadFindNote').textContent = 'Create a campaign first, then push leads into it.'; return; }
+    if (!picker.hidden) { picker.hidden = true; return; }
+    picker.innerHTML = '<p>Push into…</p>' + campaigns.map(c =>
+      `<button type="button" data-pick="${c.id}">${esc(c.name)}<span>${esc(c.status)}</span></button>`).join('');
+    picker.hidden = false;
+    picker.onclick = e => {
+      const btn = e.target.closest('[data-pick]');
+      if (!btn) return;
+      picker.hidden = true;
+      $('leadEnrollCampaign').value = btn.dataset.pick;
+      enrollSelectedLeads();
+    };
+  });
+  document.addEventListener('click', e => {
+    const picker = $('leadCampaignPicker');
+    if (picker && !picker.hidden && !e.target.closest('.lf-enroll')) picker.hidden = true;
+  });
+
+  async function enrollSelectedLeads() {
     const selected = [...document.querySelectorAll('#leadTable input[data-lead]:checked')]
       .map(cb => leadFinderLeads[Number(cb.dataset.lead)]).filter(Boolean);
     const campaignId = $('leadEnrollCampaign').value;
@@ -1873,11 +1966,16 @@ function bindLeadFinder() {
       ? `✓ Added ${data.added} to “${data.campaignName}”${data.skippedSuppressed ? ` · ${data.skippedSuppressed} suppressed skipped` : ''}.`
       : (data.error || 'Enroll failed.');
     if (status === 200 && data.ok) {
+      toast(`Added ${data.added} lead${data.added === 1 ? '' : 's'} to “${data.campaignName}”`);
       $('leadResults').hidden = true;
       leadFinderLeads = [];
       loadCampaigns();
       loadProspects();
     }
+  }
+
+  $('leadSelectAll').addEventListener('change', e => {
+    document.querySelectorAll('#leadTable input[data-lead]').forEach(cb => { cb.checked = e.target.checked; });
   });
 }
 

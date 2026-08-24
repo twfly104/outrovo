@@ -361,50 +361,50 @@
         <div class="page-head">
           <div>
             <h1>Find Leads</h1>
-            <span id="leadFinderStatus" class="lead-status"></span>
+            <p class="page-sub">Describe your ICP — Apollo data + AI enrichment does the rest.</p>
           </div>
-          <button type="button" class="btn btn-ghost btn-s" id="lfTopupBtn" hidden title="Buy pay-as-you-go credit bundles — they never expire">+ Add Credits</button>
+          <div class="page-head-actions">
+            <span id="leadFinderStatus" class="lead-status"></span>
+            <button type="button" class="btn btn-ghost btn-s" id="lfTopupBtn" hidden title="Buy pay-as-you-go credit bundles — they never expire">+ Add Credits</button>
+          </div>
         </div>
 
-        <div class="app-card-block">
-          <div class="lf-group">
-            <div class="lf-group-head"><span class="lf-step">1</span><h3>Your business</h3></div>
-            <div class="ai-scan-row">
-              <div class="field">
-                <input id="lfScanUrl" placeholder="mycompany.com" />
-              </div>
-              <button class="btn btn-ghost btn-s" id="lfScanBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Auto-fill profile</button>
-            </div>
-            <div class="ai-status" id="lfScanStatus"></div>
-            <div class="lf-detected" id="lfDetected" hidden>
-              <span class="lf-detected-tag" id="lfDetectedTag"></span>
-              <button type="button" class="lf-detected-edit" id="lfDetectedEdit">Edit</button>
-            </div>
-            <div class="field-row" id="lfOfferFields" hidden>
-              <div class="field"><label>What you sell</label><input id="lfService" placeholder="brand &amp; ecommerce marketing services…" /></div>
-              <div class="field"><label>Value proposition</label><input id="lfValue" placeholder="integrated campaigns that grow brand revenue…" /></div>
-            </div>
-          </div>
-
-          <div class="lf-group">
-            <div class="lf-group-head"><span class="lf-step">2</span><h3>Target audience</h3></div>
+        <div class="app-card-block lf-filter-card">
+          <div class="lf-grid">
             <div class="field">
-              <label>Industry / keywords</label>
-              <input id="lfKeywords" placeholder="ecommerce brands, saas, fintech…" />
+              <label for="lfKeywords">Ideal customer</label>
+              <input id="lfKeywords" placeholder="e.g. B2B SaaS founders who raised seed" />
             </div>
             <div class="field">
-              <label>Job titles</label>
-              <div class="lf-chips" id="lfTitleChips"></div>
-              <input id="lfTitle" list="lfTitleSugs" placeholder="or type your own — founder, head of marketing…" />
+              <label for="lfIndustry">Industry</label>
+              <select id="lfIndustry">
+                <option value="">Any industry</option>
+                <option>SaaS</option>
+                <option>E-commerce</option>
+                <option>Fintech</option>
+                <option>Healthcare</option>
+                <option>Marketing &amp; Agencies</option>
+                <option>Real Estate</option>
+                <option>Manufacturing</option>
+                <option>Consulting</option>
+                <option>Education</option>
+                <option>Hospitality</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="lfTitleInput">Job titles</label>
+              <div class="lf-tags" id="lfTitleTags" data-target="lfTitle" data-input="lfTitleInput"></div>
+              <input type="hidden" id="lfTitle" />
               <datalist id="lfTitleSugs"></datalist>
             </div>
             <div class="field">
-              <label>Location</label>
-              <div class="lf-chips" id="lfLocChips"></div>
-              <input id="lfLocation" placeholder="or type your own — Taiwan, Europe…" />
+              <label for="lfLocInput">Countries</label>
+              <div class="lf-tags" id="lfLocTags" data-target="lfLocation" data-input="lfLocInput"></div>
+              <input type="hidden" id="lfLocation" />
+              <datalist id="lfLocSugs"></datalist>
             </div>
             <div class="field">
-              <label>Company size</label>
+              <label for="lfSize">Company size</label>
               <select id="lfSize">
                 <option value="">Any size</option>
                 <option value="1,10">1–10</option>
@@ -415,19 +415,42 @@
                 <option value="1001,10000">1,000+</option>
               </select>
             </div>
-            <div class="lead-actions">
-              <button class="btn btn-dark btn-s" id="leadFindBtn">Search leads</button>
-              <div class="field" style="margin:0;width:160px;"><label style="margin:0;">Leads to find</label>
+            <div class="field lf-find-cell">
+              <label for="lfCount">Leads to find</label>
+              <div class="lf-find-row">
                 <select id="lfCount">
                   <option value="5">5</option>
                   <option value="10" selected>10</option>
                   <option value="25">25</option>
                 </select>
+                <button class="btn btn-primary" id="leadFindBtn"><svg class="tab-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l1.8 6.2 6.2 1.8-6.2 1.8-1.8 6.2-1.8-6.2-6.2-1.8 6.2-1.8z"/></svg> Find Leads</button>
               </div>
-              <span id="leadFindNote" class="import-note"></span>
             </div>
-            <span id="lfPrefillNote" class="import-note"></span>
           </div>
+          <span id="leadFindNote" class="import-note"></span>
+          <span id="lfPrefillNote" class="import-note"></span>
+
+          <details class="lf-more">
+            <summary>Auto-fill from your website</summary>
+            <div class="lf-more-body">
+              <div class="ai-scan-row">
+                <div class="field">
+                  <input id="lfScanUrl" placeholder="mycompany.com" />
+                </div>
+                <button class="btn btn-ghost btn-s" id="lfScanBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Scan &amp; fill</button>
+              </div>
+              <div class="ai-status" id="lfScanStatus"></div>
+              <div class="lf-detected" id="lfDetected" hidden>
+                <span class="lf-detected-tag" id="lfDetectedTag"></span>
+                <button type="button" class="lf-detected-edit" id="lfDetectedEdit">Edit</button>
+              </div>
+              <div class="field-row" id="lfOfferFields" hidden>
+                <div class="field"><label>What you sell</label><input id="lfService" placeholder="brand &amp; ecommerce marketing services…" /></div>
+                <div class="field"><label>Value proposition</label><input id="lfValue" placeholder="integrated campaigns that grow brand revenue…" /></div>
+              </div>
+            </div>
+          </details>
+
           <div class="autopilot-row">
             <label class="autopilot-toggle">
               <input type="checkbox" id="autopilotEnabled" />
@@ -444,21 +467,27 @@
                   </select>
                 </div>
               </div>
-              <p class="muted-note">Finds verified leads daily with the fields above and adds them to your campaign.</p>
+              <p class="muted-note">Finds verified leads daily with the filters above and adds them to your campaign.</p>
               <span id="autopilotNote" class="import-note"></span>
             </div>
           </div>
         </div>
 
-        <div class="app-card-block" id="leadResults" hidden>
+        <div id="leadResults" hidden>
+          <div class="lf-results-bar">
+            <span id="leadResultsMeta"></span>
+            <div class="lf-enroll">
+              <select id="leadEnrollCampaign" hidden></select>
+              <button class="btn btn-dark" id="leadEnrollBtn"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Add selected to Campaign</button>
+              <div class="lf-campaign-picker" id="leadCampaignPicker" hidden></div>
+            </div>
+          </div>
           <p class="muted-note">Hit <strong>Intel</strong> on a lead for company research and your outreach angle.</p>
-          <table class="data-table" id="leadTable">
-            <thead><tr><th></th><th>Email</th><th>Name</th><th>Company</th><th>Title</th><th>Checked</th><th>Research</th></tr></thead>
-            <tbody></tbody>
-          </table>
-          <div class="lead-actions">
-            <select id="leadEnrollCampaign"></select>
-            <button class="btn btn-primary btn-s" id="leadEnrollBtn">Add selected to campaign</button>
+          <div class="campaign-table-wrap">
+            <table class="campaign-table lead-table" id="leadTable">
+              <thead><tr><th class="lf-check-col"><input type="checkbox" id="leadSelectAll" checked /></th><th>Name</th><th>Title</th><th>Company</th><th>Size</th><th>Country</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
           </div>
         </div>
       </section>
