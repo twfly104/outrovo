@@ -1321,7 +1321,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   display: grid;
   place-items: center;
   color: #fff;
-  box-shadow: 0 0 0 12px rgba(249, 115, 22, 0.18), 0 20px 44px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.14);
   cursor: pointer;
   transition: transform 0.25s var(--ease-out);
 }
@@ -1472,7 +1472,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   font-weight: 600;
   font-size: 0.88rem;
   white-space: nowrap;
-  box-shadow: 0 8px 20px rgba(249, 115, 22, 0.3);
   transition: background 0.2s, transform 0.22s var(--ease-out);
 }
 .app-upsell:hover { background: var(--crest-deep); transform: translateY(-2px); }
@@ -1492,7 +1491,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   font-size: 0.82rem;
   background: linear-gradient(135deg, var(--crest), var(--crest-deep));
   color: #fff;
-  box-shadow: 0 4px 10px rgba(249, 115, 22, 0.3);
 }
 .app-user strong { display: block; font-size: 0.88rem; color: var(--ink); line-height: 1.25; }
 .app-user span { font-size: 0.75rem; color: var(--ink-faint); }
@@ -2057,7 +2055,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   text-transform: uppercase;
   padding: 5px 12px;
   border-radius: 999px;
-  box-shadow: 0 4px 10px rgba(249, 115, 22, 0.3);
 }
 .ai-panel-sub { font-size: 0.82rem; color: var(--ink-faint); }
 .ai-panel .field select { width: 100%; padding: 13px 16px; }
@@ -2097,25 +2094,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .tool-result li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .tool-result .ok-tag { color: var(--forest); font-weight: 700; }
 .tool-result .no-tag { color: #c22; font-weight: 700; }
-.audit-status.ok { color: var(--forest); font-weight: 600; }
-.audit-status.bad { color: #c22; font-weight: 600; }
-.audit-fix { margin: 6px 0 2px; font-size: 0.85rem; color: var(--ink-soft); line-height: 1.55; }
-.audit-fix code { background: var(--paper-deep); padding: 1px 6px; border-radius: 5px; font-size: 0.8rem; }
-.audit-record {
-  display: inline-block;
-  margin: 6px 10px 6px 0;
-  padding: 7px 11px;
-  background: var(--paper-deep);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font-size: 0.8rem;
-  overflow-wrap: anywhere;
-}
-.audit-copy { vertical-align: middle; }
-.audit-raw { margin-top: 6px; font-size: 0.78rem; }
-.audit-raw summary { cursor: pointer; color: var(--ink-faint); font-size: 0.76rem; user-select: none; }
-.audit-raw summary:hover { color: var(--ink-soft); }
-.audit-raw code { display: block; margin-top: 5px; padding: 7px 10px; background: var(--paper-deep); border-radius: 7px; color: var(--ink-soft); overflow-wrap: anywhere; }
 .settings-note { font-size: 0.85rem; color: var(--ink-soft); margin-top: 10px; }
 .settings-note code { background: var(--paper-deep); padding: 1px 6px; border-radius: 5px; font-size: 0.82rem; }
 
@@ -2271,7 +2249,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   border-radius: 12px; cursor: pointer; padding: 14px 12px; text-align: center;
   transition: border-color .15s, box-shadow .15s;
 }
-.topup-pack:hover { border-color: var(--crest); box-shadow: 0 4px 14px rgba(249, 115, 22, 0.15); }
+.topup-pack:hover { border-color: var(--crest); }
 .topup-pack strong { display: block; font-size: 1.05rem; }
 .topup-pack span { display: block; color: var(--ink3); font-size: 0.78rem; margin: 3px 0 6px; }
 .topup-pack .pack-price { color: var(--accent2); font-weight: 700; font-size: 0.9rem; }
@@ -2687,7 +2665,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .app-body .app-user button { background: none; border: 0; color: #8b8574; cursor: pointer; padding: 4px; margin-left: auto; }
 .app-body .app-main { padding: 30px 36px 70px; max-width: 1240px; margin: 0 auto; width: 100%; }
 .app-body .btn { border-radius: 10px; gap: 7px; }
-.app-body .btn-primary { box-shadow: 0 6px 16px rgba(242, 80, 30, 0.28); }
 .app-body .btn-ghost { border-color: #e7e2d6; }
 .app-body .tab-ico { width: 12px; height: 12px; flex-shrink: 0; }
 .app-body .btn-intel { border-color: transparent; color: var(--crest-deep); background: rgba(242, 80, 30, 0.1); }

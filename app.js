@@ -168,10 +168,8 @@ async function init() {
   bindCampaignDetail();
   bindAiGenerate();
   bindProspects();
-  bindTools();
   bindSenders();
   bindSettingsHero();
-  bindDomainDiag();
   bindAccount();
   bindLinkedInSafety();
   bindIntegration();
@@ -214,7 +212,7 @@ function showPage(name) {
   if (name === 'campaigns') { backToList(); loadCampaigns(); }
   if (name === 'leads') loadLeadFinderStatus();
   if (name === 'overview') { loadOverview(); loadOvExtras(); }
-  if (name === 'settings') { loadEngine(); loadSenders(); loadSettingsHero(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadApolloKeyStatus(); loadSuppression(); loadWebhooks(); }
+  if (name === 'settings') { loadEngine(); loadSenders(); loadSettingsHero(); loadLinkedInSafety(); loadIntegrationStatus(); loadApolloKeyStatus(); loadSuppression(); loadWebhooks(); }
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
 
@@ -1029,25 +1027,6 @@ async function loadActivity() {
   }));
 }
 
-// ---------- tools ----------
-function bindTools() {
-  $('verifyBtn').addEventListener('click', async () => {
-    const { data } = await api('POST', '/api/app/tools/verify', { email: $('vEmail').value });
-    const r = data.result;
-    $('verifyResult').innerHTML = r && `
-      <div class="score ${r.verdict === 'deliverable' ? 'ok-tag' : 'no-tag'}">${esc(r.verdict)}</div>
-      <ul>
-        <li><span class="${r.syntax ? 'ok-tag' : 'no-tag'}">${r.syntax ? '✓' : '✗'}</span><div>Syntax valid</div></li>
-        <li><span class="${r.mx?.length ? 'ok-tag' : 'no-tag'}">${r.mx?.length ? '✓' : '✗'}</span><div>MX records ${r.mx?.length ? esc(r.mx.join(', ')) : 'none'}</div></li>
-      </ul>`;
-  });
-  $('auditBtn').addEventListener('click', async () => {
-    $('auditResult').innerHTML = 'Running DNS checks…';
-    const { data } = await api('GET', `/api/app/tools/domain-audit?domain=${encodeURIComponent($('dDomain').value)}`);
-    renderAudit($('auditResult'), data.result, $('dDomain').value);
-  });
-}
-
 // ---------- sender accounts (one-click connect) ----------
 const SENDER_HINTS = {
   gmail: 'Paste your email and a <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">Google app password</a> — takes 30 seconds.',
@@ -1284,76 +1263,6 @@ function bindSettingsHero() {
   bindNotif('notifHotLead', 'hotLead', 'Hot lead alert');
   bindNotif('notifDailyDigest', 'dailyDigest', 'Daily digest');
   bindNotif('notifBounce', 'bounceWarnings', 'Bounce warnings');
-}
-
-// ---------- domain health (onboarding diagnostic) ----------
-function bindDomainDiag() {
-  document.addEventListener('click', async e => {
-    const btn = e.target.closest('.audit-copy');
-    if (!btn) return;
-    try {
-      await navigator.clipboard.writeText(btn.dataset.record);
-      btn.textContent = 'Copied ✓';
-    } catch {
-      window.prompt('Copy this DNS record:', btn.dataset.record);
-    }
-    setTimeout(() => { btn.textContent = 'Copy record'; }, 1500);
-  });
-}
-
-// Plain-English rendering of DNS checks: badges up front, raw records behind
-// a "Technical details" toggle, and a concrete fix (copy-paste record where
-// we can generate one) for whatever fails. Matched by server check-name
-// prefix so renamed server labels fall back to the raw name.
-const AUDIT_CHECKS = [
-  { match: /^mx/i, label: 'MX Records', okText: 'Passed', failText: 'Missing',
-    fix: d => `No mail server is configured for <strong>${esc(d)}</strong>. Add the MX records your email provider gives you (Google Workspace, Microsoft 365, …) — they look like <code>10 mail.provider.com</code>.` },
-  { match: /^spf/i, label: 'SPF Record', okText: 'Passed', failText: 'Missing',
-    fix: d => `Add this TXT record at <strong>${esc(d)}</strong>. If you send through Google or Microsoft, use their <em>include</em> instead of <code>mx</code> (their setup pages list it).`,
-    record: () => 'v=spf1 mx ~all' },
-  { match: /^dmarc/i, label: 'DMARC Policy', okText: 'Passed', failText: 'Missing',
-    fix: d => `Add this TXT record at <strong>_dmarc.${esc(d)}</strong>:`,
-    record: d => `v=DMARC1; p=quarantine; rua=mailto:postmaster@${d}` },
-  { match: /^dkim/i, label: 'DKIM Signature', okText: 'Verified', failText: 'Not found',
-    fix: () => `DKIM keys are issued by your email provider — there's nothing generic to copy. Turn on DKIM signing where your mail is hosted, then publish the TXT record they generate: <strong>Google Workspace</strong> → Admin console → Apps → Google Workspace → Gmail → Authenticate email. <strong>Microsoft 365</strong> → Defender portal → Email &amp; collaboration → DKIM.` },
-];
-
-function renderAudit(target, r, fallbackDomain) {
-  if (!r) { target.innerHTML = 'No result'; return; }
-  const domain = r.domain || fallbackDomain || 'your domain';
-  const row = c => {
-    const meta = AUDIT_CHECKS.find(m => m.match.test(c.name)) || { label: c.name, okText: 'Passed', failText: 'Failed', fix: null };
-    const record = !c.ok && meta.record ? meta.record(domain) : null;
-    return `<li>
-      <span class="${c.ok ? 'ok-tag' : 'no-tag'}">${c.ok ? '✓' : '✗'}</span>
-      <div>
-        <strong>${esc(meta.label)}</strong> — <span class="audit-status ${c.ok ? 'ok' : 'bad'}">${c.ok ? meta.okText : meta.failText}</span>
-        ${!c.ok && meta.fix ? `<p class="audit-fix">${meta.fix(domain)}</p>` : ''}
-        ${record ? `<code class="audit-record">${esc(record)}</code><button type="button" class="btn btn-s btn-dark audit-copy" data-record="${esc(record)}">Copy record</button>` : ''}
-        <details class="audit-raw"><summary>Technical details</summary><code>${esc(c.detail)}</code></details>
-      </div>
-    </li>`;
-  };
-  target.innerHTML = `
-    <div class="score">${r.score}/100</div>
-    <ul class="audit-list">${r.checks.map(row).join('')}</ul>
-    ${r.score === 100
-      ? '<p class="settings-note"><span class="ok-tag">✓</span> Your domain is ready to send.</p>'
-      : '<p class="settings-note">Fix the failing items above in your DNS provider (GoDaddy, Namecheap, Cloudflare…), then run the check again. DNS changes can take a few minutes to show up.</p>'}`;
-}
-
-const FREE_MAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'hotmail.com', 'outlook.com', 'live.com', 'msn.com', 'aol.com', 'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com', 'pm.me', 'qq.com', '163.com', '126.com', 'yeah.net', 'foxmail.com', 'mail.com', 'gmx.com', 'gmx.net', 'zoho.com', 'yandex.com', 'yandex.ru']);
-
-async function loadDomainDiag() {
-  const domain = (me?.email.split('@')[1] || '').toLowerCase();
-  // Gmail/Outlook etc. sign DKIM themselves — checking their domain here only
-  // confuses users with a failing DKIM probe. Leave the field empty instead.
-  if (domain && !FREE_MAIL_DOMAINS.has(domain) && !$('dDomain').value) $('dDomain').value = domain;
-  // The signup-time diagnostic result is logged in the activity feed — show it
-  // instantly instead of re-running DNS lookups.
-  const { data } = await api('GET', '/api/app/activity');
-  const audit = (data.events || []).find(e => e.type === 'domain-audit' && e.meta?.checks);
-  if (audit) renderAudit($('auditResult'), { score: audit.meta.score, checks: audit.meta.checks }, domain);
 }
 
 // ---------- Compliance & account data rights ----------
