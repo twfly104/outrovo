@@ -394,7 +394,9 @@ function startNewCampaign() {
   $('cdTabs').hidden = true;
   $('cdStats').innerHTML = '';
   $('cdSteps').innerHTML = '';
-  $('cdAddStepBtn').hidden = true;
+  $('cdAddStepBtn').hidden = false;
+  $('cdAiStepBtn').hidden = false;
+  $('cdAiPanel').hidden = true;
   $('cdStepEditor').hidden = true;
   $('cdAbBlock').hidden = true;
   $('cdNewBlock').hidden = false;
@@ -624,6 +626,8 @@ function backToList() {
   $('cdRunBtn').hidden = false;
   $('cdTabs').hidden = false;
   $('cdAddStepBtn').hidden = false;
+  $('cdAiStepBtn').hidden = false;
+  $('cdAiPanel').hidden = true;
 }
 
 function bindCampaignDetail() {
@@ -702,20 +706,21 @@ function bindCampaignDetail() {
   });
   // "Add step with AI" — AI drafts the next step, user reviews it in the
   // normal step editor before saving.
-  $('cdAiStepBtn').addEventListener('click', () => {
+  const openAiPanel = () => {
     $('cdStepEditor').hidden = true;
     $('cdAiNote').textContent = '';
     $('cdAiPanel').hidden = false;
     $('cdAiPrompt').focus();
-  });
+  };
+  $('cdAiStepBtn').addEventListener('click', openAiPanel);
+  $('cdNewAiBtn').addEventListener('click', openAiPanel);
   $('cdAiGenerateBtn').addEventListener('click', async () => {
     const c = campaigns.find(x => x.id === selectedCampaign);
-    if (!c) return;
     $('cdAiGenerateBtn').disabled = true;
     $('cdAiNote').textContent = 'Writing…';
     const { data } = await api('POST', '/api/app/ai/generate-step', {
-      campaignName: c.name,
-      existingSteps: c.steps,
+      campaignName: c ? c.name : ($('cdName').textContent.trim() || 'Untitled campaign'),
+      existingSteps: c ? c.steps : collectSteps($('cdNewStepRows')),
       instruction: $('cdAiPrompt').value.trim(),
     });
     $('cdAiGenerateBtn').disabled = false;
@@ -732,16 +737,22 @@ function bindCampaignDetail() {
   $('cdCancelStepBtn').addEventListener('click', () => { $('cdStepEditor').hidden = true; });
   $('cdSaveStepBtn').addEventListener('click', async () => {
     const c = campaigns.find(x => x.id === selectedCampaign);
-    if (!c) return;
     const newSteps = collectSteps($('cdStepEditorRows'));
     if (!newSteps.length) { $('cdStepNote').textContent = 'Fill in the step first — emails need a subject and body.'; return; }
     $('cdSaveStepBtn').disabled = true;
-    const { data } = await api('PATCH', `/api/app/campaigns/${selectedCampaign}`, { steps: [...c.steps, ...newSteps] });
-    $('cdSaveStepBtn').disabled = false;
-    if (!data.ok) { $('cdStepNote').textContent = data.error || 'Could not save the step.'; return; }
-    $('cdStepEditor').hidden = true;
-    toast('Step added to the sequence');
-    loadCampaigns();
+    if (selectedCampaign) {
+      const { data } = await api('PATCH', `/api/app/campaigns/${selectedCampaign}`, { steps: [...c.steps, ...newSteps] });
+      $('cdSaveStepBtn').disabled = false;
+      if (!data.ok) { $('cdStepNote').textContent = data.error || 'Could not save the step.'; return; }
+      $('cdStepEditor').hidden = true;
+      toast('Step added to the sequence');
+      loadCampaigns();
+    } else {
+      $('cdSaveStepBtn').disabled = false;
+      newSteps.forEach(s => addStepRow(s.type, s, $('cdNewStepRows')));
+      $('cdStepEditor').hidden = true;
+      toast('Step added — create the campaign to save it');
+    }
   });
   const openAddLeads = () => {
     $('importNote').textContent = '';
