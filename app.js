@@ -94,12 +94,6 @@ async function init() {
 }
 
 // ---------- nav ----------
-const PAGE_TITLES = { overview: 'Overview', campaigns: 'Campaigns', leads: 'Find Leads', inbox: 'Inbox', agency: 'Agency', settings: 'Settings' };
-function setCrumb(html) { $('crumb').innerHTML = html; }
-function crumbBackListener() {
-  const link = document.querySelector('#crumb .crumb-link');
-  if (link) link.addEventListener('click', () => { backToList(); loadCampaigns(); });
-}
 
 function bindNav() {
   $('appNav').addEventListener('click', e => {
@@ -107,7 +101,6 @@ function bindNav() {
     if (!btn || !btn.dataset.page) return;
     showPage(btn.dataset.page);
   });
-  $('topNewCampaignBtn').addEventListener('click', () => { $('campaignModal').hidden = false; });
 
   // Action cards on overview jump to sections
   document.querySelectorAll('.action-card[data-goto]').forEach(card => {
@@ -116,7 +109,6 @@ function bindNav() {
 }
 
 function showPage(name) {
-  setCrumb(`<span class="crumb-here">${PAGE_TITLES[name] || name}</span>`);
   document.querySelectorAll('#appNav button').forEach(b => {
     b.classList.toggle('active', b.dataset.page === name);
   });
@@ -496,8 +488,6 @@ function openCampaign(id) {
   selectedCampaign = id;
   $('campaignListView').hidden = true;
   $('campaignDetail').hidden = false;
-  setCrumb(`<button class="crumb-link">Campaigns</button><span class="crumb-sep">/</span><span class="crumb-here">${esc(c.name)}</span>`);
-  crumbBackListener();
   renderCampaignDetail(c);
   switchCampaignTab('steps');
   $('bulkToolResult').innerHTML = '';
@@ -506,7 +496,6 @@ function openCampaign(id) {
 
 function backToList() {
   selectedCampaign = null;
-  setCrumb('<span class="crumb-here">Campaigns</span>');
   $('campaignDetail').hidden = true;
   $('campaignListView').hidden = false;
   $('addLeadsModal').hidden = true;

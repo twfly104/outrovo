@@ -12,31 +12,30 @@
 </head>
 <body class="app-body">
   <div class="app-shell">
-    <header class="app-topbar">
-      <div class="topbar-left">
-        <a class="logo" href="index.html"><img src="logo.svg" class="logo-img" alt="Outrovo logo"> Outrovo</a>
-        <nav class="crumb" id="crumb"><span class="crumb-here">Overview</span></nav>
-      </div>
-      <div class="topbar-right">
-        <nav class="topnav" id="appNav">
-          <button data-page="overview" class="active">Overview</button>
-          <button data-page="campaigns">Campaigns</button>
-          <button data-page="inbox">Inbox</button>
-          <button data-page="settings">Settings</button>
-          <button data-page="agency" id="agencyNavBtn" hidden>Agency</button>
-          <button data-page="leads" class="btn btn-ghost btn-s">Find Leads</button>
-          <button class="btn btn-primary btn-s" id="topNewCampaignBtn">+ New Campaign</button>
-        </nav>
-        <button type="button" class="credit-badge" id="creditBadge" title="Lead Finder credits — click to add more"><span id="creditCount">…</span></button>
-        <a class="topbar-upgrade" href="pricing.html" title="Upgrade your send quota">Upgrade</a>
-        <button id="logoutBtn" title="Log out" aria-label="Log out" class="topbar-icon">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
+    <aside class="app-sidebar">
+      <a class="logo" href="index.html"><img src="logo.svg" class="logo-img" alt="Outrovo logo"> Outrovo</a>
+      <p class="app-nav-label">Workspace</p>
+      <nav class="app-nav" id="appNav">
+        <button data-page="overview" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg><span>Overview</span></button>
+        <button data-page="campaigns"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg><span>Campaigns</span></button>
+        <button data-page="leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span>Find Leads</span></button>
+        <button data-page="inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-5l-2 3h-6l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/></svg><span>Inbox</span></button>
+        <button data-page="agency" id="agencyNavBtn" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><span>Agency</span></button>
+        <button data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
+      </nav>
+      <a class="app-upsell" href="pricing.html"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4L12 2z"/></svg>Upgrade for more sends</a>
+      <button type="button" class="credit-badge" id="creditBadge" title="Lead Finder credits — click to add more"><span id="creditCount">…</span></button>
+      <div class="app-user">
         <span class="avatar" id="userAvatar">–</span>
-        <span id="userName" hidden></span>
-        <span class="plan-pill" id="planPill" hidden></span>
+        <div>
+          <strong id="userName">…</strong>
+          <span class="plan-pill" id="planPill" hidden></span>
+        </div>
+        <button id="logoutBtn" title="Log out" aria-label="Log out">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
       </div>
-    </header>
+    </aside>
 
     <main class="app-main">
       <div class="engine-banner" id="engineBanner" hidden>
@@ -84,9 +83,9 @@
             <button class="btn btn-ghost btn-s" id="cdDeleteBtn">Delete</button>
           </div>
           <div class="settings-tabs" id="cdTabs">
-            <button class="settings-tab active" data-ctab="steps"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/></svg>Steps</button>
-            <button class="settings-tab" data-ctab="contacts"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="7" r="3.5"/><circle cx="16.5" cy="8.5" r="2.5"/><path d="M2 20c0-4 12-4 12 0"/><path d="M14 20c0-2.6 7-2.6 7 0"/></svg>Contacts <span id="cdContactCount"></span></button>
-            <button class="settings-tab" data-ctab="settings"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.5 4.5l2 2M17.5 17.5l2 2M4.5 19.5l2-2M17.5 6.5l2-2"/></svg>Settings</button>
+            <button class="settings-tab active" data-ctab="steps">Steps</button>
+            <button class="settings-tab" data-ctab="contacts">Contacts <span id="cdContactCount"></span></button>
+            <button class="settings-tab" data-ctab="settings">Settings</button>
           </div>
 
           <div class="ctab-pane" id="ctab-steps">
