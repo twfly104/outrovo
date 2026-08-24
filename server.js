@@ -1980,7 +1980,8 @@ async function aiGenerateStep({ campaignName, existingSteps, instruction }) {
       if (res.ok) {
         const json = await res.json();
         const parsed = JSON.parse(json.choices?.[0]?.message?.content || '{}');
-        const [step] = normalizeSteps([parsed.step || {}]);
+        // Some models wrap in {"step": ...}, others return the step directly.
+        const [step] = normalizeSteps([parsed.step || parsed]);
         if (step && (step.body || step.note || step.type === 'wait')) return { step, ai: true, model };
         aiError = 'the model returned an unusable step';
       } else {
