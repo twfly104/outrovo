@@ -47,7 +47,7 @@ async function init() {
     const applied = data.plan?.id === (aliases[upgraded] || upgraded);
     banner.hidden = false;
     banner.innerHTML = applied
-      ? `🎉 <strong>You're on ${esc(data.plan.name)} now</strong> — higher limits are active immediately.`
+      ? `<strong>You're on ${esc(data.plan.name)} now</strong> — higher limits are active immediately.`
       : '⏳ <strong>Payment received</strong> — your plan will activate once the billing confirmation arrives. If it doesn\u2019t update within a few minutes, contact support.';
   }
   if (data.engine === 'demo') $('engineBanner').hidden = false;
@@ -63,7 +63,7 @@ async function init() {
   if (data.plan?.expired) {
     const banner = $('engineBanner');
     banner.hidden = false;
-    banner.innerHTML = '⚠️ <strong>Trial ended</strong> — upgrade on the <a href="/pricing.html" style="color:inherit;text-decoration:underline;">pricing page</a> to keep sending.';
+    banner.innerHTML = '<strong>Trial ended</strong> — upgrade on the <a href="/pricing.html" style="color:inherit;text-decoration:underline;">pricing page</a> to keep sending.';
   }
 
   bindNav();
@@ -180,7 +180,7 @@ function stepRowHtml(type) {
   if (type === 'email') {
     fields = `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" />
               <textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}… — variables, {spintax|variants} and {{bookingLink}} all work here">{Hi|Hello|Hey} {{firstName}}, {{company}} caught my eye — quick idea.</textarea>
-              <button type="button" class="ab-toggle">⇄ A/B test this step</button>
+              <button type="button" class="ab-toggle">A/B test this step</button>
               <div class="ab-b" hidden>
                 <input class="subject-b" placeholder="Variant B subject" />
                 <textarea class="body-b" placeholder="Variant B body — half your prospects get this version"></textarea>
@@ -213,7 +213,7 @@ function bindAbToggle(row) {
   btn.addEventListener('click', () => {
     const box = row.querySelector('.ab-b');
     box.hidden = !box.hidden;
-    btn.textContent = box.hidden ? '⇄ A/B test this step' : '✕ Remove variant B';
+    btn.textContent = box.hidden ? 'A/B test this step' : 'Remove variant B';
     if (box.hidden) { row.querySelector('.subject-b').value = ''; row.querySelector('.body-b').value = ''; }
   });
 }
@@ -226,7 +226,7 @@ function addStepRow(type, data = {}) {
   row.querySelector('.remove-step').addEventListener('click', () => row.remove());
   row.querySelector('.step-type').addEventListener('change', e => {
     row.querySelector('.step-fields').innerHTML = e.target.value === 'email'
-      ? `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" /><textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}… — {{bookingLink}} drops in your calendar link"></textarea><button type="button" class="ab-toggle">⇄ A/B test this step</button><div class="ab-b" hidden><input class="subject-b" placeholder="Variant B subject" /><textarea class="body-b" placeholder="Variant B body — half your prospects get this version"></textarea></div>`
+      ? `<input class="subject" placeholder="Subject — e.g. Quick question, {{firstName}}" /><textarea class="body" placeholder="{Hi|Hello|Hey} {{firstName}}, noticed {{company}}… — {{bookingLink}} drops in your calendar link"></textarea><button type="button" class="ab-toggle">A/B test this step</button><div class="ab-b" hidden><input class="subject-b" placeholder="Variant B subject" /><textarea class="body-b" placeholder="Variant B body — half your prospects get this version"></textarea></div>`
       : e.target.value === 'task'
       ? `<select class="task-kind"><option value="connect">Connection request</option><option value="message">Direct message</option><option value="view">Profile view</option></select><textarea class="note" placeholder="LinkedIn action — e.g. Send connection request to {{firstName}}"></textarea>`
       : '';
@@ -258,7 +258,7 @@ function bindAiGenerate() {
     const btn = $('aiScanBtn');
     btn.disabled = true;
     status.className = 'ai-status loading';
-    status.textContent = '🔍 Reading your site…';
+    status.textContent = 'Reading your site…';
     try {
       const { data } = await api('POST', '/api/app/ai/scan-site', { url });
       if (!data.ok) throw new Error(data.error || 'Scan failed');
@@ -267,8 +267,8 @@ function bindAiGenerate() {
       $('aiGoal').value = data.goal || '';
       status.className = 'ai-status ok';
       status.textContent = data.ai
-        ? `✦ Filled from ${data.site?.url} — review the fields, then generate.`
-        : `✦ Filled from ${data.site?.url} (heuristic — set LLM_API_KEY for smarter fills).`;
+        ? `Filled from ${data.site?.url} — review the fields, then generate.`
+        : `Filled from ${data.site?.url} (heuristic — set LLM_API_KEY for smarter fills).`;
     } catch (err) {
       status.className = 'ai-status err';
       status.textContent = err.message;
@@ -289,7 +289,7 @@ function bindAiGenerate() {
     btn.disabled = true;
     btn.style.opacity = '0.65';
     status.className = 'ai-status loading';
-    status.textContent = '✦ Writing your sequence…';
+    status.textContent = 'Writing your sequence…';
     try {
       const { data } = await api('POST', '/api/app/ai/generate-sequence', {
         product,
@@ -303,8 +303,8 @@ function bindAiGenerate() {
       if (!$('cName').value) $('cName').value = `${product.split(' ').slice(0, 3).join(' ')} outreach`;
       status.className = 'ai-status ok';
       status.textContent = data.ai
-        ? `✦ Done — generated by ${data.model}. Edit anything below, then create.`
-        : '✦ Done — built-in engine wrote this (set LLM_API_KEY for full AI). Edit and create.';
+        ? `Done — generated by ${data.model}. Edit anything below, then create.`
+        : 'Done — built-in engine wrote this (set LLM_API_KEY for full AI). Edit and create.';
     } catch (err) {
       status.className = 'ai-status err';
       status.textContent = err.message;
@@ -473,7 +473,7 @@ async function loadAbResults(c) {
   block.hidden = false;
   box.innerHTML = ab.results.map(r => `
     <div class="ab-row">
-      <span class="ab-label">⇄ ${esc(r.label)}</span>
+      <span class="ab-label">${esc(r.label)}</span>
       <span class="ab-cell ${r.winner === 'A' ? 'ab-winner' : ''}">A — ${esc(r.variantA.subject.slice(0, 34))}: ${r.variantA.sent} sent · ${r.variantA.replied} replies (${r.variantA.replyRate}%)</span>
       <span class="ab-cell ${r.winner === 'B' ? 'ab-winner' : ''}">B — ${esc(r.variantB.subject.slice(0, 34))}: ${r.variantB.sent} sent · ${r.variantB.replied} replies (${r.variantB.replyRate}%)</span>
     </div>`).join('');
@@ -526,7 +526,7 @@ function bindCampaignDetail() {
       sendWindowEnd: Number($('cdWindowEnd').value ?? 17),
       timezone: $('cdTimezone').value || 'UTC',
     });
-    $('cdSettingsNote').textContent = data.ok ? '✓ Saved' : (data.error || 'Could not save.');
+    $('cdSettingsNote').textContent = data.ok ? 'Saved.' : (data.error || 'Could not save.');
     if (data.ok) loadCampaigns();
   });
   $('addLeadsBtn').addEventListener('click', () => {
@@ -625,7 +625,7 @@ async function loadInbox() {
       <time>${fmtTime(r.at)}</time>
       <div class="inbox-actions">
         ${r.read ? '' : `<button class="link" data-read="${r.id}">Mark read</button>`}
-        <button class="link" data-draft="${r.id}">✦ AI draft</button>
+        <button class="link" data-draft="${r.id}">AI draft</button>
       </div>
       ${r.draft ? `<div class="draft-box"><em>AI draft (${esc(r.draft.source)}):</em><br>${esc(r.draft.text).replace(/\n/g, '<br>')}</div>` : `<div class="draft-box" id="draft-${r.id}" hidden></div>`}
     </li>`).join('') : '<li class="empty">No replies yet — when someone answers a campaign, their message lands here.</li>';
@@ -637,7 +637,7 @@ async function loadInbox() {
     btn.textContent = '… drafting';
     const { data: d } = await api('POST', `/api/app/inbox/${btn.dataset.draft}/draft`, {});
     if (d.ok) loadInbox();
-    else { btn.textContent = '✦ AI draft'; toast(d.error || 'Draft failed', 'err'); }
+    else { btn.textContent = 'AI draft'; toast(d.error || 'Draft failed', 'err'); }
   }));
   if (!$('simulateReplyBtn').hasListener) {
     $('simulateReplyBtn').hasListener = true;
@@ -1428,7 +1428,7 @@ async function loadLeadFinderStatus() {
   if (!data.ok) return;
   const src = data.provider === 'apollo' ? (data.apolloKeySet ? 'via your Apollo key' : 'via Apollo') : 'built-in verify';
   const ap = data.autopilot;
-  $('leadFinderStatus').textContent = `${data.used}/${data.quota} credits used this month · ${src}${ap?.enabled ? ' · ✦ auto-pilot on' : ''}`;
+  $('leadFinderStatus').textContent = `${data.used}/${data.quota} credits used this month · ${src}${ap?.enabled ? ' · auto-pilot on' : ''}`;
   $('lfTopupBtn').hidden = false;
   const toggle = $('autopilotEnabled');
   toggle.checked = !!ap?.enabled;
@@ -1475,7 +1475,7 @@ function bindLeadFinderScan() {
     const btn = $('lfScanBtn');
     btn.disabled = true;
     status.className = 'ai-status loading';
-    status.textContent = '🔍 Reading your site…';
+    status.textContent = 'Reading your site…';
     try {
       const { data } = await api('POST', '/api/app/lead-finder/scan-fill', { url });
       if (!data.ok || !data.prefill) throw new Error(data.error || 'Scan failed');
@@ -1492,8 +1492,8 @@ function bindLeadFinderScan() {
       status.className = 'ai-status ok';
       const gaps = !p.keywords ? ' Could not infer the target industry — type it in step 2.' : '';
       status.textContent = (data.source === 'llm'
-        ? `✦ Filled from ${url} — review, then hit ✦ Search leads.`
-        : `✦ Filled from ${url} (heuristic — set LLM_API_KEY for AI-quality fills).`) + gaps;
+        ? `Filled from ${url} — review, then hit Search leads.`
+        : `Filled from ${url} (heuristic — set LLM_API_KEY for AI-quality fills).`) + gaps;
     } catch (err) {
       status.className = 'ai-status err';
       status.textContent = `✕ ${err.message || 'Could not scan that site — fill manually.'}`;
@@ -1521,7 +1521,7 @@ async function applyLeadFinderPrefill() {
     syncDetected();
     syncChips();
     if (filled > 0 && $('lfPrefillNote')) {
-      $('lfPrefillNote').textContent = `✨ Pre-filled from your website — tweak anything before searching.`;
+      $('lfPrefillNote').textContent = `Pre-filled from your website — tweak anything before searching.`;
     }
   } catch {}
 }
@@ -1545,7 +1545,7 @@ async function saveAutopilot(enabled) {
     return;
   }
   $('autopilotNote').textContent = enabled
-    ? `✓ Auto-pilot on — up to ${data.autopilot.dailyLimit} verified leads/day into this campaign. First run on the next engine pass.`
+    ? `Auto-pilot on — up to ${data.autopilot.dailyLimit} verified leads/day into this campaign. First run on the next engine pass.`
     : 'Auto-pilot off.';
   loadLeadFinderStatus();
 }
@@ -1558,7 +1558,7 @@ function intelCardHtml(d) {
       <div class="intel-head">
         <strong>${esc(d.domain)}</strong>
         <a href="https://${esc(d.domain)}" target="_blank" rel="noopener">visit site ↗</a>
-        <span class="intel-src">${d.source === 'llm' ? '✦ AI research' : 'site scan'}</span>
+        <span class="intel-src">${d.source === 'llm' ? 'AI research' : 'site scan'}</span>
       </div>
       <p class="intel-summary">${esc(d.summary)}</p>
       <div class="intel-grid">
@@ -1576,7 +1576,7 @@ function intelCardHtml(d) {
         </div>
       </div>
       <div class="intel-angle">
-        <h4>✦ Your angle</h4>
+        <h4>Your angle</h4>
         <p>${esc(d.angle)}</p>
       </div>
     </div>`;
@@ -1587,14 +1587,14 @@ async function toggleLeadIntel(btn, row) {
   const lead = leadFinderLeads[i];
   const tbody = row.parentNode;
   const existing = tbody.querySelector(`tr[data-intel-row="${i}"]`);
-  if (existing) { existing.remove(); btn.textContent = '✦ Intel'; return; }
+  if (existing) { existing.remove(); btn.textContent = 'Intel'; return; }
   btn.disabled = true;
   btn.textContent = '…';
   const { status, data } = await api('POST', '/api/app/lead-finder/intel', {
     company: lead.company, email: lead.email, pitch: servicePitch, title: lead.title,
   });
   btn.disabled = false;
-  btn.textContent = '✦ Intel';
+  btn.textContent = 'Intel';
   const tr = document.createElement('tr');
   tr.dataset.intelRow = i;
   const content = status === 200 && data.ok
@@ -1618,7 +1618,7 @@ function renderLeadResults(leads) {
       <td>${esc(l.company) || '—'}</td>
       <td>${esc(l.title) || '—'}</td>
       <td>${l.verified === 'valid' ? '<span class="ok-tag">✓ deliverable</span>' : '<span class="warn-tag">unknown</span>'}</td>
-      <td><button class="btn btn-ghost btn-xs" data-intel="${i}">✦ Intel</button></td>
+      <td><button class="btn btn-ghost btn-xs" data-intel="${i}">Intel</button></td>
     </tr>`).join('');
   tbody.onclick = e => {
     const btn = e.target.closest('[data-intel]');

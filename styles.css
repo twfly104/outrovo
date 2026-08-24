@@ -2359,3 +2359,35 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   .branch-row input { max-width: none !important; }
   .app-user { margin-left: auto; }
 }
+
+/* ---------- Simplicity pass (flat, quiet — app dashboard only) ---------- */
+.app-body .app-page { animation: none; }
+.app-body .btn { border-radius: 10px; box-shadow: none; gap: 8px; }
+.app-body .btn:hover { transform: none; box-shadow: none; }
+.app-body .btn:hover svg { transform: none; }
+.app-body .btn-ghost { border-color: var(--line); }
+.app-body .btn-ghost:hover { background: var(--paper-deep); color: var(--ink); }
+.app-body .app-card-block,
+.app-body .campaign-card,
+.app-body .campaign-item,
+.app-body .inbox-list li,
+.app-body .stat-card { box-shadow: none; border-radius: 12px; }
+.app-body .stat-card:hover,
+.app-body .campaign-item:hover,
+.app-body .campaign-card:hover { transform: none; box-shadow: none; }
+.app-body .inbox-list li:hover { box-shadow: none; }
+.app-body .app-nav button { border-radius: 8px; }
+.app-body .icon-btn { border-radius: 8px; }
+.app-body .icon-btn:hover { transform: none; }
+.app-body .app-upsell {
+  background: none;
+  color: var(--crest-deep);
+  border: 1px solid rgba(249, 115, 22, 0.4);
+  box-shadow: none;
+}
+.app-body .app-upsell:hover { background: rgba(249, 115, 22, 0.08); transform: none; }
+.app-body .app-user .avatar { box-shadow: none; }
+.app-body .credit-badge { box-shadow: none; }
+.app-body .step-row,
+.app-body .lf-chip,
+.app-body .topup-pack { box-shadow: none; }

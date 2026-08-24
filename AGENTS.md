@@ -544,3 +544,10 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - Fixed TWO unclosed `<details>` in app.html (pacing-panel in the create modal, lf-details) - browsers were auto-closing them, which is what trapped the "People to email" section inside the lead-finder disclosure in the first place. Tag balance now verified (details 2/2, section 6/6, div 222/222).
 - CSS: new "Campaign detail" block in styles.css (.cd-head/.cd-spacer/.cd-actions/.cd-steps-card/.cp-clickable/.cp-open-hint, mobile stack <720px).
 - Verified end-to-end on PORT=12001 DATA_DIR=/tmp/otest12: list->detail->tabs, modal add person (tab count updates), settings PATCH persists, Run flips draft->active with Auto badges, leads page renders with seeded domain + status line, create modal intact. No server.js changes - all endpoints reused.
+
+## Iteration 13 — Visual simplicity pass (Aug 2026)
+- Owner: "make everything simple, I don't like this style". Landing/marketing pages UNTOUCHED; all changes scoped to the app dashboard.
+- Copy de-clutter: removed decorative glyphs (sparkle/magnifier/party/warning emoji) from buttons, headings and status strings in app.html/app.js. Kept functional glyphs only: checkmark/cross inside ok-tag/no-tag pills, close X, and the tiny enriched-marker on prospect rows.
+- Overview page: removed the 4 action cards (duplicated the sidebar). Page is now just At a glance stats + LinkedIn to-dos + Event feed. Heading is plain "Overview". (bindNav's data-goto handler is harmless with no matches.)
+- Flat design overrides appended at END of styles.css as a "Simplicity pass" block, every selector prefixed `.app-body` so the marketing site is unaffected: no box-shadows on cards/buttons/chips, radius 12px (buttons/nav 8-10px), no hover-lift transforms, quiet outline style for the sidebar upsell, no page fade-in animation.
+- When restyling the app again: append scoped `.app-body ...` overrides at the end of styles.css rather than editing the shared base rules (.btn etc. are used by the landing pages too).
