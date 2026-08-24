@@ -232,6 +232,13 @@
 
   <script src="script.js"></script>
   <script>
+    // floating-pill header shadow
+    const siteHeader = document.getElementById('siteHeader');
+    const syncHeader = () => siteHeader.classList.toggle('is-scrolled', scrollY > 8);
+    addEventListener('scroll', syncHeader, { passive: true });
+    syncHeader();
+  </script>
+  <script>
     // Pricing page: if signed in, upgrade buttons open checkout; otherwise sign up
     fetch('/api/me').then(r => r.json()).then(d => {
       if (!d.ok || !d.user) return;
