@@ -2914,11 +2914,53 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 
 /* Tag inputs — input-styled container holding removable orange chips */
 .lf-tags {
+  position: relative;
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
   min-height: 44px; padding: 6px 10px;
   border: 1px solid var(--line); border-radius: 12px; background: #fff;
   cursor: text; transition: border-color 0.15s, box-shadow 0.15s;
 }
+/* Searchable picker popover (Countries field). */
+.cpop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  z-index: 90;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-l);
+  padding: 5px;
+  max-height: 240px;
+  overflow-y: auto;
+  animation: fselect-in 0.16s var(--ease-out);
+  cursor: default;
+}
+.cpop-group {
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 9px 11px 3px;
+}
+.cpop-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  padding: 7px 11px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: background 0.12s, color 0.12s;
+}
+.cpop-item:hover, .cpop-item.hl { background: #f6f2ea; color: var(--ink); }
+.cpop-empty { padding: 10px 12px; color: var(--ink-faint); font-size: 0.85rem; }
 .lf-tags:focus-within { border-color: var(--crest); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14); }
 .lf-tag {
   display: inline-flex; align-items: center; gap: 6px;

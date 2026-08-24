@@ -1708,9 +1708,30 @@ function canonTitle(raw) {
 function fillTitleEl(val) { const el = $('lfTitle'); if (el && !el.value && val) { el.value = canonTitle(val); return true; } return false; }
 
 // Tag inputs — chips backed by a hidden comma-joined input (the value the
-// search/autopilot code already reads). Enter/comma/paste adds; × removes;
-// the input carries a datalist of preset suggestions.
-const LOC_PRESETS = ['United States', 'United Kingdom', 'Germany', 'France', 'Europe', 'Canada', 'Australia', 'Singapore', 'Taiwan'];
+// search/autopilot code already reads). Enter/comma/paste adds; × removes.
+// Country picker — every country built in, searchable. Region shortcuts sit
+// on top for broad targeting ("Europe" was already a supported preset).
+const REGION_PRESETS = ['Europe', 'North America', 'Latin America', 'Asia-Pacific', 'Middle East', 'Africa'];
+const COUNTRIES = [
+  'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Antigua and Barbuda', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan',
+  'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia and Herzegovina',
+  'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina Faso', 'Burundi', 'Cambodia', 'Cameroon', 'Canada', 'Cape Verde',
+  'Central African Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo', 'Costa Rica', 'Croatia', 'Cuba', 'Cyprus',
+  'Czech Republic', 'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic', 'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea',
+  'Eritrea', 'Estonia', 'Eswatini', 'Ethiopia', 'Fiji', 'Finland', 'France', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece',
+  'Grenada', 'Guatemala', 'Guinea', 'Guinea-Bissau', 'Guyana', 'Haiti', 'Honduras', 'Hong Kong', 'Hungary', 'Iceland', 'India',
+  'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy', 'Ivory Coast', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kuwait',
+  'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Macau',
+  'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Mauritania', 'Mauritius', 'Mexico', 'Moldova', 'Monaco', 'Mongolia',
+  'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nepal', 'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria',
+  'North Macedonia', 'Norway', 'Oman', 'Pakistan', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland',
+  'Portugal', 'Puerto Rico', 'Qatar', 'Romania', 'Russia', 'Rwanda', 'Saudi Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Singapore',
+  'Slovakia', 'Slovenia', 'South Africa', 'South Korea', 'Spain', 'Sri Lanka', 'Sudan', 'Sweden', 'Switzerland', 'Taiwan', 'Tanzania',
+  'Thailand', 'Togo', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom',
+  'United States', 'Uruguay', 'Uzbekistan', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe',
+];
+// Tag inputs that get a searchable picker popover instead of a bare datalist.
+const TAG_PICKERS = { lfLocTags: [...REGION_PRESETS, ...COUNTRIES] };
 
 function tagValues(wrap) {
   const hidden = $(wrap.dataset.target);
@@ -1726,20 +1747,89 @@ function renderTags(wrap) {
   const values = tagValues(wrap);
   const inputId = wrap.dataset.input;
   const placeholder = values.length ? '+ add' : (wrap.dataset.placeholder || '+ add');
+  const pop = wrap.querySelector('.cpop'); // picker popover survives re-renders
   wrap.innerHTML = values.map(v =>
     `<span class="lf-tag">${esc(v)}<button type="button" class="lf-tag-x" data-remove="${esc(v)}" aria-label="Remove ${esc(v)}">✕</button></span>`
   ).join('') + `<input id="${inputId}" class="lf-tag-input" list="${wrap.dataset.list || ''}" placeholder="${esc(placeholder)}" autocomplete="off" />`;
+  if (pop) wrap.appendChild(pop);
   const input = wrap.querySelector('.lf-tag-input');
   input.addEventListener('keydown', e => {
     if ((e.key === 'Enter' || e.key === ',') && input.value.trim()) {
       e.preventDefault();
-      addTag(wrap, input.value);
+      addTag(wrap, (wrap._pickerPick && wrap._pickerPick()) || input.value);
     } else if (e.key === 'Backspace' && !input.value && values.length) {
       setTagValues(wrap, values.slice(0, -1));
     }
   });
   input.addEventListener('change', () => { if (input.value.trim()) addTag(wrap, input.value); });
   input.addEventListener('blur', () => { if (input.value.trim()) addTag(wrap, input.value); });
+  const pickerItems = TAG_PICKERS[wrap.id];
+  if (pickerItems) attachTagPicker(wrap, input, pickerItems);
+}
+
+// Searchable popover for tag inputs (used by the Countries field): focus
+// shows the full list, typing filters, click/Enter picks, arrows navigate.
+// Free text still works — Enter with no match adds whatever was typed.
+function attachTagPicker(wrap, input, items) {
+  let pop = wrap.querySelector('.cpop');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.className = 'cpop';
+    pop.hidden = true;
+    wrap.appendChild(pop);
+  }
+  let hl = 0;
+  const view = () => {
+    const q = input.value.trim().toLowerCase();
+    const taken = new Set(tagValues(wrap).map(v => v.toLowerCase()));
+    const match = c => !taken.has(c.toLowerCase()) && (!q || c.toLowerCase().includes(q));
+    const regions = items.filter(c => REGION_PRESETS.includes(c) && match(c));
+    const countries = items.filter(c => !REGION_PRESETS.includes(c) && match(c));
+    return { regions, countries, list: [...regions, ...countries] };
+  };
+  const renderPop = () => {
+    const { regions, list } = view();
+    const q = input.value.trim();
+    hl = Math.min(hl, Math.max(list.length - 1, 0));
+    if (!list.length) {
+      pop.innerHTML = `<div class="cpop-empty">No match — press Enter to add “${esc(q)}”</div>`;
+      return;
+    }
+    let html = '';
+    list.forEach((c, i) => {
+      if (!q && i === 0 && regions.length) html += '<div class="cpop-group">Regions</div>';
+      if (!q && i === regions.length) html += '<div class="cpop-group">All countries</div>';
+      html += `<button type="button" class="cpop-item${i === hl ? ' hl' : ''}" data-val="${esc(c)}">${esc(c)}</button>`;
+    });
+    pop.innerHTML = html;
+  };
+  const open = () => { renderPop(); pop.hidden = false; };
+  const close = () => { pop.hidden = true; };
+  wrap._pickerPick = () => (pop.hidden ? null : view().list[hl] || null);
+  input.addEventListener('focus', open);
+  input.addEventListener('input', () => { hl = 0; open(); });
+  input.addEventListener('blur', () => setTimeout(close, 120));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (pop.hidden) { open(); return; }
+      const list = view().list;
+      if (!list.length) return;
+      hl = e.key === 'ArrowDown' ? Math.min(hl + 1, list.length - 1) : Math.max(hl - 1, 0);
+      renderPop();
+      pop.querySelector('.hl')?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Escape') close();
+  });
+  pop.onmousedown = e => {
+    const item = e.target.closest('.cpop-item');
+    if (!item) return;
+    e.preventDefault(); // keep focus; blur must not swallow the pick
+    addTag(wrap, item.dataset.val);
+    wrap.querySelector('.lf-tag-input')?.focus();
+  };
+  if (wrap._pickerDoc) document.removeEventListener('mousedown', wrap._pickerDoc);
+  wrap._pickerDoc = e => { if (!wrap.contains(e.target)) close(); };
+  document.addEventListener('mousedown', wrap._pickerDoc);
 }
 
 function addTag(wrap, raw) {
@@ -1776,9 +1866,7 @@ bindTagInput('lfTitleTags', {
   placeholder: '+ add',
 });
 bindTagInput('lfLocTags', {
-  listId: 'lfLocSugs',
-  suggestions: LOC_PRESETS,
-  placeholder: '+ add',
+  placeholder: '+ add country',
 });
 
 // "Detected:" summary tag — shows the auto-filled offer profile as one glanceable
