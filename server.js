@@ -805,9 +805,13 @@ async function hunterDiscoverDomains(f, limit = 3) {
     else if (res.status === 429) err.code = 'RATE_LIMITED';
     throw err;
   }
-  // Prefer companies Hunter actually has personal emails for.
+  // Discover matches loosely ("ecommerce brands" surfaces agencies and
+  // software vendors), so skip the industries an SGI-style user sells TO
+  // but never targets: marketing/IT/recruiting providers. Prefer companies
+  // Hunter actually has personal emails for.
+  const SKIP_INDUSTRY = /marketing|advertis|public relations|information technology|software|internet|staffing|recruit|consult/i;
   return (data?.data || [])
-    .filter(c => c.domain)
+    .filter(c => c.domain && !SKIP_INDUSTRY.test(c.industry || ''))
     .sort((a, b) => (b.emails_count?.personal || 0) - (a.emails_count?.personal || 0))
     .slice(0, limit)
     .map(c => c.domain);
