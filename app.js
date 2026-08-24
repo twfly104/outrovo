@@ -151,11 +151,6 @@ async function init() {
     ? `Plan: ${data.plan.name}${data.plan.id === 'trial' && data.plan.trialEnds ? ` (trial ends ${new Date(data.plan.trialEnds).toLocaleDateString()})` : ''}`
     : '';
   $('accountInfo').textContent = (me ? `${me.firstName} ${me.lastName} — ${me.email} (${me.company})` : '') + (planLine ? ` · ${planLine}` : '');
-  $('mailAddr').value = me?.mailingAddress || '';
-  $('bookingLink').value = me?.bookingLink || '';
-  if (!me?.mailingAddress) {
-    $('mailAddrResult').innerHTML = '<span class="no-tag">⚠ No mailing address saved</span> — one is legally required (CAN-SPAM) in every campaign email you send.';
-  }
   if (data.plan?.expired) {
     const banner = $('engineBanner');
     banner.hidden = false;
@@ -171,14 +166,8 @@ async function init() {
   bindSenders();
   bindSettingsHero();
   bindAccount();
-  bindLinkedInSafety();
-  bindIntegration();
-  bindApolloKey();
-  bindSuppression();
   bindAgency();
   bindWhiteLabel();
-  bindWebhooks();
-  bindWebhookFormToggle();
   bindTopup();
   bindBulkTools();
   loadCredits();
@@ -212,7 +201,7 @@ function showPage(name) {
   if (name === 'campaigns') { backToList(); loadCampaigns(); }
   if (name === 'leads') loadLeadFinderStatus();
   if (name === 'overview') { loadOverview(); loadOvExtras(); }
-  if (name === 'settings') { loadEngine(); loadSenders(); loadSettingsHero(); loadLinkedInSafety(); loadIntegrationStatus(); loadApolloKeyStatus(); loadSuppression(); loadWebhooks(); }
+  if (name === 'settings') { loadSenders(); loadSettingsHero(); }
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
 
@@ -1223,10 +1212,8 @@ async function loadSettingsHero() {
   const { data } = await api('GET', '/api/app/settings/integrations');
   if (!data.ok) return;
   $('apolloHeroPill').hidden = !data.apollo;
-  $('apolloHeroSetup').hidden = data.apollo;
   $('llmHeroPill').hidden = !data.llm;
   $('llmHeroOff').hidden = data.llm;
-  $('crmSyncToggle').checked = Boolean(data.crmSync);
   const n = me?.notifications || {};
   $('notifHotLead').checked = n.hotLead !== false;
   $('notifDailyDigest').checked = n.dailyDigest !== false;
@@ -1243,15 +1230,6 @@ function bindSettingsHero() {
     $('connectMicrosoft').classList.add('pulse');
     setTimeout(() => ['connectGoogle', 'connectMicrosoft'].forEach(id => $(id).classList.remove('pulse')), 1600);
   });
-  $('apolloHeroSetup').addEventListener('click', () => gotoTab('integrations'));
-
-  $('crmSyncToggle').addEventListener('change', async e => {
-    const on = e.target.checked;
-    const { data } = await api('POST', '/api/app/settings', { crmSync: on });
-    if (!data.ok) { e.target.checked = !on; return toast('Could not save CRM sync setting', 'err'); }
-    if (me) me.crmSync = on;
-    toast(on ? 'CRM sync on — events flow to your webhooks' : 'CRM sync off — webhook delivery paused');
-  });
 
   const bindNotif = (id, key, label) => $(id).addEventListener('change', async e => {
     const on = e.target.checked;
@@ -1267,20 +1245,6 @@ function bindSettingsHero() {
 
 // ---------- Compliance & account data rights ----------
 function bindAccount() {
-  $('mailAddrBtn').addEventListener('click', async () => {
-    const { data } = await api('POST', '/api/app/settings', { mailingAddress: $('mailAddr').value });
-    $('mailAddrResult').innerHTML = data.ok
-      ? (data.mailingAddress
-        ? '<span class="ok-tag">✓ Saved</span> — this address now appears in every campaign email footer.'
-        : '<span class="no-tag">⚠ Address cleared</span> — CAN-SPAM requires a postal address in every campaign email.')
-      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
-  });
-  $('bookingLinkBtn').addEventListener('click', async () => {
-    const { data } = await api('POST', '/api/app/settings', { bookingLink: $('bookingLink').value });
-    $('bookingLinkResult').innerHTML = data.ok
-      ? '<span class="ok-tag">✓ Saved</span> — campaigns can drop it in with <code>{{bookingLink}}</code>.'
-      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
-  });
   $('exportBtn').addEventListener('click', () => { window.location.href = '/api/app/export'; });
   $('deleteAccountBtn').addEventListener('click', async () => {
     if (!confirm('Delete your account and ALL campaigns, prospects, replies, tasks and inboxes? This cannot be undone.')) return;
@@ -1293,107 +1257,9 @@ function bindAccount() {
 }
 
 // ---------- LinkedIn safety ----------
-function bindLinkedInSafety() {
-  $('liBudgetBtn').addEventListener('click', async () => {
-    const { data } = await api('POST', '/api/app/settings', { linkedinBudget: Number($('liBudget').value) });
-    $('liBudgetResult').innerHTML = data.ok
-      ? `<span class="ok-tag">✓ Saved</span> — budget is now ${data.linkedinBudget} actions/day.`
-      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
-  });
-}
-
-async function loadLinkedInSafety() {
-  const { data } = await api('GET', '/api/app/tasks');
-  if (data.ok && data.linkedin) $('liBudget').value = data.linkedin.budget;
-}
-
 // ---------- LinkedIn autopilot bridge ----------
-function bindIntegration() {
-  $('genTokenBtn').addEventListener('click', async () => {
-    const out = $('integrationResult');
-    const { data } = await api('POST', '/api/app/integrations/token');
-    if (!data.ok) { out.innerHTML = `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`; return; }
-    out.innerHTML = `
-      <p><span class="ok-tag">✓ Token created</span> — copy it now, it won't be shown again:</p>
-      <p><code class="token-box">${esc(data.token)}</code></p>
-      <p class="settings-note">Callback URL: <code>${esc(data.callbackUrl)}</code><br>
-      Example: <code>curl -X POST ${esc(data.callbackUrl)} -H "x-integration-token: YOUR_TOKEN" -H "Content-Type: application/json" -d '{"prospect":"sarah@acme.io","outcome":"done","note":"request sent"}'</code></p>`;
-    loadIntegrationStatus();
-  });
-  $('revokeTokenBtn').addEventListener('click', async () => {
-    if (!confirm('Revoke the integration token? Connected autopilots will stop working.')) return;
-    await api('DELETE', '/api/app/integrations/token');
-    $('integrationResult').innerHTML = '';
-    loadIntegrationStatus();
-  });
-}
-
-async function loadIntegrationStatus() {
-  const { data } = await api('GET', '/api/app/integrations/status');
-  if (!data.ok) return;
-  $('integrationStatus').innerHTML = data.hasToken
-    ? `<p>🟢 Token active. Callback URL: <code>${esc(data.callbackUrl)}</code></p>`
-    : '<p style="color:var(--ink-faint)">No token yet — generate one to connect an autopilot.</p>';
-  $('revokeTokenBtn').hidden = !data.hasToken;
-}
-
 // ---------- BYOK: Apollo lead data source ----------
-function bindApolloKey() {
-  $('apolloKeySaveBtn').addEventListener('click', async () => {
-    const out = $('apolloKeyResult');
-    const key = $('apolloKeyInput').value.trim();
-    if (!key) { out.innerHTML = '<span class="no-tag">✗ Paste your Apollo API key first</span>'; return; }
-    out.innerHTML = 'Validating with Apollo…';
-    const { data } = await api('POST', '/api/app/integrations/apollo-key', { key });
-    if (!data.ok) { out.innerHTML = `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`; return; }
-    $('apolloKeyInput').value = '';
-    out.innerHTML = '<span class="ok-tag">✓ Key saved</span> — Lead Finder and enrichment now use your Apollo account.';
-    loadApolloKeyStatus();
-    loadLeadFinderStatus();
-  });
-  $('apolloKeyRemoveBtn').addEventListener('click', async () => {
-    if (!confirm('Remove your Apollo key? Lead Finder falls back to the built-in source.')) return;
-    await api('DELETE', '/api/app/integrations/apollo-key');
-    $('apolloKeyResult').innerHTML = '';
-    loadApolloKeyStatus();
-    loadLeadFinderStatus();
-  });
-}
-
-async function loadApolloKeyStatus() {
-  const { data } = await api('GET', '/api/app/integrations/apollo-key');
-  if (!data.ok) return;
-  $('apolloKeyStatus').innerHTML = data.set
-    ? `<p>🟢 Using your Apollo key (${esc(data.hint || '')}).</p>`
-    : '<p style="color:var(--ink-faint)">No key set — using the built-in lead source.</p>';
-  $('apolloKeyRemoveBtn').hidden = !data.set;
-  $('apolloKeyInput').placeholder = data.set ? 'Replace your Apollo API key' : 'Paste your Apollo API key';
-}
-
 // ---------- suppression list ----------
-function bindSuppression() {
-  $('suppAddBtn').addEventListener('click', async () => {
-    const { data } = await api('POST', '/api/app/suppression', { email: $('suppEmail').value });
-    if (data.ok) $('suppEmail').value = '';
-    loadSuppression();
-  });
-}
-
-async function loadSuppression() {
-  const { data } = await api('GET', '/api/app/suppression');
-  if (!data.ok) return;
-  $('suppList').innerHTML = data.suppressed.length
-    ? data.suppressed.map(s => `<div class="sender-row">
-        <div class="sender-info"><strong>${esc(s.email)}</strong><span>${esc(s.reason)} · ${fmtTime(s.at)}</span></div>
-        <button class="link" data-unsuppress="${esc(s.email)}">Remove</button>
-      </div>`).join('')
-    : '<p class="settings-note">Nobody blocked — good. Unsubscribes appear here automatically.</p>';
-  $('suppList').querySelectorAll('[data-unsuppress]').forEach(btn => btn.addEventListener('click', async () => {
-    await api('DELETE', `/api/app/suppression/${encodeURIComponent(btn.dataset.unsuppress)}`);
-    loadSuppression();
-  }));
-}
-
 // ---------- agency: clients + billing ----------
 function bindAgency() {
   $('addClientBtn').addEventListener('click', async () => {
@@ -1473,53 +1339,6 @@ async function loadWhiteLabel() {
 }
 
 // ---------- CRM webhooks ----------
-function bindWebhookFormToggle() {
-  const showBtn = $('showWebhookFormBtn');
-  if (showBtn) showBtn.addEventListener('click', () => { $('webhookForm').hidden = false; showBtn.hidden = true; });
-}
-
-function bindWebhooks() {
-  $('addWebhookBtn').addEventListener('click', async () => {
-    const out = $('webhookResult');
-    out.innerHTML = 'Adding…';
-    const events = [...document.querySelectorAll('.whEvent:checked')].map(c => c.value);
-    const { data } = await api('POST', '/api/app/integrations/webhooks', {
-      provider: $('whProvider').value, url: $('whUrl').value, secret: $('whSecret').value || undefined, events,
-    });
-    out.innerHTML = data.ok
-      ? `<span class="ok-tag">✓ Webhook added</span> — events will POST to ${esc(data.webhook.provider)}.`
-      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
-    if (data.ok) { $('whUrl').value = ''; $('whSecret').value = ''; loadWebhooks(); }
-  });
-}
-
-async function loadWebhooks() {
-  const { data } = await api('GET', '/api/app/integrations/webhooks');
-  if (!data.ok) return;
-  if (data.webhooks.length && $('webhookForm')) { $('webhookForm').hidden = false; $('showWebhookFormBtn').hidden = true; }
-  $('webhookList').innerHTML = data.webhooks.length ? data.webhooks.map(w => `
-    <div class="sender-row">
-      <div class="sender-info">
-        <strong>${esc(w.provider)}</strong>
-        <span>${esc(w.url.slice(0, 60))}${w.url.length > 60 ? '…' : ''} · events: ${esc((w.events || []).join(', '))}</span>
-      </div>
-      <button class="link" data-test-hook="${w.id}">Test</button>
-      <button class="link" data-del-hook="${w.id}">Remove</button>
-    </div>`).join('') : '<p class="settings-note">No webhooks yet — add one below to sync your CRM.</p>';
-  $('webhookList').querySelectorAll('[data-del-hook]').forEach(btn => btn.addEventListener('click', async () => {
-    await api('DELETE', `/api/app/integrations/webhooks/${btn.dataset.delHook}`);
-    loadWebhooks();
-  }));
-  $('webhookList').querySelectorAll('[data-test-hook]').forEach(btn => btn.addEventListener('click', async () => {
-    btn.textContent = '…';
-    const { data: r } = await api('POST', `/api/app/integrations/webhooks/${btn.dataset.testHook}/test`);
-    btn.textContent = 'Test';
-    $('webhookResult').innerHTML = r.ok
-      ? `<span class="ok-tag">✓ Delivered</span> — endpoint returned ${r.status}.`
-      : `<span class="no-tag">✗ ${esc(r.error || 'Failed')}</span>`;
-  }));
-}
-
 // ---------- bulk tools: verify + enrich ----------
 function bindBulkTools() {
   $('verifyAllBtn').addEventListener('click', async () => {
@@ -1588,24 +1407,6 @@ function bindTopup() {
       ? '<span class="no-tag">Payments not configured yet</span> — your admin needs to connect Stripe before packs can be bought.'
       : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
   });
-}
-
-async function loadEngine() {
-  const { data } = await api('GET', '/api/app/engine');
-  const el = $('engineInfo');
-  if (data.mode === 'multi-inbox') {
-    el.innerHTML = `<span class="status-badge good">Connected — ${data.inboxes} inbox${data.inboxes > 1 ? 'es' : ''} sending</span>
-      <p class="settings-note">Campaigns load-balance across your connected inboxes automatically.</p>`;
-  } else if (data.mode === 'resend') {
-    el.innerHTML = `<span class="status-badge good">Connected via Resend</span>
-      <p class="settings-note">Sending as ${esc(data.smtp.user)} through the server email gateway.</p>`;
-  } else if (data.mode === 'smtp') {
-    el.innerHTML = `<span class="status-badge good">Connected via custom SMTP</span>
-      <p class="settings-note">Sending as ${esc(data.smtp.user)} through the server email gateway.</p>`;
-  } else {
-    el.innerHTML = `<span class="status-badge demo">Demo mode</span>
-      <p class="settings-note">Campaigns simulate sending until you connect an inbox on the Inboxes tab (or your admin adds a gateway key). Nothing is actually delivered.</p>`;
-  }
 }
 
 // ---------- lead finder ----------
