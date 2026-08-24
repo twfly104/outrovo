@@ -1760,6 +1760,7 @@ async function saveAutopilot(enabled) {
     $('autopilotSettings').hidden = true;
     $('autopilotNote').textContent = '';
     $('leadFindNote').textContent = data.error || 'Could not save autopilot.';
+    toast(data.error || 'Could not save autopilot.', 'err');
     return;
   }
   $('autopilotNote').textContent = enabled
@@ -1884,6 +1885,15 @@ function bindLeadFinder() {
     if (e.key === 'Escape' && !$('intelDrawer').hidden) closeLeadIntel();
   });
   $('autopilotEnabled').addEventListener('change', e => {
+    // Auto-pilot enrolls into a campaign — with none, enabling would just
+    // bounce off the server and silently flip back. Say why instead.
+    if (e.target.checked && !campaigns.length) {
+      e.target.checked = false;
+      $('autopilotSettings').hidden = true;
+      toast('Create a campaign first — auto-pilot needs one to add leads to.', 'err');
+      $('leadFindNote').textContent = 'Auto-pilot needs a campaign. Create one in Campaigns, then turn auto-pilot on.';
+      return;
+    }
     $('autopilotSettings').hidden = !e.target.checked;
     if (e.target.checked) { $('apCampaign').innerHTML = campaigns.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join(''); }
     saveAutopilot(e.target.checked);
@@ -1926,6 +1936,8 @@ function bindLeadFinder() {
     } else {
       note.textContent = 'No leads matched — try broader keywords or a different title.';
     }
+    // Soft config warnings (e.g. free-plan Apollo key) — informational, not an error.
+    if (data.warnings?.length) note.textContent += ` · ${data.warnings.join(' · ')}`;
     renderLeadResults(data.leads, keywords);
     loadLeadFinderStatus();
   });

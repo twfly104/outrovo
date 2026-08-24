@@ -682,10 +682,11 @@ const APOLLO_BASE = () => (process.env.APOLLO_BASE_URL || 'https://api.apollo.io
 // free-plan API block as an actionable message instead of a bare status.
 async function apolloError(res, what) {
   const payload = await res.json().catch(() => null);
-  if (payload?.error_code === 'API_INACCESSIBLE') {
-    return new Error("Apollo: your plan doesn't include API access — upgrade at apollo.io/pricing or unset APOLLO_API_KEY to use the built-in finder");
-  }
-  return new Error(`Apollo ${what} ${res.status}${payload?.error ? `: ${payload.error}` : ''}`);
+  const err = new Error(payload?.error_code === 'API_INACCESSIBLE'
+    ? "Apollo: your plan doesn't include API access — upgrade at apollo.io/pricing or unset APOLLO_API_KEY to use the built-in finder"
+    : `Apollo ${what} ${res.status}${payload?.error ? `: ${payload.error}` : ''}`);
+  err.code = payload?.error_code || (res.status === 401 || res.status === 403 ? 'INVALID_KEY' : null);
+  return err;
 }
 
 // Tag inputs send comma-joined values — Apollo wants an array per filter.
@@ -722,6 +723,13 @@ async function apolloSearchLeads(f, perPage, user = null) {
   });
   if (!res.ok) throw await apolloError(res, 'search');
   const data = await res.json();
+  // Apollo answers a bad key with HTTP 200 + an error body — catch it here
+  // so it doesn't look like "zero results".
+  if (data.error && !data.people && !data.contacts) {
+    const err = new Error(`Apollo search: ${data.error}`);
+    err.code = 'INVALID_KEY';
+    throw err;
+  }
   const people = [...(data.people || []), ...(data.contacts || [])];
   const seen = new Set();
   return people.map(p => {
@@ -830,13 +838,21 @@ async function verifyLeadBatch(leads, limit) {
 async function searchLeads(f, perPage, sessionEmail, user = null) {
   const order = leadFinderSourceOrder(user);
   const errors = [];
+  const warnings = [];
   let leads = [];
   for (const src of order) {
     try {
       if (src === 'apollo') leads = await apolloSearchLeads(f, perPage, user);
       else leads = await builtinSearchLeads(f, perPage, sessionEmail);
       if (leads.length) break;
-    } catch (err) { errors.push(`${src}: ${err.message}`); }
+    } catch (err) {
+      // A free-plan or rejected Apollo key is a config issue, not a search
+      // failure — the built-in finder already covers the search, so report
+      // it as a soft warning instead of a provider error.
+      if (err.code === 'API_INACCESSIBLE') warnings.push('Apollo key has no API access — used the built-in finder instead.');
+      else if (err.code === 'INVALID_KEY') warnings.push('Apollo key was rejected — used the built-in finder instead.');
+      else errors.push(`${src}: ${err.message}`);
+    }
   }
   // Filter out emails already in any of this user's campaigns or suppressed
   const campaigns = load('campaigns').filter(c => c.owner === sessionEmail);
@@ -844,9 +860,9 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
   const existing = new Set(load('prospects').filter(p => campaignIds.has(p.campaignId)).map(p => p.email));
   leads = leads.filter(l => !existing.has(l.email) && !isSuppressed(sessionEmail, l.email));
   leads = leads.filter(l => !GENERIC_LOCALS.has(l.email.split('@')[0]));
-  if (!leads.length) return { leads: [], provider: null, errors };
+  if (!leads.length) return { leads: [], provider: null, errors, warnings };
   const verified = await verifyLeadBatch(leads, perPage);
-  return { leads: verified.slice(0, perPage), provider: leads[0].source, errors };
+  return { leads: verified.slice(0, perPage), provider: leads[0].source, errors, warnings };
 }
 
 // ---------- lead finder autopilot ----------
