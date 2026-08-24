@@ -600,3 +600,16 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
   interested reply blocked when hotLead off / delivered when on; question
   reply unaffected; crmSync off silences everything; digest event delivered
   with real counts. Browser-checked hero render incl. HEALTHY mailbox row.
+
+## Iteration 17 — Settings sub-tabs removed (Aug 2026)
+- Owner: "delete setting button function" — the Inboxes / Tools & verification /
+  Integrations / Account & compliance tab bar is GONE from Settings; all four
+  .settings-pane blocks are always visible in one long page (hidden attrs removed).
+- bindSettingsTabs() deleted from app.js (its global .settings-tab selector also
+  mis-bound the campaign-detail tabs — latent bug gone with it). The webhook
+  "show form" toggle survives as bindWebhookFormToggle(). Campaign detail tabs
+  (#cdTabs, data-ctab) are untouched — they bind via their own delegation.
+- Hero "jump" buttons (Connect mailbox, Apollo Set up) now scrollIntoView the
+  pane instead of clicking a tab. KEEP the .settings-tabs/.settings-tab CSS —
+  campaign detail still uses it.
+

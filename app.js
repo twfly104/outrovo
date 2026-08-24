@@ -180,7 +180,7 @@ async function init() {
   bindAgency();
   bindWhiteLabel();
   bindWebhooks();
-  bindSettingsTabs();
+  bindWebhookFormToggle();
   bindTopup();
   bindBulkTools();
   loadCredits();
@@ -1256,8 +1256,7 @@ async function loadSettingsHero() {
 
 function bindSettingsHero() {
   const gotoTab = stab => {
-    document.querySelector(`.settings-tab[data-stab="${stab}"]`)?.click();
-    $('settingsTabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $(`stab-${stab}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   $('connectMailboxBtn').addEventListener('click', () => {
     gotoTab('inboxes');
@@ -1565,11 +1564,7 @@ async function loadWhiteLabel() {
 }
 
 // ---------- CRM webhooks ----------
-function bindSettingsTabs() {
-  document.querySelectorAll('.settings-tab').forEach(btn => btn.addEventListener('click', () => {
-    document.querySelectorAll('.settings-tab').forEach(b => b.classList.toggle('active', b === btn));
-    document.querySelectorAll('.settings-pane').forEach(p => { p.hidden = p.id !== 'stab-' + btn.dataset.stab; });
-  }));
+function bindWebhookFormToggle() {
   const showBtn = $('showWebhookFormBtn');
   if (showBtn) showBtn.addEventListener('click', () => { $('webhookForm').hidden = false; showBtn.hidden = true; });
 }
