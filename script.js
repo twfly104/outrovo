@@ -100,6 +100,23 @@ if (billToggle) {
   });
 }
 
+// Google sign-in: show the button only when the server has OAuth configured,
+// and surface any error bounced back from the OAuth callback (?error=...).
+(function googleAuth() {
+  const wrap = document.getElementById('googleAuthWrap');
+  if (!wrap) return;
+  const errMsg = new URLSearchParams(location.search).get('error');
+  if (errMsg) {
+    const p = document.createElement('p');
+    p.style.cssText = 'color:#d93025;font-size:0.85rem;font-weight:600;margin:0 0 14px;';
+    p.textContent = errMsg;
+    wrap.before(p);
+  }
+  fetch('/api/auth/providers').then(r => r.json()).then(d => {
+    if (d.google) wrap.hidden = false;
+  }).catch(() => {});
+})();
+
 // Form validation + API (signup / login)
 document.querySelectorAll('form[id$="Form"]').forEach(form => {
   const success = document.getElementById(form.id.replace('Form', 'Success'));

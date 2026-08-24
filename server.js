@@ -194,6 +194,22 @@ const oauthRedirect = name => `${PUBLIC_URL}/api/app/oauth/${name}/callback`;
 function oauthState(sessionToken, name) {
   return crypto.createHmac('sha256', SENDER_KEY).update(`oauth:${sessionToken}:${name}`).digest('base64url');
 }
+
+// Sign-in flow has no session token yet, so its state is random + stored
+// server-side (5 min TTL) instead of the deterministic HMAC above.
+const loginStates = new Map();
+function newLoginState() {
+  const s = crypto.randomBytes(24).toString('base64url');
+  const now = Date.now();
+  for (const [k, v] of loginStates) if (now - v > 5 * 60e3) loginStates.delete(k);
+  loginStates.set(s, now);
+  return s;
+}
+function takeLoginState(s) {
+  const ok = loginStates.has(s) && Date.now() - loginStates.get(s) < 5 * 60e3;
+  loginStates.delete(s);
+  return ok;
+}
 function oauthCredsFor(senderProvider) {
   const entry = Object.values(OAUTH_PROVIDERS).find(p => p.senderProvider === senderProvider);
   return entry && entry.clientId ? { clientId: entry.clientId, clientSecret: entry.clientSecret, accessUrl: entry.tokenUrl } : null;
@@ -2664,6 +2680,100 @@ const router = {
       if (!/no LLM key/.test(e?.message || '')) console.error('[assistant]', e?.message || e);
       send(res, 503, { ok: false, error: 'LLM unavailable.' });
     }
+  },
+
+  // Google sign-in — the login/signup pages show the button only when this
+  // reports configured, so a missing key never leaves a dead button.
+  'GET /api/auth/providers': (req, res) => {
+    send(res, 200, { ok: true, google: oauthReady('google') });
+  },
+
+  'GET /api/auth/google/start': (req, res) => {
+    if (!oauthReady('google')) return send(res, 400, { ok: false, error: 'Google sign-in is not configured on this server.' });
+    const p = OAUTH_PROVIDERS.google;
+    const q = new URLSearchParams({
+      client_id: p.clientId,
+      redirect_uri: `${PUBLIC_URL}/api/auth/google/callback`,
+      response_type: 'code',
+      scope: 'openid email profile',
+      state: newLoginState(),
+    });
+    res.writeHead(302, { Location: `${p.authUrl}?${q.toString()}` });
+    res.end();
+  },
+
+  'GET /api/auth/google/callback': async (req, res, name, params) => {
+    const fail = msg => {
+      res.writeHead(302, { Location: `/login.html?error=${encodeURIComponent(msg)}` });
+      res.end();
+    };
+    const startSession = (res, email) => {
+      const sessions = load('sessions');
+      const token = newToken();
+      sessions.push({ token, email, expires: new Date(Date.now() + 7 * 864e5).toISOString() });
+      save('sessions', sessions);
+      res.writeHead(302, {
+        Location: '/app.html',
+        'Set-Cookie': `outrovo_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 86400}`,
+      });
+      res.end();
+    };
+    if (!oauthReady('google')) return fail('Google sign-in is not configured.');
+    if (params.get('error')) return fail(params.get('error_description') || 'Google sign-in was cancelled.');
+    const state = params.get('state') || '';
+    if (!takeLoginState(state)) return fail('Sign-in link expired — please try again.');
+    const code = params.get('code');
+    if (!code) return fail('Google did not return an authorization code.');
+    let email, givenName, familyName;
+    try {
+      const p = OAUTH_PROVIDERS.google;
+      const tokenRes = await fetch(p.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code', code,
+          redirect_uri: `${PUBLIC_URL}/api/auth/google/callback`,
+          client_id: p.clientId, client_secret: p.clientSecret,
+        }).toString(),
+      });
+      const tokens = await tokenRes.json();
+      if (!tokenRes.ok || !tokens.access_token) return fail(`Google token exchange failed (${tokens.error || tokenRes.status}).`);
+      const uiRes = await fetch(process.env.GOOGLE_USERINFO_URL || 'https://openidconnect.googleapis.com/v1/userinfo', {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      const ui = await uiRes.json();
+      if (!uiRes.ok || ui.email_verified === false) return fail('Google did not return a verified email address.');
+      email = (ui.email || '').trim().toLowerCase();
+      givenName = (ui.given_name || '').trim();
+      familyName = (ui.family_name || '').trim();
+      if (!isEmail(email)) return fail('Google returned no usable email address.');
+    } catch (err) {
+      return fail('Could not reach Google — please try again.');
+    }
+    const users = load('users');
+    const existing = users.find(u => u.email === email);
+    if (existing) {
+      existing.authProvider = 'google';
+      save('users', users);
+      return startSession(res, email);
+    }
+    // First time: create the account. Google verified the email, so no
+    // verification email needed; company name can be filled in later.
+    const domain = email.split('@')[1] || '';
+    const user = {
+      id: crypto.randomUUID(),
+      firstName: givenName || 'there', lastName: familyName || '',
+      email, company: domain, authProvider: 'google',
+      plan: 'trial', trialEnds: new Date(Date.now() + 14 * 864e5).toISOString(),
+      consent: { termsVersion: TERMS_VERSION, privacyVersion: TERMS_VERSION, at: new Date().toISOString(), via: 'google-oauth' },
+      createdAt: new Date().toISOString(),
+    };
+    users.push(user); save('users', users);
+    domainAudit(domain)
+      .then(result => logEvent('domain-audit', `Domain check for ${result.domain}: score ${result.score}/100`, { score: result.score, checks: result.checks }, email))
+      .catch(() => {});
+    logEvent('auth', `Signed up via Google: ${email}`, {}, email);
+    return startSession(res, email);
   },
 
   'POST /api/login': async (req, res) => {

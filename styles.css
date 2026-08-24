@@ -1208,6 +1208,21 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .auth-box .sub { color: var(--ink-faint); margin-bottom: 32px; }
 .auth-box .sub a { color: var(--crest); font-weight: 600; }
 
+.btn-google {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; padding: 12px 15px; margin-bottom: 4px;
+  background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  font: inherit; font-size: 0.95rem; font-weight: 600; color: var(--ink);
+  text-decoration: none; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s;
+}
+.btn-google:hover { border-color: #c7ccd1; box-shadow: 0 2px 8px rgba(11, 12, 14, 0.08); }
+.auth-divider {
+  display: flex; align-items: center; gap: 12px; margin: 18px 0 22px;
+  color: var(--ink-faint); font-size: 0.78rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
 .field { margin-bottom: 18px; }
 .field label {
   display: block;
