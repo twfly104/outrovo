@@ -826,7 +826,19 @@ async function hunterSearchLeads(f, perPage) {
   }
   const titles = splitFilter(f.title);
   const isExec = EXEC_TITLES.test(f.title || '');
-  const titleTerms = titles.map(t => t.toLowerCase().replace(/[^a-z\s]/g, '').trim()).filter(Boolean);
+  // Expand C-level abbreviations to their spelled-out forms — Hunter stores
+  // "Chief Executive Officer", so a "CEO" chip must match that too.
+  const TITLE_EXPANSIONS = {
+    ceo: 'chief executive officer', cto: 'chief technology officer',
+    cfo: 'chief financial officer', coo: 'chief operating officer',
+    cmo: 'chief marketing officer', cro: 'chief revenue officer',
+    cpo: 'chief product officer', cio: 'chief information officer',
+  };
+  const titleTerms = [...new Set(titles.flatMap(t => {
+    const clean = t.toLowerCase().replace(/[^a-z\s]/g, '').trim();
+    if (!clean) return [];
+    return TITLE_EXPANSIONS[clean] ? [clean, TITLE_EXPANSIONS[clean]] : [clean];
+  }))];
   // Hunter's seniority=executive spans C-level through directors, so a
   // "founder / CEO" search still surfaces Directors of AI. Post-filter by
   // word boundary so the lead's title must contain one of the requested
@@ -852,7 +864,12 @@ async function hunterSearchLeads(f, perPage) {
     for (const e of data?.data?.emails || []) {
       const email = (e.value || '').trim().toLowerCase();
       if (!isEmail(email) || seen.has(email)) continue;
-      if (e.verification?.status && e.verification.status !== 'valid') continue;
+      // Hunter returns 'valid' / 'invalid' / 'accept_all' / 'webmail' — or no
+      // verification object at all when the address was never checked. That
+      // unverified bucket is where junk like "Imma Russo, Founder of Google"
+      // lives (anyone can claim any title on an unchecked address), so keep
+      // only positively-verified emails.
+      if (e.verification?.status !== 'valid') continue;
       if (!titleMatches(e.position)) continue;
       seen.add(email);
       out.push({
@@ -866,6 +883,15 @@ async function hunterSearchLeads(f, perPage) {
     }
   }
   return out;
+}
+
+// True when the ICP keywords pointed at specific company domains — Hunter ran
+// its domain-search on them and simply found no verified people. Falling
+// through to the built-in crawler would only scrape the same sites for
+// unverified junk, so return a clear zero-result instead.
+function hunterCovered(f) {
+  const domains = leadFinderDomains(f.keywords).slice(0, 3);
+  return domains.length > 0;
 }
 
 const GENERIC_LOCALS = new Set(['info', 'contact', 'hello', 'support', 'sales', 'team', 'office', 'mail', 'admin', 'no-reply', 'noreply']);
@@ -957,6 +983,10 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
       else if (src === 'hunter') leads = await hunterSearchLeads(f, perPage);
       else leads = await builtinSearchLeads(f, perPage, sessionEmail);
       if (leads.length) break;
+      // Hunter ran but returned nothing verified: if the search was
+      // domain-targeted, don't fall through to the crawler (it would scrape
+      // the same sites for unverified junk like "press@google.com").
+      if (src === 'hunter' && hunterCovered(f)) break;
     } catch (err) {
       // A free-plan or rejected provider key is a config issue, not a search
       // failure — the next source covers the search, so report it as a soft

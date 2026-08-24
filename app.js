@@ -1874,7 +1874,7 @@ function bindLeadFinder() {
         note.appendChild(a);
       }
     } else {
-      note.textContent = 'No leads matched — try broader keywords or a different title.';
+      note.textContent = 'No verified leads matched — try a broader title, a different domain, or add APOLLO_API_KEY for full ICP search.';
     }
     // Soft config warnings (e.g. free-plan Apollo key) — informational, not an error.
     if (data.warnings?.length) note.textContent += ` · ${data.warnings.join(' · ')}`;
