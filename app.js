@@ -1179,9 +1179,11 @@ async function loadSenders() {
   $('senderList').querySelectorAll('[data-test-sender]').forEach(btn => btn.addEventListener('click', async () => {
     const to = me?.email;
     if (!to) return;
-    btn.textContent = '…';
+    btn.textContent = 'Sending…';
+    btn.disabled = true;
     const { data: r } = await api('POST', '/api/app/tools/test-email', { to, senderId: btn.dataset.testSender });
     btn.textContent = 'Send test';
+    btn.disabled = false;
     $('senderResult').innerHTML = r.ok
       ? `<span class="ok-tag">✓ Sent</span> to ${esc(to)} via ${esc(r.sender || 'rotation')}${r.demo ? ' (demo — logged, not sent)' : ''}.`
       : `<span class="no-tag">✗ ${esc(r.error || 'Failed')}</span>`;

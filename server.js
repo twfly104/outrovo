@@ -4455,12 +4455,15 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       opts.sender = s;
     }
     try {
-      const result = await sendEmail(
-        { name: 'Test email', owner: session.email },
-        { email: to, firstName: 'there' },
-        { subject: 'Outrovo test email ✅', body: 'Hi {{firstName}} — if you see this {message|note}, your Outrovo sending pipeline works.' },
-        opts,
-      );
+      const result = await Promise.race([
+        sendEmail(
+          { name: 'Test email', owner: session.email },
+          { email: to, firstName: 'there' },
+          { subject: 'Outrovo test email ✅', body: 'Hi {{firstName}} — if you see this {message|note}, your Outrovo sending pipeline works.' },
+          opts,
+        ),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Timed out after 15s — check your SMTP host/credentials.')), 15000)),
+      ]);
       send(res, 200, { ok: true, sender: result.sender, demo: result.demo });
     } catch (err) {
       send(res, 502, { ok: false, error: err.message });
