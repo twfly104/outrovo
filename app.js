@@ -69,6 +69,7 @@ async function init() {
   bindNav();
   bindLogout();
   bindCampaignModal();
+  bindCampaignDetail();
   bindAiGenerate();
   bindProspects();
   bindTools();
@@ -113,7 +114,8 @@ function showPage(name) {
   document.querySelectorAll('.app-page').forEach(p => p.hidden = true);
   $('page-' + name).hidden = false;
   if (name === 'inbox') loadInbox();
-  if (name === 'campaigns') loadCampaigns();
+  if (name === 'campaigns') { backToList(); loadCampaigns(); }
+  if (name === 'leads') loadLeadFinderStatus();
   if (name === 'overview') { loadOverview(); loadActivity(); }
   if (name === 'settings') { loadEngine(); loadSenders(); refreshSetup(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadApolloKeyStatus(); loadSuppression(); loadWebhooks(); }
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
@@ -344,10 +346,11 @@ async function saveCampaign() {
   if (!data.ok) { toast(data.error || 'Could not create campaign', 'err'); return; }
   $('campaignModal').hidden = true;
   $('cName').value = '';
-  loadCampaigns();
+  await loadCampaigns();
+  openCampaign(data.campaign.id);
 }
 
-function campaignCardHtml(c) {
+function stepVisuals(c) {
   const mins = s => Math.max(0, Number(s.delayMinutes || 0));
   const waitText = s => {
     const m = mins(s);
@@ -371,7 +374,20 @@ function campaignCardHtml(c) {
     s.type === 'email' ? (c.status === 'active' ? '<span class="step-bdg sent">Auto</span>' : '<span class="step-bdg">Queued</span>')
     : s.type === 'task' ? '<span class="step-bdg check">Manual</span>'
     : '<span class="step-bdg done">Auto</span>';
+  return { stepTitle, stepSub, ico, badge };
+}
 
+function campaignStepsHtml(c) {
+  const { stepTitle, stepSub, ico, badge } = stepVisuals(c);
+  return c.steps.map((s, i) => `
+    <div class="cp-step">
+      <span class="cp-ico ${s.type}">${ico(s)}</span>
+      <div class="cp-stinfo"><strong>${esc(stepTitle(s, i))}</strong><span>${esc(stepSub(s))}</span></div>
+      ${badge(s)}
+    </div>`).join('');
+}
+
+function campaignStatsHtml(c) {
   const sent = c.sentCount || 0;
   const bounced = c.bounced || 0;
   const replied = c.replied || 0;
@@ -383,7 +399,14 @@ function campaignCardHtml(c) {
     ? `<div class="cp-bars">${days.map((n, i) => `<i style="height:${Math.max(12, Math.round((n / peak) * 100))}%" class="${i % 2 ? 'b' : 'a'}" title="${n} repl${n === 1 ? 'y' : 'ies'}"></i>`).join('')}</div>`
     : '';
   return `
-    <div class="campaign-card">
+    <div class="cp-kpi"><span>Landing in inbox</span><strong>${placed === null ? '—' : placed + '%'}</strong></div>
+    <div class="cp-kpi"><span>Reply rate</span><strong>${replyRate === null ? '—' : replyRate + '%'}</strong></div>
+    <div><span class="cp-kpi-label">Replies · 7 days</span>${bars}</div>`;
+}
+
+function campaignCardHtml(c) {
+  return `
+    <div class="campaign-card cp-clickable" data-open="${c.id}" role="button" tabindex="0">
       <div class="cp-head">
         <div>
           <h3>${esc(c.name)}</h3>
@@ -391,28 +414,7 @@ function campaignCardHtml(c) {
         </div>
         <span class="status ${esc(c.status)}">${esc(c.status)}</span>
       </div>
-      <div class="cp-body">
-        <div class="cp-steps">
-          ${c.steps.map((s, i) => `
-            <div class="cp-step">
-              <span class="cp-ico ${s.type}">${ico(s)}</span>
-              <div class="cp-stinfo"><strong>${esc(stepTitle(s, i))}</strong><span>${esc(stepSub(s))}</span></div>
-              ${badge(s)}
-            </div>`).join('')}
-        </div>
-        <div class="cp-stats">
-          <div class="cp-kpi"><span>Landing in inbox</span><strong>${placed === null ? '—' : placed + '%'}</strong></div>
-          <div class="cp-kpi"><span>Reply rate</span><strong>${replyRate === null ? '—' : replyRate + '%'}</strong></div>
-          <div><span class="cp-kpi-label">Replies · 7 days</span>${bars}</div>
-        </div>
-      </div>
-      ${c.steps.some(s => s.variantB) ? `<div class="ab-results" data-campaign="${c.id}"></div>` : ''}
-      <div class="cp-foot">
-        ${c.status === 'active'
-          ? `<button class="icon-btn icon-btn-text" data-act="pause" data-id="${c.id}" title="Pause campaign">Pause</button>`
-          : `<button class="icon-btn icon-btn-text" data-act="activate" data-id="${c.id}" title="Activate campaign">Run</button>`}
-        <button class="icon-btn icon-btn-text" data-act="delete" data-id="${c.id}" title="Delete campaign">Delete</button>
-      </div>
+      <div class="cp-open-hint">Open campaign →</div>
     </div>`;
 }
 
@@ -427,41 +429,117 @@ async function loadCampaigns() {
     list.innerHTML = campaigns.map(c => campaignCardHtml(c)).join('');
   }
 
-  list.querySelectorAll('button[data-act]').forEach(btn => btn.addEventListener('click', async () => {
-    const { id, act } = btn.dataset;
-    if (act === 'delete' && !confirm('Delete this campaign and its prospects?')) return;
-    await api(act === 'delete' ? 'DELETE' : 'POST', `/api/app/campaigns/${id}${act === 'delete' ? '' : '/' + act}`);
-    loadCampaigns();
-    fillProspectSelect();
-  }));
-
-  list.querySelectorAll('.ab-results').forEach(async box => {
-    const { data: ab } = await api('GET', `/api/app/campaigns/${box.dataset.campaign}/ab-results`);
-    if (!ab?.ok || !ab.results.length) return;
-    box.innerHTML = ab.results.map(r => `
-      <div class="ab-row">
-        <span class="ab-label">⇄ ${esc(r.label)}</span>
-        <span class="ab-cell ${r.winner === 'A' ? 'ab-winner' : ''}">A — ${esc(r.variantA.subject.slice(0, 34))}: ${r.variantA.sent} sent · ${r.variantA.replied} replies (${r.variantA.replyRate}%)</span>
-        <span class="ab-cell ${r.winner === 'B' ? 'ab-winner' : ''}">B — ${esc(r.variantB.subject.slice(0, 34))}: ${r.variantB.sent} sent · ${r.variantB.replied} replies (${r.variantB.replyRate}%)</span>
-      </div>`).join('');
+  list.querySelectorAll('[data-open]').forEach(card => {
+    const open = () => openCampaign(card.dataset.open);
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
   });
 
-  fillProspectSelect();
+  // Keep an open detail view in sync (status, steps, stats).
+  if (selectedCampaign && !$('campaignDetail').hidden) {
+    const c = campaigns.find(x => x.id === selectedCampaign);
+    if (c) renderCampaignDetail(c); else backToList();
+  }
 }
 
-function fillProspectSelect() {
-  const sel = $('prospectCampaign');
-  sel.innerHTML = '<option value="">Select campaign…</option>' +
-    campaigns.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
-  if (selectedCampaign && campaigns.some(c => c.id === selectedCampaign)) sel.value = selectedCampaign;
+// ---------- campaign detail ----------
+function switchCampaignTab(name) {
+  document.querySelectorAll('#cdTabs .settings-tab').forEach(t => t.classList.toggle('active', t.dataset.ctab === name));
+  document.querySelectorAll('.ctab-pane').forEach(p => p.hidden = p.id !== 'ctab-' + name);
+}
+
+function renderCampaignDetail(c) {
+  $('cdName').textContent = c.name;
+  const status = $('cdStatus');
+  status.className = `status ${c.status}`;
+  status.textContent = c.status;
+  $('cdRunBtn').textContent = c.status === 'active' ? 'Pause campaign' : 'Run campaign';
+  $('cdSteps').innerHTML = campaignStepsHtml(c);
+  $('cdStats').innerHTML = campaignStatsHtml(c);
+  $('cdDailyCap').value = c.dailyCap ?? 25;
+  $('cdWindowStart').value = c.sendWindowStart ?? 9;
+  $('cdWindowEnd').value = c.sendWindowEnd ?? 17;
+  $('cdTimezone').value = c.timezone || 'UTC';
+  $('cdSettingsNote').textContent = '';
+  loadAbResults(c);
+}
+
+async function loadAbResults(c) {
+  const block = $('cdAbBlock');
+  const box = $('cdAbResults');
+  if (!c.steps.some(s => s.variantB)) { block.hidden = true; return; }
+  const { data: ab } = await api('GET', `/api/app/campaigns/${c.id}/ab-results`);
+  if (!ab?.ok || !ab.results.length) { block.hidden = true; return; }
+  block.hidden = false;
+  box.innerHTML = ab.results.map(r => `
+    <div class="ab-row">
+      <span class="ab-label">⇄ ${esc(r.label)}</span>
+      <span class="ab-cell ${r.winner === 'A' ? 'ab-winner' : ''}">A — ${esc(r.variantA.subject.slice(0, 34))}: ${r.variantA.sent} sent · ${r.variantA.replied} replies (${r.variantA.replyRate}%)</span>
+      <span class="ab-cell ${r.winner === 'B' ? 'ab-winner' : ''}">B — ${esc(r.variantB.subject.slice(0, 34))}: ${r.variantB.sent} sent · ${r.variantB.replied} replies (${r.variantB.replyRate}%)</span>
+    </div>`).join('');
+}
+
+function openCampaign(id) {
+  const c = campaigns.find(x => x.id === id);
+  if (!c) return;
+  selectedCampaign = id;
+  $('campaignListView').hidden = true;
+  $('campaignDetail').hidden = false;
+  renderCampaignDetail(c);
+  switchCampaignTab('steps');
+  $('bulkToolResult').innerHTML = '';
+  loadProspects();
+}
+
+function backToList() {
+  selectedCampaign = null;
+  $('campaignDetail').hidden = true;
+  $('campaignListView').hidden = false;
+  $('addLeadsModal').hidden = true;
+}
+
+function bindCampaignDetail() {
+  $('cdBackBtn').addEventListener('click', () => { backToList(); loadCampaigns(); });
+  $('cdTabs').addEventListener('click', e => {
+    const tab = e.target.closest('.settings-tab');
+    if (tab) switchCampaignTab(tab.dataset.ctab);
+  });
+  $('cdRunBtn').addEventListener('click', async () => {
+    const c = campaigns.find(x => x.id === selectedCampaign);
+    if (!c) return;
+    const act = c.status === 'active' ? 'pause' : 'activate';
+    $('cdRunBtn').disabled = true;
+    await api('POST', `/api/app/campaigns/${selectedCampaign}/${act}`);
+    $('cdRunBtn').disabled = false;
+    loadCampaigns();
+  });
+  $('cdDeleteBtn').addEventListener('click', async () => {
+    if (!confirm('Delete this campaign and its prospects?')) return;
+    await api('DELETE', `/api/app/campaigns/${selectedCampaign}`);
+    backToList();
+    loadCampaigns();
+  });
+  $('cdSaveSettings').addEventListener('click', async () => {
+    const { data } = await api('PATCH', `/api/app/campaigns/${selectedCampaign}`, {
+      dailyCap: Number($('cdDailyCap').value) || 25,
+      sendWindowStart: Number($('cdWindowStart').value ?? 9),
+      sendWindowEnd: Number($('cdWindowEnd').value ?? 17),
+      timezone: $('cdTimezone').value || 'UTC',
+    });
+    $('cdSettingsNote').textContent = data.ok ? '✓ Saved' : (data.error || 'Could not save.');
+    if (data.ok) loadCampaigns();
+  });
+  $('addLeadsBtn').addEventListener('click', () => {
+    $('importNote').textContent = '';
+    $('addLeadsModal').hidden = false;
+  });
+  $('closeAddLeadsModal').addEventListener('click', () => { $('addLeadsModal').hidden = true; });
+  $('addLeadsModal').addEventListener('click', e => { if (e.target === $('addLeadsModal')) $('addLeadsModal').hidden = true; });
+  $('goFindLeadsBtn').addEventListener('click', () => { $('addLeadsModal').hidden = true; showPage('leads'); });
 }
 
 // ---------- prospects ----------
 function bindProspects() {
-  $('prospectCampaign').addEventListener('change', e => {
-    selectedCampaign = e.target.value || null;
-    loadProspects();
-  });
   $('addProspectBtn').addEventListener('click', addSingleProspect);
   $('importBtn').addEventListener('click', importCsv);
 }
@@ -471,6 +549,7 @@ async function loadProspects() {
   const { data } = await api('GET', `/api/app/prospects?campaignId=${selectedCampaign}`);
   if (!data.ok) return;
   $('prospectCount').textContent = `(${data.prospects.length})`;
+  $('cdContactCount').textContent = `(${data.prospects.length})`;
   const tbody = $('prospectTable').querySelector('tbody');
   tbody.innerHTML = data.prospects.map(p => {
     const v = p.verified?.verdict;
@@ -493,7 +572,7 @@ async function loadProspects() {
         <button class="link" data-enrich="${p.id}">Enrich</button>
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" style="color:var(--ink-faint)">Pick a campaign above and add people below — they\'ll appear here.</td></tr>';
+  }).join('') || '<tr><td colspan="6" style="color:var(--ink-faint)">No one here yet — press <strong>+ Add leads</strong> to add people or import a list.</td></tr>';
   tbody.querySelectorAll('[data-verify]').forEach(btn => btn.addEventListener('click', async () => {
     btn.textContent = '…';
     await api('POST', `/api/app/prospects/${btn.dataset.verify}/verify`);
@@ -1350,6 +1429,7 @@ async function loadLeadFinderStatus() {
   const src = data.provider === 'apollo' ? (data.apolloKeySet ? 'via your Apollo key' : 'via Apollo') : 'built-in verify';
   const ap = data.autopilot;
   $('leadFinderStatus').textContent = `${data.used}/${data.quota} credits used this month · ${src}${ap?.enabled ? ' · ✦ auto-pilot on' : ''}`;
+  $('lfTopupBtn').hidden = false;
   const toggle = $('autopilotEnabled');
   toggle.checked = !!ap?.enabled;
   $('autopilotSettings').hidden = !ap?.enabled;

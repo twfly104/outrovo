@@ -533,3 +533,14 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   — otherwise pills clicked before a scan keep glowing after the scan overwrites the
   input. syncDetected() + syncChips() are called from all three fill paths in app.js.
 - No server.js changes — search/autopilot payload shape unchanged.
+
+## Iteration 12 — Campaigns page de-clutter + Find Leads as its own page (Aug 2026)
+- Owner feedback: Campaigns page forced 3-4 screens of scrolling (lead finder + people import + table all stacked under the campaign list). Restructured per top-tier B2B SaaS pattern.
+- Sidebar now: Overview / Campaigns / Find Leads / Inbox / Settings (+Agency). New `#page-leads` holds the whole Lead Finder (2-step form, auto-pilot, results table, Intel). `lfTopupBtn` now unhidden by `loadLeadFinderStatus` (it was permanently hidden before). Overview gained a "Find leads" action card.
+- Campaigns page = list only. Cards are compact (name, meta, status, "Open campaign ->"), whole card clickable (`data-open`, keyboard Enter/Space). No more Run/Delete buttons on cards.
+- Clicking a card opens `#campaignDetail`: header (back, name, status pill, Run/Pause, Delete) + 3 tabs reusing `.settings-tab` styles: Steps (sequence visual + stats, A/B results card when variants exist), Contacts (table + Verify all / Enrich all / + Add leads), Settings (daily cap, window start/end, timezone -> existing `PATCH /api/app/campaigns/:id`).
+- Add-one-person + CSV paste moved into `#addLeadsModal` (opened from Contacts -> "+ Add leads"); modal also has "Find new leads with AI" which closes and jumps to the leads page. `importNote` lives in the modal now.
+- app.js: `fillProspectSelect` and the `prospectCampaign` select are GONE - `selectedCampaign` is set by `openCampaign()`. `campaignCardHtml` was split into `stepVisuals`/`campaignStepsHtml`/`campaignStatsHtml` reused by the detail Steps pane. `loadCampaigns` re-renders an open detail; `saveCampaign` opens the new campaign's detail after create. `backToList()` resets on nav.
+- Fixed TWO unclosed `<details>` in app.html (pacing-panel in the create modal, lf-details) - browsers were auto-closing them, which is what trapped the "People to email" section inside the lead-finder disclosure in the first place. Tag balance now verified (details 2/2, section 6/6, div 222/222).
+- CSS: new "Campaign detail" block in styles.css (.cd-head/.cd-spacer/.cd-actions/.cd-steps-card/.cp-clickable/.cp-open-hint, mobile stack <720px).
+- Verified end-to-end on PORT=12001 DATA_DIR=/tmp/otest12: list->detail->tabs, modal add person (tab count updates), settings PATCH persists, Run flips draft->active with Auto badges, leads page renders with seeded domain + status line, create modal intact. No server.js changes - all endpoints reused.

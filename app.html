@@ -18,6 +18,7 @@
       <nav class="app-nav" id="appNav">
         <button data-page="overview" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg><span>Overview</span></button>
         <button data-page="campaigns"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg><span>Campaigns</span></button>
+        <button data-page="leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span>Find Leads</span></button>
         <button data-page="inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-5l-2 3h-6l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/></svg><span>Inbox</span></button>
         <button data-page="agency" id="agencyNavBtn" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><span>Agency</span></button>
         <button data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
@@ -57,6 +58,12 @@
             <span>Every reply lands here in one place.</span>
             <span class="a-link">Open inbox →</span>
           </button>
+          <button class="action-card" data-goto="leads">
+            <span class="a-ico"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+            <strong>Find leads</strong>
+            <span>AI sources verified prospects for your campaigns.</span>
+            <span class="a-link">Find leads →</span>
+          </button>
           <button class="action-card" data-goto="settings">
             <span class="a-ico"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7 9 18l-5-5"/></svg></span>
             <strong>Check my email</strong>
@@ -84,11 +91,100 @@
 
       <!-- Campaigns -->
       <section class="app-page" id="page-campaigns" hidden>
-        <div class="page-head">
-          <h1>Campaigns</h1>
-          <button class="btn btn-primary btn-s" id="newCampaignBtn">+ New campaign</button>
+        <div id="campaignListView">
+          <div class="page-head">
+            <h1>Campaigns</h1>
+            <button class="btn btn-primary btn-s" id="newCampaignBtn">+ New campaign</button>
+          </div>
+          <div id="campaignList" class="campaign-list"></div>
         </div>
-        <div id="campaignList" class="campaign-list"></div>
+
+        <!-- Campaign detail: one campaign, three tabs -->
+        <div id="campaignDetail" hidden>
+          <div class="cd-head">
+            <button class="btn btn-ghost btn-s" id="cdBackBtn">← All campaigns</button>
+            <h1 id="cdName"></h1>
+            <span class="status" id="cdStatus"></span>
+            <span class="cd-spacer"></span>
+            <button class="btn btn-primary btn-s" id="cdRunBtn">Run campaign</button>
+            <button class="btn btn-ghost btn-s" id="cdDeleteBtn">Delete</button>
+          </div>
+          <div class="settings-tabs" id="cdTabs">
+            <button class="settings-tab active" data-ctab="steps">Steps</button>
+            <button class="settings-tab" data-ctab="contacts">Contacts <span id="cdContactCount"></span></button>
+            <button class="settings-tab" data-ctab="settings">Settings</button>
+          </div>
+
+          <div class="ctab-pane" id="ctab-steps">
+            <div class="app-card-block cd-steps-card">
+              <div class="cp-body">
+                <div class="cp-steps" id="cdSteps"></div>
+                <div class="cp-stats" id="cdStats"></div>
+              </div>
+            </div>
+            <div class="app-card-block" id="cdAbBlock" hidden>
+              <h2>A/B results</h2>
+              <div class="ab-results" id="cdAbResults"></div>
+            </div>
+          </div>
+
+          <div class="ctab-pane" id="ctab-contacts" hidden>
+            <div class="subhead cd-contacts-head">
+              <h2>All people <span id="prospectCount"></span></h2>
+              <div class="cd-actions">
+                <button class="btn btn-ghost btn-s" id="verifyAllBtn">✓ Verify all</button>
+                <button class="btn btn-ghost btn-s" id="enrichAllBtn">✦ Enrich all</button>
+                <button class="btn btn-primary btn-s" id="addLeadsBtn">+ Add leads</button>
+              </div>
+            </div>
+            <div class="tool-result" id="bulkToolResult"></div>
+            <div class="app-card-block">
+              <table class="data-table" id="prospectTable">
+                <thead><tr><th>Email</th><th>Name</th><th>Company</th><th>Step</th><th>Verification</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="ctab-pane" id="ctab-settings" hidden>
+            <div class="app-card-block">
+              <h2>Sending pace</h2>
+              <p class="settings-note">Emails only go out inside this window, in this timezone, and stop at the daily cap. Queued prospects roll over to the next day automatically.</p>
+              <div class="field-row">
+                <div class="field">
+                  <label>Daily email cap</label>
+                  <input id="cdDailyCap" type="number" min="1" max="500" />
+                </div>
+                <div class="field">
+                  <label>Window start (hour)</label>
+                  <input id="cdWindowStart" type="number" min="0" max="23" />
+                </div>
+                <div class="field">
+                  <label>Window end (hour)</label>
+                  <input id="cdWindowEnd" type="number" min="0" max="23" />
+                </div>
+              </div>
+              <div class="field">
+                <label>Timezone</label>
+                <select id="cdTimezone">
+                  <option value="UTC">UTC</option>
+                  <option value="America/New_York">Eastern (New York)</option>
+                  <option value="America/Chicago">Central (Chicago)</option>
+                  <option value="America/Denver">Mountain (Denver)</option>
+                  <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
+                  <option value="Europe/London">London</option>
+                  <option value="Europe/Berlin">Berlin</option>
+                  <option value="Asia/Singapore">Singapore</option>
+                  <option value="Australia/Sydney">Sydney</option>
+                </select>
+              </div>
+              <div class="modal-actions cd-settings-actions">
+                <button class="btn btn-primary" id="cdSaveSettings">Save settings</button>
+                <span class="import-note" id="cdSettingsNote"></span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div class="modal-lite" id="campaignModal" hidden>
           <div class="modal-lite-card">
@@ -177,19 +273,58 @@
                 </select>
               </div>
               <p class="settings-note">Emails only go out inside this window, in this timezone, and stop at the daily cap. Queued prospects roll over to the next day automatically.</p>
+            </details>
             <div class="modal-actions">
               <button class="btn btn-primary" id="saveCampaignBtn">Create campaign</button>
             </div>
           </div>
         </div>
-      
-        <details class="app-card-block lf-details">
-          <summary class="li-meter-head">
-            <h2>✦ Find new leads</h2>
-            <span class="sec-hint">AI sources verified prospects for you</span>
+
+        <div class="modal-lite" id="addLeadsModal" hidden>
+          <div class="modal-lite-card">
+            <div class="page-head">
+              <h2>Add leads</h2>
+              <button class="icon-btn" id="closeAddLeadsModal" aria-label="Close">✕</button>
+            </div>
+            <button class="btn btn-dark btn-s" id="goFindLeadsBtn" style="margin-bottom:20px;">✦ Find new leads with AI →</button>
+            <div class="split-2">
+              <div>
+                <h2>Add one person</h2>
+                <div class="field-row">
+                  <div class="field"><label>Email</label><input id="pEmail" placeholder="sarah@acme.io" /></div>
+                  <div class="field"><label>First name</label><input id="pFirst" placeholder="Sarah" /></div>
+                </div>
+                <div class="field-row">
+                  <div class="field"><label>Last name</label><input id="pLast" placeholder="Connor" /></div>
+                  <div class="field"><label>Company</label><input id="pCompany" placeholder="Acme Inc." /></div>
+                </div>
+                <button class="btn btn-primary btn-s" id="addProspectBtn">Add person</button>
+              </div>
+              <div>
+                <h2>Paste a list (CSV)</h2>
+                <div class="field">
+                  <label>email, first name, last name, company — one per line. Optional header row; extra columns become {{variables}} you can use in emails.</label>
+                  <textarea id="csvInput" rows="5" placeholder="email,first name,company,icebreaker&#10;sarah@acme.io,Sarah,Acme,saw your launch post&#10;ben@orbcall.io,Ben,Orbcall,noticed you're hiring SDRs"></textarea>
+                </div>
+                <button class="btn btn-dark btn-s" id="importBtn">Add people</button>
+              </div>
+            </div>
+            <span class="import-note" id="importNote"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Find Leads -->
+      <section class="app-page" id="page-leads" hidden>
+        <div class="page-head">
+          <div>
+            <h1>✦ Find Leads</h1>
             <span id="leadFinderStatus" class="lead-status"></span>
-            <button type="button" class="btn btn-ghost btn-s" id="lfTopupBtn" hidden title="Buy pay-as-you-go credit bundles — they never expire">+ Add Credits</button>
-          </summary>
+          </div>
+          <button type="button" class="btn btn-ghost btn-s" id="lfTopupBtn" hidden title="Buy pay-as-you-go credit bundles — they never expire">+ Add Credits</button>
+        </div>
+
+        <div class="app-card-block">
           <div class="lf-group">
             <div class="lf-group-head"><span class="lf-step">1</span><h3>Your business</h3></div>
             <div class="ai-scan-row">
@@ -271,58 +406,19 @@
               <span id="autopilotNote" class="import-note"></span>
             </div>
           </div>
-          <div id="leadResults" hidden>
-            <p class="muted-note">Hit <strong>✦ Intel</strong> on a lead for company research and your outreach angle.</p>
-            <table class="data-table" id="leadTable">
-              <thead><tr><th></th><th>Email</th><th>Name</th><th>Company</th><th>Title</th><th>Checked</th><th>Research</th></tr></thead>
-              <tbody></tbody>
-            </table>
-            <div class="lead-actions">
-              <select id="leadEnrollCampaign"></select>
-              <button class="btn btn-primary btn-s" id="leadEnrollBtn">Add selected to campaign</button>
-            </div>
-          </div>
+        </div>
 
-        <div class="subhead">
-          <h2>People to email</h2>
-          <select id="prospectCampaign"></select>
-        </div>
-        <div class="app-card-block split-2">
-          <div>
-            <h2>Add one person</h2>
-            <div class="field-row">
-              <div class="field"><label>Email</label><input id="pEmail" placeholder="sarah@acme.io" /></div>
-              <div class="field"><label>First name</label><input id="pFirst" placeholder="Sarah" /></div>
-            </div>
-            <div class="field-row">
-              <div class="field"><label>Last name</label><input id="pLast" placeholder="Connor" /></div>
-              <div class="field"><label>Company</label><input id="pCompany" placeholder="Acme Inc." /></div>
-            </div>
-            <button class="btn btn-primary btn-s" id="addProspectBtn">Add person</button>
-          </div>
-          <div>
-            <h2>Paste a list (CSV)</h2>
-            <div class="field">
-              <label>email, first name, last name, company — one per line. Optional header row; extra columns become {{variables}} you can use in emails.</label>
-              <textarea id="csvInput" rows="5" placeholder="email,first name,company,icebreaker&#10;sarah@acme.io,Sarah,Acme,saw your launch post&#10;ben@orbcall.io,Ben,Orbcall,noticed you're hiring SDRs"></textarea>
-            </div>
-            <button class="btn btn-dark btn-s" id="importBtn">Add people</button>
-            <span class="import-note" id="importNote"></span>
-            <div style="display:flex;gap:8px;margin-top:14px;">
-              <button class="btn btn-ghost btn-s" id="verifyAllBtn">✓ Verify before sending</button>
-              <button class="btn btn-ghost btn-s" id="enrichAllBtn">✦ Enrich all</button>
-            </div>
-            <div class="tool-result" id="bulkToolResult"></div>
-          </div>
-        </div>
-        <div class="app-card-block">
-          <h2>All people <span id="prospectCount"></span></h2>
-          <table class="data-table" id="prospectTable">
-            <thead><tr><th>Email</th><th>Name</th><th>Company</th><th>Step</th><th>Verification</th><th></th></tr></thead>
+        <div class="app-card-block" id="leadResults" hidden>
+          <p class="muted-note">Hit <strong>✦ Intel</strong> on a lead for company research and your outreach angle.</p>
+          <table class="data-table" id="leadTable">
+            <thead><tr><th></th><th>Email</th><th>Name</th><th>Company</th><th>Title</th><th>Checked</th><th>Research</th></tr></thead>
             <tbody></tbody>
           </table>
+          <div class="lead-actions">
+            <select id="leadEnrollCampaign"></select>
+            <button class="btn btn-primary btn-s" id="leadEnrollBtn">Add selected to campaign</button>
+          </div>
         </div>
-      
       </section>
 
       
