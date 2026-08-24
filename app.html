@@ -497,12 +497,28 @@
       <!-- Inbox -->
       <section class="app-page" id="page-inbox" hidden>
         <div class="page-head">
-          <h1>Inbox</h1>
+          <div>
+            <h1>Inbox</h1>
+            <p class="page-sub">Every reply, one place. AI-labeled by intent.</p>
+          </div>
           <button class="btn btn-ghost btn-s" id="simulateReplyBtn">Simulate reply</button>
         </div>
-        <div class="app-card-block">
-          <h2>Replies from prospects</h2>
-          <ul class="inbox-list" id="inboxList"></ul>
+        <div class="inbox-shell" id="inboxShell">
+          <aside class="inbox-threads" id="inboxThreads"></aside>
+          <div class="inbox-convo" id="inboxConvo">
+            <div class="inbox-convo-empty" id="inboxConvoEmpty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-5l-2 3h-6l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z"/></svg>
+              <p>Select a conversation to read it.</p>
+            </div>
+            <div class="inbox-convo-body" id="inboxConvoBody" hidden></div>
+            <div class="inbox-composer" id="inboxComposer" hidden>
+              <textarea id="replyBox" rows="3" placeholder="Write a reply…"></textarea>
+              <div class="inbox-composer-bar">
+                <button class="btn btn-ghost btn-s" id="aiDraftBtn">✦ AI draft</button>
+                <button class="btn btn-primary btn-s" id="sendReplyBtn">Send reply</button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

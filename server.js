@@ -33,6 +33,7 @@ const FILES = {
   sessions: 'sessions.json',
   replies: 'replies.json',
   senders: 'senders.json',
+  messages: 'messages.json',
 };
 // /tmp resets between serverless instances at any moment; this marks that in the API.
 const EPHEMERAL_DATA = process.env.VERCEL && !process.env.DATA_DIR;
@@ -566,7 +567,7 @@ function abResultsFor(campaign, prospects) {
 }
 
 // ---------- reply intent (Smart Unibox) ----------
-const INTENT_LABELS = ['interested', 'not_interested', 'question', 'out_of_office', 'unsubscribe', 'bounce', 'neutral'];
+const INTENT_LABELS = ['interested', 'not_interested', 'not_now', 'question', 'out_of_office', 'unsubscribe', 'bounce', 'neutral'];
 async function classifyIntent(reply) {
   const text = `Subject: ${reply.subject}\n\n${String(reply.body || '').slice(0, 1200)}`;
   const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
@@ -596,6 +597,7 @@ async function classifyIntent(reply) {
   if (/out of (the )?office|auto-?reply|on vacation|returning on|limited access to email/.test(t)) return 'out_of_office';
   if (/undeliverable|delivery (has )?failed|mail delivery (failed|subsystem)|550 |5\.1\.1/.test(t)) return 'bounce';
   if (/unsubscribe|remove me|stop emailing|opt.?out|take me off|don't (email|contact) me/.test(t)) return 'unsubscribe';
+  if (/not right now|next (quarter|year)|circle back|later this year|try (me|us) again|check back/.test(t)) return 'not_now';
   if (/(not|no) interested|not a (good )?fit|we're (all )?set|pass\b|don't reach out/.test(t)) return 'not_interested';
   if (/\?\s*$|how (much|does)|what (does|is)|can you (send|share)|pricing|demo\?/.test(t) || t.includes('?')) return 'question';
   if (/(yes|sounds good|let's (talk|chat|book)|interested|send (over|me)|book a|schedule a|tell me more|love to)/.test(t)) return 'interested';
@@ -1101,6 +1103,19 @@ function senderTransport(sender) {
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// Every outbound email (campaign step or manual reply) is journaled so the
+// Inbox can render the "You" side of a conversation, not just replies.
+function recordOutbound(owner, { to, from, subject, body, campaign, campaignId }) {
+  if (!owner) return;
+  const messages = load('messages');
+  messages.unshift({
+    id: crypto.randomUUID(), owner, direction: 'out',
+    to, from, subject, body, campaign: campaign || '', campaignId: campaignId || '',
+    at: new Date().toISOString(),
+  });
+  save('messages', messages.slice(0, 2000));
+}
+
 // Send one campaign step to one prospect through the rotation.
 // opts.sender picks a specific inbox (test-email), opts.fallback is the
 // legacy env SMTP transport kept for backward compatibility.
@@ -1152,6 +1167,7 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
     await sendViaResend(prospect.email, subject, body, senderDisplayName(sender), unsubHeaders, html);
     recordCampaignSend(campaign.id);
     logEvent('sent', `${label} (via Resend)`, { subject, sender: sender.email }, campaign.owner || null);
+    if (campaign.id) recordOutbound(campaign.owner, { to: prospect.email, from: sender.email, subject, body, campaign: campaign.name, campaignId: campaign.id });
     if (campaign.owner) fireWebhooks(campaign.owner, 'sent', { email: prospect.email, campaign: campaign.name, subject, sender: sender.email });
     return { demo: false, sender: sender.email };
   }
@@ -1163,6 +1179,7 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
   if (!t) {
     recordCampaignSend(campaign.id);
     logEvent('sent', `[DEMO] ${label}`, { subject, sender: sender.email }, campaign.owner || null);
+    if (campaign.id) recordOutbound(campaign.owner, { to: prospect.email, from: sender.email, subject, body, campaign: campaign.name, campaignId: campaign.id });
     if (campaign.owner) fireWebhooks(campaign.owner, 'sent', { email: prospect.email, campaign: campaign.name, subject, sender: sender.email, demo: true });
     return { demo: true, sender: sender.email };
   }
@@ -1171,6 +1188,7 @@ async function sendEmail(campaign, prospect, step, opts = {}) {
   recordSend(sender);
   recordCampaignSend(campaign.id);
   logEvent('sent', `${label} (via ${sender.email})`, { subject, sender: sender.email }, campaign.owner || null);
+  if (campaign.id) recordOutbound(campaign.owner, { to: prospect.email, from: sender.email, subject, body, campaign: campaign.name, campaignId: campaign.id });
   if (campaign.owner) fireWebhooks(campaign.owner, 'sent', { email: prospect.email, campaign: campaign.name, subject, sender: sender.email });
   return { demo: false, sender: sender.email };
 }
@@ -3617,18 +3635,112 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     send(res, 200, { ok: true, replies: replies.slice(0, 100) });
   },
 
+  // Threads view: replies grouped by prospect, interleaved with the journaled
+  // outbound messages so the conversation pane shows both sides.
+  'GET /api/app/inbox/threads': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const replies = load('replies').filter(r => !r.owner || r.owner === session.email);
+    const outbound = load('messages').filter(m => m.owner === session.email);
+    const prospects = load('prospects');
+    const campaigns = load('campaigns');
+    const byEmail = new Map();
+    for (const r of replies) {
+      const key = (r.from || '').toLowerCase();
+      if (!key) continue;
+      if (!byEmail.has(key)) byEmail.set(key, []);
+      byEmail.get(key).push(r);
+    }
+    const threads = [...byEmail.entries()].map(([email, rs]) => {
+      rs.sort((a, b) => new Date(a.at) - new Date(b.at));
+      const latest = rs[rs.length - 1];
+      const prospect = prospects.find(p => p.email === email);
+      const campaign = campaigns.find(c => c.id === prospect?.campaignId);
+      const messages = [
+        ...rs.map(r => ({ id: r.id, dir: 'in', body: r.body, subject: r.subject, at: r.at, from: r.from, intent: r.intent || null, draft: r.draft || null })),
+        ...outbound.filter(m => m.to === email).map(m => ({ id: m.id, dir: 'out', body: m.body, subject: m.subject, at: m.at, from: m.from })),
+      ].sort((a, b) => new Date(a.at) - new Date(b.at));
+      return {
+        email,
+        prospect: latest.prospect || [prospect?.firstName, prospect?.lastName].filter(Boolean).join(' ') || email.split('@')[0],
+        company: prospect?.company || '',
+        campaign: latest.campaign || campaign?.name || '',
+        intent: latest.intent || null,
+        unread: rs.some(r => !r.read),
+        lastAt: latest.at,
+        preview: (latest.body || '').replace(/\s+/g, ' ').slice(0, 90),
+        replyId: latest.id,
+        messages,
+      };
+    }).sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
+    send(res, 200, { ok: true, threads });
+  },
+
+  // Dismiss a whole conversation once the user has dealt with it.
+  'DELETE /api/app/inbox/thread/:id': (req, res, email) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const target = decodeURIComponent(email).toLowerCase();
+    const replies = load('replies');
+    const kept = replies.filter(r => (r.owner && r.owner !== session.email) || (r.from || '').toLowerCase() !== target);
+    save('replies', kept);
+    send(res, 200, { ok: true, removed: replies.length - kept.length });
+  },
+
+  // Manual reply from the conversation composer. Goes through the same
+  // sender rotation as campaigns; without a real inbox it demo-logs.
+  'POST /api/app/inbox/:id/send-reply': async (req, res, id) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const b = await readBody(req);
+    const text = (b.body || '').trim().slice(0, 5000);
+    if (!text) return send(res, 400, { ok: false, error: 'Write something first.' });
+    const replies = load('replies');
+    const r = replies.find(x => x.id === id);
+    if (!r || (r.owner && r.owner !== session.email)) return send(res, 404, { ok: false, error: 'Reply not found' });
+    const to = r.from;
+    const subject = /^re:/i.test(r.subject || '') ? r.subject : `Re: ${r.subject || 'your email'}`;
+    const sender = pickSender(session.email, { email: to }) || demoSender();
+    let demo = false;
+    try {
+      if (sender.resend) {
+        await sendViaResend(to, subject, text, senderDisplayName(sender));
+      } else if (sender.host && nodemailer) {
+        await senderTransport(sender).sendMail({ from: senderDisplayName(sender), to, subject, text });
+        recordSend(sender);
+      } else {
+        demo = true;
+      }
+    } catch (err) {
+      return send(res, 502, { ok: false, error: `Could not send: ${err.message}` });
+    }
+    recordOutbound(session.email, { to, from: sender.email, subject, body: text, campaign: r.campaign || '' });
+    r.read = true;
+    save('replies', replies);
+    logEvent('sent', `Reply to ${to} (${r.campaign || 'inbox'})${demo ? ' [DEMO]' : ''}`, { subject, sender: sender.email }, session.email);
+    send(res, 200, { ok: true, demo });
+  },
+
   'POST /api/app/inbox/simulate': (req, res) => {
     // Demo/simulated inbound until IMAP/webhook is wired
     const session = requireAuth(req, res);
     if (!session) return;
+    const firstCampaign = load('campaigns').find(c => c.owner === session.email);
+    const campaignName = firstCampaign?.name || 'Q3 founders';
+    const personas = [
+      { from: 'dana@loopwork.io', prospect: 'Dana Kim', subject: 'Re: Week-1 retention at Loopwork', body: "This actually looks relevant — can you send over pricing? We're onboarding ~200 users/week and week-1 retention is exactly the problem you described.", intent: 'interested' },
+      { from: 'victor@threadbase.com', prospect: 'Victor Hale', subject: 'Re: Quick question', body: 'How does this handle deliverability when we rotate across three sending domains?', intent: 'question' },
+      { from: 'tom@brighthaus.co', prospect: 'Tom Becker', subject: 'Re: Agency outreach', body: "Okay, I'm intrigued. Do you have case studies from agencies our size?", intent: 'interested' },
+      { from: 'ella@madebymany.fr', prospect: 'Ella Fontaine', subject: 'Re: Intro', body: 'Not right now — we just signed a retainer that fills capacity through Q4. Try me again next quarter?', intent: 'not_now' },
+      { from: 'sarah@acme.io', prospect: 'Sarah Connor', subject: 'Re: Quick idea for Acme', body: 'Thanks for reaching out — this actually looks relevant. Can you send over a short demo link?', intent: 'interested' },
+    ];
     const replies = load('replies');
+    const used = new Set(replies.filter(r => r.owner === session.email).map(r => r.from));
+    const persona = personas.find(p => !used.has(p.from)) || personas[Math.floor(Math.random() * personas.length)];
     replies.unshift({
       id: crypto.randomUUID(),
-      from: 'sarah@acme.io',
-      subject: 'Re: Quick idea for Acme',
-      body: 'Thanks for reaching out — this actually looks relevant. Can you send over a short demo link?',
-      prospect: 'Sarah Connor',
-      campaign: 'Q3 founders',
+      ...persona,
+      campaign: campaignName,
       owner: session.email,
       read: false,
       at: new Date().toISOString(),

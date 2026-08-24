@@ -6,14 +6,90 @@ const api = (method, path, body) =>
     body: body ? JSON.stringify(body) : undefined,
   }).then(r => r.json().then(d => ({ status: r.status, data: d })));
 
-// Non-blocking toast notifications (replaces alert()).
+// Non-blocking toast notifications (replaces alert()). Dismissible via ✕.
 function toast(msg, kind = 'ok') {
   const el = document.createElement('div');
   el.className = `toast toast-${kind}`;
-  el.textContent = msg;
+  const text = document.createElement('span');
+  text.className = 'toast-msg';
+  text.textContent = msg;
+  const close = document.createElement('button');
+  close.className = 'toast-x';
+  close.type = 'button';
+  close.setAttribute('aria-label', 'Dismiss');
+  close.textContent = '✕';
+  el.append(text, close);
   document.body.appendChild(el);
+  const dismiss = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); };
+  close.addEventListener('click', dismiss);
   requestAnimationFrame(() => el.classList.add('show'));
-  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 3500);
+  setTimeout(dismiss, 5000);
+}
+
+// ---------- custom selects ----------
+// Native <select> dropdowns look different (and dated) on every OS/browser.
+// This wraps each one in a styled button + popover while keeping the original
+// element as the source of truth: picking an option sets select.value and
+// fires a real 'change' event, so no other code needs to know.
+function enhanceSelect(select) {
+  if (select.dataset.fancy || select.hidden) return;
+  select.dataset.fancy = '1';
+  const wrap = document.createElement('div');
+  wrap.className = 'fselect';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'fselect-btn';
+  btn.setAttribute('aria-haspopup', 'listbox');
+  const label = document.createElement('span');
+  label.className = 'fselect-label';
+  const chev = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  chev.setAttribute('viewBox', '0 0 24 24');
+  chev.innerHTML = '<path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+  btn.append(label, chev);
+  const pop = document.createElement('div');
+  pop.className = 'fselect-pop';
+  pop.setAttribute('role', 'listbox');
+  pop.hidden = true;
+  wrap.append(btn, pop);
+  select.after(wrap);
+  wrap.appendChild(select);
+
+  const syncLabel = () => {
+    const opt = select.options[select.selectedIndex];
+    label.textContent = opt ? opt.textContent : '';
+    wrap.classList.toggle('empty', !opt);
+  };
+  const buildOptions = () => {
+    pop.innerHTML = '';
+    [...select.options].forEach((opt, i) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'fselect-opt' + (i === select.selectedIndex ? ' selected' : '');
+      item.setAttribute('role', 'option');
+      item.textContent = opt.textContent;
+      item.addEventListener('click', () => {
+        select.selectedIndex = i;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        close();
+      });
+      pop.appendChild(item);
+    });
+  };
+  const open = () => { buildOptions(); syncLabel(); pop.hidden = false; wrap.classList.add('open'); };
+  const close = () => { pop.hidden = true; wrap.classList.remove('open'); };
+  btn.addEventListener('click', () => (pop.hidden ? open() : close()));
+  document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
+  btn.addEventListener('keydown', e => {
+    if (e.key === 'Escape') close();
+    if (e.key === 'ArrowDown' && pop.hidden) { e.preventDefault(); open(); }
+  });
+  select.addEventListener('change', syncLabel);
+  // Options are often filled async after page load — re-sync when they change.
+  new MutationObserver(syncLabel).observe(select, { childList: true });
+  syncLabel();
+}
+function enhanceAllSelects(root = document) {
+  root.querySelectorAll('select').forEach(enhanceSelect);
 }
 
 const $ = id => document.getElementById(id);
@@ -49,6 +125,7 @@ async function init() {
   const { status, data } = await api('GET', '/api/me');
   if (status !== 200) { window.location.href = '/login.html'; return; }
   me = data.user;
+  enhanceAllSelects();
   $('userName').textContent = me ? `${me.firstName} ${me.lastName}` : 'User';
   $('userAvatar').textContent = ((me?.firstName || 'U')[0] + (me?.lastName || '')[0]).toUpperCase();
   if (data.plan?.name) {
@@ -784,36 +861,36 @@ async function importCsv() {
 }
 
 // ---------- inbox ----------
-async function loadInbox() {
-  const { data } = await api('GET', '/api/app/inbox');
+let inboxThreads = [];
+let activeThread = null;
+
+const INTENT_LABEL = { interested: 'Interested', question: 'Question', not_now: 'Not now', not_interested: 'Not interested', out_of_office: 'Out of office', unsubscribe: 'Unsubscribe', bounce: 'Bounce' };
+function intentPill(intent) {
+  const label = INTENT_LABEL[intent];
+  if (!label) return '';
+  return `<span class="intent-pill intent-${esc(intent)}">${esc(label)}</span>`;
+}
+function inboxTime(t) {
+  const d = new Date(t), now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  if (now - d < 7 * 864e5) return d.toLocaleDateString([], { weekday: 'short' });
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+function initials(name) {
+  return (name || '?').split(/\s+/).map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+}
+
+async function loadInbox(selectEmail) {
+  const { data } = await api('GET', '/api/app/inbox/threads');
   if (!data.ok) return;
-  const list = $('inboxList');
-  const replies = data.replies || [];
-  const intentChip = r => r.intent ? `<span class="intent-chip intent-${esc(r.intent)}">${esc(r.intent.replace('_', ' '))}</span>` : '';
-  list.innerHTML = replies.length ? replies.map(r => `
-    <li class="${r.read ? 'read' : 'unread'}">
-      <div class="inbox-meta">
-        <strong>${esc(r.subject)}</strong> ${intentChip(r)}
-        <span>${esc(r.from)} · ${esc(r.prospect)} · ${esc(r.campaign)}</span>
-      </div>
-      <p>${esc((r.body || '').slice(0, 160))}${(r.body || '').length > 160 ? '…' : ''}</p>
-      <time>${fmtTime(r.at)}</time>
-      <div class="inbox-actions">
-        ${r.read ? '' : `<button class="link" data-read="${r.id}">Mark read</button>`}
-        <button class="link" data-draft="${r.id}">AI draft</button>
-      </div>
-      ${r.draft ? `<div class="draft-box"><em>AI draft (${esc(r.draft.source)}):</em><br>${esc(r.draft.text).replace(/\n/g, '<br>')}</div>` : `<div class="draft-box" id="draft-${r.id}" hidden></div>`}
-    </li>`).join('') : '<li class="empty">No replies yet — when someone answers a campaign, their message lands here.</li>';
-  list.querySelectorAll('[data-read]').forEach(btn => btn.addEventListener('click', async () => {
-    await api('POST', `/api/app/inbox/${btn.dataset.read}/read`);
-    loadInbox();
-  }));
-  list.querySelectorAll('[data-draft]').forEach(btn => btn.addEventListener('click', async () => {
-    btn.textContent = '… drafting';
-    const { data: d } = await api('POST', `/api/app/inbox/${btn.dataset.draft}/draft`, {});
-    if (d.ok) loadInbox();
-    else { btn.textContent = 'AI draft'; toast(d.error || 'Draft failed', 'err'); }
-  }));
+  inboxThreads = data.threads || [];
+  if (selectEmail) activeThread = inboxThreads.find(t => t.email === selectEmail) || null;
+  else if (activeThread) activeThread = inboxThreads.find(t => t.email === activeThread.email) || null;
+  renderThreadList();
+  renderConvo();
   if (!$('simulateReplyBtn').hasListener) {
     $('simulateReplyBtn').hasListener = true;
     $('simulateReplyBtn').addEventListener('click', async () => {
@@ -821,6 +898,104 @@ async function loadInbox() {
       loadInbox();
     });
   }
+}
+
+function renderThreadList() {
+  const el = $('inboxThreads');
+  if (!inboxThreads.length) {
+    el.innerHTML = `<div class="inbox-threads-empty">No replies yet — when someone answers a campaign, their message lands here.</div>`;
+    return;
+  }
+  el.innerHTML = inboxThreads.map(t => `
+    <button class="inbox-thread ${activeThread?.email === t.email ? 'active' : ''} ${t.unread ? 'unread' : ''}" data-email="${esc(t.email)}">
+      <span class="it-top">
+        <strong>${esc(t.prospect)}</strong>
+        ${intentPill(t.intent)}
+        <time>${inboxTime(t.lastAt)}</time>
+      </span>
+      <span class="it-preview">${esc(t.preview)}</span>
+      <span class="it-meta">${esc([t.company, t.campaign].filter(Boolean).join('  ·  '))}</span>
+      <span class="it-close" data-del="${esc(t.email)}" title="Delete conversation" role="button" aria-label="Delete conversation">✕</span>
+    </button>`).join('');
+  el.querySelectorAll('.inbox-thread').forEach(btn => btn.addEventListener('click', () => {
+    activeThread = inboxThreads.find(t => t.email === btn.dataset.email) || null;
+    renderThreadList();
+    renderConvo();
+  }));
+  el.querySelectorAll('[data-del]').forEach(x => x.addEventListener('click', async e => {
+    e.stopPropagation();
+    const email = x.dataset.del;
+    const { data: d } = await api('DELETE', `/api/app/inbox/thread/${encodeURIComponent(email)}`);
+    if (d.ok) {
+      if (activeThread?.email === email) activeThread = null;
+      toast('Conversation deleted');
+      loadInbox();
+    } else toast('Could not delete', 'err');
+  }));
+}
+
+function renderConvo() {
+  const body = $('inboxConvoBody'), empty = $('inboxConvoEmpty'), composer = $('inboxComposer');
+  if (!activeThread) {
+    body.hidden = true; composer.hidden = true; empty.hidden = false;
+    return;
+  }
+  empty.hidden = true; body.hidden = false; composer.hidden = false;
+  const t = activeThread;
+  body.innerHTML = t.messages.map(m => m.dir === 'in' ? `
+    <div class="msg msg-in">
+      <span class="msg-av" style="background:${avColor(t.prospect)}">${esc(initials(t.prospect))}</span>
+      <div class="msg-side">
+        <div class="msg-head"><strong>${esc(t.prospect)}</strong><time>${inboxTime(m.at)}</time></div>
+        <div class="msg-bubble">${esc(m.body).replace(/\n/g, '<br>')}</div>
+        ${m.draft ? `<div class="msg-draft"><em>✦ AI draft (${esc(m.draft.source)})</em>${esc(m.draft.text).replace(/\n/g, '<br>')}</div>` : ''}
+      </div>
+    </div>` : `
+    <div class="msg msg-out">
+      <div class="msg-side">
+        <div class="msg-head"><strong>You</strong><time>${inboxTime(m.at)}</time></div>
+        <div class="msg-bubble">${esc(m.body).replace(/\n/g, '<br>')}</div>
+      </div>
+      <span class="msg-av msg-av-you">YOU</span>
+    </div>`).join('');
+  body.scrollTop = body.scrollHeight;
+  if (t.unread) {
+    const latest = t.messages.filter(m => m.dir === 'in').pop();
+    if (latest) api('POST', `/api/app/inbox/${latest.id}/read`).then(() => {
+      inboxThreads.forEach(x => { if (x.email === t.email) x.unread = false; });
+      renderThreadList();
+    });
+  }
+  $('replyBox').value = '';
+  if (!$('sendReplyBtn').hasListener) {
+    $('sendReplyBtn').hasListener = true;
+    $('sendReplyBtn').addEventListener('click', sendReply);
+    $('aiDraftBtn').addEventListener('click', aiDraftReply);
+  }
+}
+
+async function sendReply() {
+  if (!activeThread) return;
+  const text = $('replyBox').value.trim();
+  if (!text) return toast('Write something first', 'err');
+  const btn = $('sendReplyBtn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  const { data: d } = await api('POST', `/api/app/inbox/${activeThread.replyId}/send-reply`, { body: text });
+  btn.disabled = false; btn.textContent = 'Send reply';
+  if (d.ok) {
+    toast(d.demo ? 'Reply logged (demo mode — connect an inbox to send for real)' : 'Reply sent');
+    loadInbox(activeThread.email);
+  } else toast(d.error || 'Send failed', 'err');
+}
+
+async function aiDraftReply() {
+  if (!activeThread) return;
+  const btn = $('aiDraftBtn');
+  btn.disabled = true; btn.textContent = '… drafting';
+  const { data: d } = await api('POST', `/api/app/inbox/${activeThread.replyId}/draft`, {});
+  btn.disabled = false; btn.textContent = '✦ AI draft';
+  if (d.ok && d.draft) $('replyBox').value = d.draft;
+  else if (!d.ok) toast(d.error || 'Draft failed', 'err');
 }
 
 // ---------- activity & tasks ----------
