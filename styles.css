@@ -2037,27 +2037,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .step-row .remove-step:hover { text-decoration: underline; }
 .import-note { font-size: 0.82rem; color: var(--forest); font-weight: 600; margin-left: 10px; }
 
-/* ---------- AI assistant panel ---------- */
-.ai-panel {
-  border: 1.5px solid rgba(249, 115, 22, 0.3);
-  background: linear-gradient(160deg, #fff4ea, var(--card) 65%);
-  border-radius: 18px;
-  padding: 20px 22px;
-  margin-bottom: 22px;
-}
-.ai-panel-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-.ai-badge {
-  background: var(--crest);
-  color: #fff;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 5px 12px;
-  border-radius: 999px;
-}
-.ai-panel-sub { font-size: 0.82rem; color: var(--ink-faint); }
-.ai-panel .field select { width: 100%; padding: 13px 16px; }
+/* ---------- shared scan/status styles ---------- */
 .ai-scan-row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
 .ai-scan-row .btn-ghost { border-style: dashed; }
 .ai-status { font-size: 0.84rem; color: var(--ink-soft); min-height: 1.2em; }
