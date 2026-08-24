@@ -80,7 +80,7 @@
         <div id="campaignDetail" hidden>
           <div class="cd-head">
             <button class="cd-back" id="cdBackBtn" aria-label="Back to campaigns"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg></button>
-            <h1 id="cdName"></h1>
+            <h1 id="cdName" contenteditable="true" spellcheck="false" data-placeholder="Untitled campaign"></h1>
             <span class="status" id="cdStatus"></span>
             <span class="cd-spacer"></span>
             <button class="btn btn-ghost btn-s" id="cdValidateBtn"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Validate</button>
@@ -106,6 +106,15 @@
                 <button class="btn btn-primary btn-s" id="cdSaveStepBtn">Save step</button>
                 <button class="btn btn-ghost btn-s" id="cdCancelStepBtn">Cancel</button>
                 <span class="import-note" id="cdStepNote"></span>
+              </div>
+            </div>
+            <div class="app-card-block" id="cdNewBlock" hidden>
+              <h2>New campaign</h2>
+              <p class="settings-note">Name it above, write your first email, then create. Tune pace and rules later in Settings.</p>
+              <div id="cdNewStepRows"></div>
+              <div class="modal-actions cd-settings-actions">
+                <button class="btn btn-primary btn-s" id="cdCreateBtn">Create campaign</button>
+                <span class="import-note" id="cdNewNote"></span>
               </div>
             </div>
             <div class="app-card-block" id="cdAbBlock" hidden>
@@ -224,57 +233,6 @@
               <h2>Danger zone</h2>
               <p class="settings-note">Deleting removes the campaign and everyone enrolled in it. This cannot be undone.</p>
               <button class="btn btn-ghost btn-s" id="cdDeleteBtn">Delete campaign</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-lite" id="campaignModal" hidden>
-          <div class="modal-lite-card">
-            <div class="page-head">
-              <h2>New campaign</h2>
-              <button class="icon-btn" id="closeCampaignModal" aria-label="Close">✕</button>
-            </div>
-            <div class="field">
-              <label for="cName">Campaign name</label>
-              <input id="cName" placeholder="Q3 founders outreach" />
-            </div>
-
-            <div id="stepsEditor"></div>
-            <button class="btn btn-ghost btn-s" id="addStepBtn">+ Add step</button>
-            <details class="pacing-panel">
-              <summary>Sending pace (daily cap &amp; send window)</summary>
-              <div class="field-row" style="margin-top:12px;">
-                <div class="field">
-                  <label>Daily email cap</label>
-                  <input id="cDailyCap" type="number" value="25" min="1" max="500" />
-                </div>
-                <div class="field">
-                  <label>Window start (hour)</label>
-                  <input id="cWindowStart" type="number" value="9" min="0" max="23" />
-                </div>
-                <div class="field">
-                  <label>Window end (hour)</label>
-                  <input id="cWindowEnd" type="number" value="17" min="0" max="23" />
-                </div>
-              </div>
-              <div class="field">
-                <label>Timezone</label>
-                <select id="cTimezone">
-                  <option value="UTC">UTC</option>
-                  <option value="America/New_York">Eastern (New York)</option>
-                  <option value="America/Chicago">Central (Chicago)</option>
-                  <option value="America/Denver">Mountain (Denver)</option>
-                  <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
-                  <option value="Europe/London">London</option>
-                  <option value="Europe/Berlin">Berlin</option>
-                  <option value="Asia/Singapore">Singapore</option>
-                  <option value="Australia/Sydney">Sydney</option>
-                </select>
-              </div>
-              <p class="settings-note">Emails only go out inside this window, in this timezone, and stop at the daily cap. Queued prospects roll over to the next day automatically.</p>
-            </details>
-            <div class="modal-actions">
-              <button class="btn btn-primary" id="saveCampaignBtn">Create campaign</button>
             </div>
           </div>
         </div>

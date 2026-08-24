@@ -281,16 +281,7 @@ function renderEvents(events) {
 
 // ---------- campaigns ----------
 function bindCampaignModal() {
-  $('newCampaignBtn').addEventListener('click', () => {
-    $('campaignModal').hidden = false;
-    $('stepsEditor').innerHTML = '';
-    addStepRow('email');
-    // Pre-fill timezone from the browser so the send window makes sense.
-    try { $('cTimezone').value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch {}
-  });
-  $('closeCampaignModal').addEventListener('click', () => $('campaignModal').hidden = true);
-  $('addStepBtn').addEventListener('click', () => addStepRow('email'));
-  $('saveCampaignBtn').addEventListener('click', saveCampaign);
+  $('newCampaignBtn').addEventListener('click', startNewCampaign);
 }
 
 function stepRowHtml(type) {
@@ -347,7 +338,7 @@ function addStepRow(type, data = {}, container) {
   const wrap = document.createElement('div');
   wrap.innerHTML = stepRowHtml(type);
   const row = wrap.firstElementChild;
-  (container || $('stepsEditor')).appendChild(row);
+  (container || $('cdStepEditorRows')).appendChild(row);
   row.querySelector('.remove-step').addEventListener('click', () => row.remove());
   row.querySelector('.step-type').addEventListener('change', e => {
     row.querySelector('.step-fields').innerHTML = e.target.value === 'email'
@@ -392,20 +383,38 @@ function collectSteps(container) {
   }).filter(s => (s.type !== 'email' || (s.subject && s.body)) && (s.type !== 'task' || s.note));
 }
 
-async function saveCampaign() {
-  const steps = collectSteps($('stepsEditor'));
+function startNewCampaign() {
+  selectedCampaign = null;
+  $('campaignListView').hidden = true;
+  $('campaignDetail').hidden = false;
+  $('cdName').textContent = '';
+  $('cdStatus').hidden = true;
+  $('cdValidateBtn').hidden = true;
+  $('cdRunBtn').hidden = true;
+  $('cdTabs').hidden = true;
+  $('cdStats').innerHTML = '';
+  $('cdSteps').innerHTML = '';
+  $('cdAddStepBtn').hidden = true;
+  $('cdStepEditor').hidden = true;
+  $('cdAbBlock').hidden = true;
+  $('cdNewBlock').hidden = false;
+  $('cdNewNote').textContent = '';
+  $('cdNewStepRows').innerHTML = '';
+  addStepRow('email', {}, $('cdNewStepRows'));
+  document.querySelector('#ctab-steps .seq-divider').hidden = true;
+  document.querySelector('#ctab-steps .seq-stats').hidden = true;
+  $('cdName').focus();
+}
 
-  const { data } = await api('POST', '/api/app/campaigns', {
-    name: $('cName').value,
-    steps,
-    dailyCap: Number($('cDailyCap').value) || 25,
-    sendWindowStart: Number($('cWindowStart').value ?? 9),
-    sendWindowEnd: Number($('cWindowEnd').value ?? 17),
-    timezone: $('cTimezone').value || 'UTC',
-  });
-  if (!data.ok) { toast(data.error || 'Could not create campaign', 'err'); return; }
-  $('campaignModal').hidden = true;
-  $('cName').value = '';
+async function createCampaign() {
+  const name = $('cdName').textContent.trim();
+  const steps = collectSteps($('cdNewStepRows'));
+  if (!name) { $('cdNewNote').textContent = 'Give the campaign a name (click the title above).'; return; }
+  if (!steps.length) { $('cdNewNote').textContent = 'Write the email subject and body first.'; return; }
+  $('cdCreateBtn').disabled = true;
+  const { data } = await api('POST', '/api/app/campaigns', { name, steps });
+  $('cdCreateBtn').disabled = false;
+  if (!data.ok) { $('cdNewNote').textContent = data.error || 'Could not create campaign.'; return; }
   await loadCampaigns();
   openCampaign(data.campaign.id);
 }
@@ -538,6 +547,14 @@ function switchCampaignTab(name) {
 }
 
 function renderCampaignDetail(c) {
+  $('cdNewBlock').hidden = true;
+  document.querySelector('#ctab-steps .seq-divider').hidden = false;
+  document.querySelector('#ctab-steps .seq-stats').hidden = false;
+  $('cdStatus').hidden = false;
+  $('cdValidateBtn').hidden = false;
+  $('cdRunBtn').hidden = false;
+  $('cdTabs').hidden = false;
+  $('cdAddStepBtn').hidden = false;
   $('cdName').textContent = c.name;
   const status = $('cdStatus');
   status.className = `status ${c.status}`;
@@ -598,6 +615,14 @@ function backToList() {
   $('campaignDetail').hidden = true;
   $('campaignListView').hidden = false;
   $('addLeadsModal').hidden = true;
+  $('cdNewBlock').hidden = true;
+  document.querySelector('#ctab-steps .seq-divider').hidden = false;
+  document.querySelector('#ctab-steps .seq-stats').hidden = false;
+  $('cdStatus').hidden = false;
+  $('cdValidateBtn').hidden = false;
+  $('cdRunBtn').hidden = false;
+  $('cdTabs').hidden = false;
+  $('cdAddStepBtn').hidden = false;
 }
 
 function bindCampaignDetail() {
@@ -609,6 +634,18 @@ function bindCampaignDetail() {
     }).join('');
   }
   $('cdBackBtn').addEventListener('click', () => { backToList(); loadCampaigns(); });
+  $('cdCreateBtn').addEventListener('click', createCampaign);
+  const cdName = $('cdName');
+  cdName.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); cdName.blur(); } });
+  cdName.addEventListener('blur', async () => {
+    const name = cdName.textContent.trim();
+    if (!selectedCampaign) return;
+    const c = campaigns.find(x => x.id === selectedCampaign);
+    if (!c || !name || name === c.name) { if (c) cdName.textContent = c.name; return; }
+    const { data } = await api('PATCH', `/api/app/campaigns/${selectedCampaign}`, { name });
+    if (data.ok) { c.name = name; cdName.textContent = name; toast('Renamed.'); }
+    else cdName.textContent = c.name;
+  });
   $('cdTabs').addEventListener('click', e => {
     const tab = e.target.closest('.settings-tab');
     if (tab) switchCampaignTab(tab.dataset.ctab);

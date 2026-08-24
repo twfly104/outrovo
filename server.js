@@ -3306,6 +3306,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const c = campaigns.find(x => x.id === id && x.owner === session.email);
     if (!c) return send(res, 404, { ok: false, error: 'Not found' });
     const b = await readBody(req);
+    if (typeof b.name === 'string' && b.name.trim()) c.name = b.name.trim();
     if (b.dailyCap != null) c.dailyCap = Math.max(1, Math.min(500, Number(b.dailyCap)));
     if (b.sendWindowStart != null) c.sendWindowStart = Math.max(0, Math.min(23, Number(b.sendWindowStart)));
     if (b.sendWindowEnd != null) c.sendWindowEnd = Math.max(0, Math.min(23, Number(b.sendWindowEnd)));
