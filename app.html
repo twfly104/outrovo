@@ -629,6 +629,75 @@
         </div>
         </div><!-- /stab-inboxes -->
 
+        <div class="settings-pane" id="stab-developer">
+        <div class="app-card-block" id="secDeveloper">
+          <h2>Developer</h2>
+          <p class="sec-hint" style="margin-bottom:16px;">API key · webhooks · MCP &amp; CLI</p>
+
+          <div class="dev-block">
+            <div class="dev-block-head">
+              <div>
+                <div class="integ-name">API key</div>
+                <div class="integ-desc">Authenticate the REST API, MCP server and CLI. Treat it like a password.</div>
+              </div>
+            </div>
+            <div id="apiKeyArea">
+              <div id="apiKeyStatus" class="settings-note">Checking…</div>
+              <div id="apiKeyNew" hidden>
+                <code id="apiKeyValue" class="dev-key"></code>
+                <button type="button" class="btn btn-dark btn-s" id="copyApiKeyBtn">Copy</button>
+                <p class="settings-note">Shown once — store it somewhere safe. Generating a new key revokes the old one.</p>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:10px;">
+                <button type="button" class="btn btn-primary btn-s" id="genApiKeyBtn">Generate key</button>
+                <button type="button" class="btn btn-ghost btn-s" id="revokeApiKeyBtn" hidden style="color:#d93025;border-color:#d93025;">Revoke</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="dev-block">
+            <div class="dev-block-head">
+              <div>
+                <div class="integ-name">Webhooks</div>
+                <div class="integ-desc">Push events (sent, reply, bounce, unsubscribe…) to Zapier, HubSpot, Pipedrive or any URL.</div>
+              </div>
+            </div>
+            <div id="webhookList"></div>
+            <form id="webhookForm" style="margin-top:12px;">
+              <div class="field"><label>Endpoint URL</label><input id="whUrl" placeholder="https://hooks.zapier.com/…" /></div>
+              <div class="field-row">
+                <div class="field"><label>Provider</label>
+                  <select id="whProvider">
+                    <option value="webhook">Generic webhook</option>
+                    <option value="zapier">Zapier</option>
+                    <option value="hubspot">HubSpot</option>
+                    <option value="pipedrive">Pipedrive</option>
+                    <option value="salesforce">Salesforce</option>
+                  </select>
+                </div>
+                <div class="field"><label>Signing secret (optional)</label><input id="whSecret" placeholder="verify payloads" /></div>
+              </div>
+              <div class="field"><label>Events</label>
+                <div class="wh-events" id="whEvents"></div>
+              </div>
+              <button type="submit" class="btn btn-primary btn-s">Add webhook</button>
+              <div class="tool-result" id="webhookResult"></div>
+            </form>
+          </div>
+
+          <div class="dev-block">
+            <div class="dev-block-head">
+              <div>
+                <div class="integ-name">MCP &amp; CLI</div>
+                <div class="integ-desc">Drive Outrovo from Claude, Cursor, or your terminal.</div>
+              </div>
+            </div>
+            <p class="settings-note">MCP endpoint: <code id="mcpUrl"></code> — authenticate with header <code>Authorization: Bearer &lt;your API key&gt;</code> or <code>x-integration-token</code>.</p>
+            <p class="settings-note">CLI: <code>npm i -g outrovo</code> then <code>outrovo login</code> with the same key.</p>
+          </div>
+        </div>
+        </div><!-- /stab-developer -->
+
         <div class="settings-pane" id="stab-account">
 <div class="app-card-block" id="secAccount">
           <h2>Account</h2>

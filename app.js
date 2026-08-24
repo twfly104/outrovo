@@ -169,6 +169,7 @@ async function init() {
   bindWhiteLabel();
   bindTopup();
   bindBulkTools();
+  bindDeveloper();
   loadCredits();
   // Agency plan → reveal the Agency nav
   if (data.plan?.id === 'agency' || me?.owner) $('agencyNavBtn').hidden = false;
@@ -200,7 +201,7 @@ function showPage(name) {
   if (name === 'campaigns') { backToList(); loadCampaigns(); }
   if (name === 'leads') loadLeadFinderStatus();
   if (name === 'overview') { loadOverview(); loadOvExtras(); }
-  if (name === 'settings') { loadSenders(); loadSettingsHero(); }
+  if (name === 'settings') { loadSenders(); loadSettingsHero(); loadDeveloper(); }
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
 
@@ -1269,6 +1270,91 @@ function bindAccount() {
 // ---------- LinkedIn autopilot bridge ----------
 // ---------- BYOK: Apollo lead data source ----------
 // ---------- suppression list ----------
+// ---------- developer: API key + webhooks + MCP/CLI ----------
+function bindDeveloper() {
+  $('genApiKeyBtn').addEventListener('click', async () => {
+    if (!confirm('Generate a new API key? Any existing key stops working immediately.')) return;
+    const { data } = await api('POST', '/api/app/integrations/token');
+    if (!data.ok) { $('apiKeyStatus').textContent = data.error || 'Error'; return; }
+    $('apiKeyValue').textContent = data.token;
+    $('apiKeyNew').hidden = false;
+    $('apiKeyStatus').textContent = 'New key generated — copy it now, it won\'t be shown again.';
+    $('revokeApiKeyBtn').hidden = false;
+  });
+  $('copyApiKeyBtn').addEventListener('click', () => {
+    navigator.clipboard.writeText($('apiKeyValue').textContent).then(() => {
+      $('copyApiKeyBtn').textContent = 'Copied ✓';
+      setTimeout(() => { $('copyApiKeyBtn').textContent = 'Copy'; }, 2000);
+    });
+  });
+  $('revokeApiKeyBtn').addEventListener('click', async () => {
+    if (!confirm('Revoke the API key? MCP, CLI and any integrations using it stop working.')) return;
+    await api('DELETE', '/api/app/integrations/token');
+    $('apiKeyNew').hidden = true;
+    $('apiKeyStatus').textContent = 'No key — generate one to use the API, MCP or CLI.';
+    $('revokeApiKeyBtn').hidden = true;
+  });
+  $('webhookForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const events = [...document.querySelectorAll('#whEvents input:checked')].map(c => c.value);
+    const { data } = await api('POST', '/api/app/integrations/webhooks', {
+      url: $('whUrl').value.trim(),
+      provider: $('whProvider').value,
+      secret: $('whSecret').value.trim() || undefined,
+      events: events.length ? events : undefined,
+    });
+    $('webhookResult').innerHTML = data.ok
+      ? '<span class="ok-tag">✓ Webhook added</span>'
+      : `<span class="no-tag">✗ ${esc(data.error || 'Error')}</span>`;
+    if (data.ok) { $('whUrl').value = ''; $('whSecret').value = ''; loadWebhooks(); }
+  });
+  $('webhookList').addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-wh-del]');
+    if (!btn) return;
+    if (!confirm('Delete this webhook?')) return;
+    await api('DELETE', `/api/app/integrations/webhooks/${btn.dataset.whDel}`);
+    loadWebhooks();
+  });
+}
+
+async function loadDeveloper() {
+  // API key status
+  const { data: tok } = await api('GET', '/api/app/integrations/status');
+  if (tok.ok) {
+    $('apiKeyStatus').textContent = tok.hasToken
+      ? 'A key is active. Generate a new one to rotate it.'
+      : 'No key — generate one to use the API, MCP or CLI.';
+    $('revokeApiKeyBtn').hidden = !tok.hasToken;
+    $('apiKeyNew').hidden = true;
+  }
+  // MCP URL
+  $('mcpUrl').textContent = `${location.origin}/api/mcp`;
+  loadWebhooks();
+}
+
+async function loadWebhooks() {
+  const { data } = await api('GET', '/api/app/integrations/webhooks');
+  if (!data.ok) { $('webhookList').innerHTML = ''; return; }
+  // Populate event checkboxes once
+  const evBox = $('whEvents');
+  if (evBox && !evBox.children.length && data.events) {
+    evBox.innerHTML = data.events.map(ev =>
+      `<label><input type="checkbox" value="${ev}" checked /> ${ev}</label>`
+    ).join('');
+  }
+  $('webhookList').innerHTML = data.webhooks.length ? data.webhooks.map(h => `
+    <div class="wh-item">
+      <div>
+        <span class="wh-provider">${esc(h.provider)}</span>
+        <span class="wh-url">${esc(h.url)}</span>
+        <div class="settings-note" style="margin-top:2px;">${(h.events || []).join(' · ')}</div>
+      </div>
+      <div class="wh-meta">
+        <button type="button" data-wh-del="${h.id}">Delete</button>
+      </div>
+    </div>`).join('') : '<p class="settings-note">No webhooks yet — add one below to push events to your stack.</p>';
+}
+
 // ---------- agency: clients + billing ----------
 function bindAgency() {
   $('addClientBtn').addEventListener('click', async () => {

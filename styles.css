@@ -2137,6 +2137,32 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .app-body .notif-row { padding: 18px 0; }
 .app-body .notif-card h2 { margin-bottom: 2px; }
 
+/* Developer section */
+.dev-block { padding: 18px 0; border-top: 1px solid #f0ebe2; }
+.dev-block:first-of-type { border-top: none; padding-top: 0; }
+.dev-block-head { margin-bottom: 10px; }
+.dev-key {
+  display: inline-block; padding: 8px 12px; margin-right: 8px;
+  background: #f6f3ec; border: 1px solid #e5dfd2; border-radius: 8px;
+  font-family: ui-monospace, monospace; font-size: 0.82rem; word-break: break-all;
+}
+.wh-events { display: flex; flex-wrap: wrap; gap: 8px; }
+.wh-events label {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border: 1px solid #e5dfd2; border-radius: 20px;
+  font-size: 0.8rem; font-weight: 500; cursor: pointer; background: #faf8f3;
+}
+.wh-events input[type="checkbox"] { accent-color: var(--crest); margin: 0; }
+.wh-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid #f0ebe2; font-size: 0.88rem;
+}
+.wh-item:last-child { border-bottom: none; }
+.wh-item .wh-url { font-family: ui-monospace, monospace; font-size: 0.8rem; color: var(--ink-faint); word-break: break-all; }
+.wh-item .wh-meta { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.wh-item .wh-provider { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--crest); background: rgba(232,93,4,0.08); padding: 2px 8px; border-radius: 10px; }
+.wh-item button { background: none; border: none; color: #d93025; cursor: pointer; font-size: 0.8rem; font-weight: 600; padding: 2px 6px; }
+
 .app-body .mailbox-main, .app-body .integ-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .app-body .integ-main { display: block; }
 .app-body .mailbox-email, .app-body .integ-name { font-size: 0.95rem; font-weight: 700; letter-spacing: -0.01em; }
