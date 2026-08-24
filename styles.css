@@ -2134,61 +2134,102 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .sender-check label { display: flex; gap: 8px; align-items: center; font-size: 0.9rem; white-space: nowrap; }
 .sender-pill.oauth { background: #e7f5ee; color: #1a7a4a; }
 
-/* ---------- Settings: quick-setup wizard ---------- */
+/* ---------- Settings: hero cards (mailboxes / integrations / notifications) ---------- */
 .page-sub { font-size: 0.95rem; color: var(--ink-soft); margin: -14px 0 22px; }
-.setup-wizard {
+.app-body .settings-hero {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 22px;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
 }
-.setup-step {
-  position: relative;
-  min-width: 0;
+@media (max-width: 860px) { .app-body .settings-hero { grid-template-columns: 1fr; } }
+.app-body .mailbox-card, .app-body .integ-card, .app-body .notif-card { margin-bottom: 0; }
+.app-body .notif-card { margin-bottom: 20px; }
+
+.app-body .mailbox-row, .app-body .integ-row, .app-body .notif-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+}
+.app-body .mailbox-row + .mailbox-row,
+.app-body .integ-row + .integ-row,
+.app-body .notif-row + .notif-row { border-top: 1px dashed var(--line); }
+.app-body .mailbox-row:first-child, .app-body .integ-row:first-child { padding-top: 4px; }
+.app-body .notif-row { padding: 18px 0; }
+.app-body .notif-card h2 { margin-bottom: 2px; }
+
+.app-body .mailbox-main, .app-body .integ-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.app-body .integ-main { display: block; }
+.app-body .mailbox-email, .app-body .integ-name { font-size: 0.95rem; font-weight: 700; letter-spacing: -0.01em; }
+.app-body .mailbox-meta, .app-body .integ-desc { font-size: 0.82rem; color: var(--ink-soft); margin-top: 2px; }
+
+.app-body .mb-avatar {
+  flex: none;
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  display: grid; place-items: center;
+  color: #fff; font-weight: 700; font-size: 0.95rem;
+}
+.app-body .mb-google { background: #2fae5f; }
+.app-body .mb-ms { background: #d97a16; }
+.app-body .mb-other { background: #6b7280; }
+
+.app-body .status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.app-body .status-pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.app-body .pill-green { background: #e3f6ea; color: #189a55; }
+.app-body .pill-amber { background: #fdf0d8; color: #c6891c; }
+.app-body .pill-gray { background: var(--paper-deep); color: var(--ink-faint); }
+
+.app-body .connect-mailbox-btn {
+  margin-top: 14px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 20px;
-  box-shadow: var(--shadow-m);
-  padding: 20px 22px;
-  display: flex;
-  flex-direction: column;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  border-radius: 999px;
+  padding: 9px 16px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
 }
-.setup-step:hover { border-color: rgba(249, 115, 22, 0.35); }
-.step-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.step-head h3 { margin: 0; font-size: 1.02rem; font-weight: 650; }
-.step-num {
-  flex: none;
-  width: 28px; height: 28px;
+.app-body .connect-mailbox-btn:hover { background: var(--paper); border-color: var(--ink-faint); }
+
+/* Orange toggle switch (CRM sync + notification prefs) */
+.app-body .ov-switch { position: relative; width: 46px; height: 27px; flex: none; cursor: pointer; }
+.app-body .ov-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.app-body .ov-track {
+  position: absolute; inset: 0;
+  background: #d9d4c8;
+  border-radius: 999px;
+  transition: background 0.2s;
+}
+.app-body .ov-track::after {
+  content: "";
+  position: absolute; top: 3px; left: 3px;
+  width: 21px; height: 21px;
+  background: #fff;
   border-radius: 50%;
-  display: grid; place-items: center;
-  background: var(--paper-deep);
-  color: var(--ink-soft);
-  font-size: 0.85rem; font-weight: 700;
-  transition: background 0.2s, color 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
 }
-.setup-step p { font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 14px; flex: 1; }
-.step-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.step-status { font-size: 0.8rem; font-weight: 650; color: var(--ink-faint); }
-.step-status.ok { color: #1a7a4a; }
-.step-fields { display: flex; gap: 8px; }
-.step-fields input {
-  flex: 1; min-width: 0;
-  padding: 10px 13px;
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-s);
-  background: var(--paper);
-  font: inherit; font-size: 0.88rem; color: var(--ink);
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.step-fields input:focus { outline: none; border-color: var(--crest); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14); }
-.step-fields .btn { flex: none; }
-.setup-step .tool-result { font-size: 0.82rem; margin-top: 12px; }
-.setup-step.done { border-color: #b7dfc6; background: linear-gradient(180deg, #fbfdfc, var(--card)); }
-.setup-step.done .step-num { background: #1a7a4a; color: #fff; }
-.setup-step.done .step-num { font-size: 0; }
-.setup-step.done .step-num::after { content: "✓"; font-size: 0.85rem; }
-@media (max-width: 980px) { .setup-wizard { grid-template-columns: 1fr; } }
+.app-body .ov-switch input:checked + .ov-track { background: var(--crest); }
+.app-body .ov-switch input:checked + .ov-track::after { transform: translateX(19px); }
+.app-body .ov-switch input:focus-visible + .ov-track { outline: 2px solid var(--crest); outline-offset: 2px; }
 
 
 .adv-divider { margin: 34px 0 14px; }

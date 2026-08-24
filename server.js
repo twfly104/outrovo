@@ -102,7 +102,10 @@ function readRawBody(req) {
   });
 }
 const isEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
-const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company, owner: u.owner || null, whiteLabel: u.whiteLabel || null, mailingAddress: u.mailingAddress || '', bookingLink: u.bookingLink || '' });
+// Slack-facing alert prefs (delivered to the user's own webhooks, e.g. a
+// Slack incoming hook). Defaults match the Settings toggles on first paint.
+const notifyPrefs = u => ({ hotLead: true, dailyDigest: true, bounceWarnings: false, ...(u?.notifyPrefs || {}) });
+const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company, owner: u.owner || null, whiteLabel: u.whiteLabel || null, mailingAddress: u.mailingAddress || '', bookingLink: u.bookingLink || '', crmSync: u.crmSync !== false, notifications: notifyPrefs(u) });
 const newToken = () => crypto.randomBytes(24).toString('hex');
 
 function getSession(req) {
@@ -966,9 +969,15 @@ function enrollLeads(sessionEmail, campaignId, leads) {
 // user.integrations: [{ url, provider, secret, events[] }]. Events fan out
 // to matching webhooks (Zapier catch hooks, HubSpot/Pipedrive workflow
 // webhooks, or any endpoint). Failures are logged, never block the engine.
-const INTEGRATION_EVENTS = ['sent', 'bounce', 'unsubscribe', 'reply', 'task', 'campaign'];
-async function fireWebhooks(ownerEmail, eventType, payload) {
+const INTEGRATION_EVENTS = ['sent', 'bounce', 'unsubscribe', 'reply', 'task', 'campaign', 'click', 'digest'];
+async function fireWebhooks(ownerEmail, eventType, payload = {}) {
   const user = load('users').find(u => u.email === ownerEmail);
+  if (!user) return;
+  if (user.crmSync === false) return; // Settings → CRM sync master switch
+  const prefs = notifyPrefs(user);
+  if (eventType === 'bounce' && !prefs.bounceWarnings) return;
+  if (eventType === 'reply' && payload.intent === 'interested' && !prefs.hotLead) return;
+  if (eventType === 'digest' && !prefs.dailyDigest) return;
   const hooks = (user?.integrations || []).filter(i => i.url && (i.events?.includes(eventType) || !i.events?.length));
   for (const hook of hooks) {
     try {
@@ -2195,6 +2204,36 @@ function engineTick() {
   }
   if (changed) { save('prospects', prospects); save('tasks', tasks); }
   autopilotRun().catch(() => {});
+  digestTick();
+}
+
+// 9:00 AM daily digest: one `digest` webhook event per opted-in user with a
+// 24h rollup (sends, opens, replies, bounces). A Slack incoming hook on the
+// receiving end is what makes the Settings → Notifications toggles real.
+function digestTick() {
+  const now = new Date();
+  if (now.getHours() < 9) return;
+  const today = now.toISOString().slice(0, 10);
+  const users = load('users');
+  let dirty = false;
+  for (const user of users) {
+    if (!notifyPrefs(user).dailyDigest) continue;
+    if (user.crmSync === false) continue; // master switch off — don't consume today's digest
+    if (user.lastDigestDay === today) continue;
+    if (!(user.integrations || []).some(i => i.url)) continue;
+    user.lastDigestDay = today;
+    dirty = true;
+    const since = Date.now() - 86400000;
+    const day = load('events').filter(e => e.owner === user.email && Date.parse(e.at) >= since);
+    const count = (...types) => day.filter(e => types.includes(e.type)).length;
+    fireWebhooks(user.email, 'digest', {
+      date: today,
+      sent: count('sent'), opens: count('open'), replies: count('reply', 'received'),
+      bounces: count('bounce', 'soft-bounce'),
+      text: `Outrovo daily digest — sent ${count('sent')}, opens ${count('open')}, replies ${count('reply', 'received')}, bounces ${count('bounce', 'soft-bounce')} (last 24h)`,
+    }).catch(() => {});
+  }
+  if (dirty) save('users', users);
 }
 // Long-lived local server ticks forever; serverless functions must not start
 // unmanaged background loops, so on Vercel the engine only runs on-demand
@@ -2959,7 +2998,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       provider: ['hubspot', 'pipedrive', 'salesforce', 'zapier'].includes(b.provider) ? b.provider : 'webhook',
       url: b.url.trim(),
       secret: b.secret ? String(b.secret).slice(0, 100) : null,
-      events: Array.isArray(b.events) && b.events.length ? b.events.filter(e => INTEGRATION_EVENTS.includes(e)) : [...INTEGRATION_EVENTS, 'click'],
+      events: Array.isArray(b.events) && b.events.length ? b.events.filter(e => INTEGRATION_EVENTS.includes(e)) : [...INTEGRATION_EVENTS],
       createdAt: new Date().toISOString(),
     };
     user.integrations.push(hook);
@@ -3854,8 +3893,32 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
       if (link && !/^https:\/\/[\w.-]+\.[a-z]{2,}/i.test(link)) return send(res, 400, { ok: false, error: 'Booking link must be a full https:// URL' });
       user.bookingLink = link;
     }
+    if (b.crmSync != null) user.crmSync = Boolean(b.crmSync);
+    if (b.notifications && typeof b.notifications === 'object') {
+      const cur = notifyPrefs(user);
+      for (const k of ['hotLead', 'dailyDigest', 'bounceWarnings']) {
+        if (b.notifications[k] != null) cur[k] = Boolean(b.notifications[k]);
+      }
+      user.notifyPrefs = cur;
+    }
     save('users', users);
-    send(res, 200, { ok: true, linkedinBudget: linkedinBudget(user), mailingAddress: user.mailingAddress || '', bookingLink: user.bookingLink || '' });
+    send(res, 200, { ok: true, linkedinBudget: linkedinBudget(user), mailingAddress: user.mailingAddress || '', bookingLink: user.bookingLink || '', crmSync: user.crmSync !== false, notifications: notifyPrefs(user) });
+  },
+
+  // Settings hero card: one-call status for Apollo / OpenAI / CRM sync.
+  'GET /api/app/settings/integrations': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const user = load('users').find(u => u.email === session.email);
+    if (!user) return send(res, 404, { ok: false });
+    send(res, 200, {
+      ok: true,
+      apollo: leadFinderProvider(user) === 'apollo',
+      apolloKeySet: Boolean(userApolloKey(user)),
+      llm: Boolean(process.env.LLM_API_KEY || process.env.OPENAI_API_KEY),
+      crmSync: user.crmSync !== false,
+      webhooks: (user.integrations || []).filter(i => i.url).length,
+    });
   },
 
   // --- GDPR data rights (Arts. 15/17/20) ---

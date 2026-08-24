@@ -565,3 +565,38 @@ Owner approved a new visual direction (screenshots): left sidebar REPLACED by a 
 
 ## Gotcha — preview Bad Gateway
 If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "Bad Gateway": the node server is still porchtted alive but the sandbox HTTP entrypoint (a ngrok-style edge?) lost its tunnel. Fix: kill the node PID (was nested under pts/1, respawned as PID 1741) and restart `PORT=12001 nohup node server.js > /tmp/server12001.log 2>&1 &`. GET / then returns 200 (HEAD / returns 405, don't use HEAD). Session cookies are in data/sessions.json (token value usable directly as the outrovo_session cookie in browser storage).
+
+## Iteration 16 — Settings hero: Mailboxes / Integrations / Notifications (Aug 2026)
+- Owner screenshot spec: Settings top is now two hero cards + a Notifications
+  card (cream, dashed row dividers, orange toggles). The 3-step quick-setup
+  wizard is GONE (connect → "+ Connect mailbox" button jumps to Inboxes tab;
+  domain check lives in Tools & verification; test email = per-sender "Send
+  test" which now always sends to me.email — the wizard's testEmailTo input
+  no longer exists).
+- Mailboxes card (renderMailboxHero in app.js, fed by loadSenders' data):
+  provider avatar (gmail=green G, microsoft=orange M), "Provider · warmup %"
+  (capToday/dailyLimit when warmup on), pill HEALTHY vs WARMING (from
+  warmup.isWarming).
+- Integrations card reads NEW `GET /api/app/settings/integrations` →
+  {apollo, apolloKeySet, llm, crmSync, webhooks}. ROUTE GOTCHA:
+  `/api/app/integrations/status` was already taken by the LinkedIn autopilot
+  bridge (duplicate key silently served the wrong handler) — hence the
+  settings/integrations path.
+- CRM sync toggle = REAL master switch: user.crmSync (default true),
+  fireWebhooks returns early when false. Persisted via POST
+  /api/app/settings (now also accepts {crmSync, notifications}).
+- Notifications card = user.notifyPrefs {hotLead:true, dailyDigest:true,
+  bounceWarnings:false} (notifyPrefs() helper, exposed on publicUser).
+  fireWebhooks gates: 'bounce' needs bounceWarnings; 'reply' with
+  intent 'interested' needs hotLead; 'digest' needs dailyDigest. Delivery
+  channel = the user's existing outbound webhooks (a Slack incoming webhook
+  URL works) — INTEGRATION_EVENTS gained 'click' + 'digest'.
+- Daily digest: digestTick() at the end of engineTick — once per user per
+  day at/after 9:00 server-local, fires a 'digest' webhook with a 24h rollup
+  (sent/opens/replies/bounces from the events store). GOTCHA fixed: mark
+  lastDigestDay only when crmSync is on, otherwise the day is consumed with
+  zero delivery.
+- Verified live (PORT=12001, DATA_DIR=/tmp/otest-settings, sink on :12009):
+  interested reply blocked when hotLead off / delivered when on; question
+  reply unaffected; crmSync off silences everything; digest event delivered
+  with real counts. Browser-checked hero render incl. HEALTHY mailbox row.

@@ -170,7 +170,7 @@ async function init() {
   bindProspects();
   bindTools();
   bindSenders();
-  bindSetup();
+  bindSettingsHero();
   bindDomainDiag();
   bindAccount();
   bindLinkedInSafety();
@@ -214,7 +214,7 @@ function showPage(name) {
   if (name === 'campaigns') { backToList(); loadCampaigns(); }
   if (name === 'leads') loadLeadFinderStatus();
   if (name === 'overview') { loadOverview(); loadOvExtras(); }
-  if (name === 'settings') { loadEngine(); loadSenders(); refreshSetup(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadApolloKeyStatus(); loadSuppression(); loadWebhooks(); }
+  if (name === 'settings') { loadEngine(); loadSenders(); loadSettingsHero(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadApolloKeyStatus(); loadSuppression(); loadWebhooks(); }
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
 
@@ -1119,7 +1119,7 @@ window.addEventListener('message', e => {
   $('senderResult').innerHTML = e.data.ok
     ? `<span class="ok-tag">✓ Connected</span> — ${esc(e.data.email)} added to the rotation.`
     : `<span class="no-tag">✗ ${esc(e.data.error || 'Authorization failed')}</span>`;
-  if (e.data.ok) { loadSenders(); refreshSetup(); $('inboundGuide').open = true; }
+  if (e.data.ok) { loadSenders(); $('inboundGuide').open = true; }
 });
 
 function openSenderForm(provider) {
@@ -1158,7 +1158,6 @@ async function addSender() {
   if (data.ok) {
     ['sEmail', 'sFromName', 'sPass', 'sHost'].forEach(id => $(id).value = '');
     loadSenders();
-    refreshSetup();
   }
 }
 
@@ -1193,67 +1192,103 @@ async function loadSenders() {
     </div>`);
   }
   $('senderList').innerHTML = rows.join('') || '<p class="settings-note" style="margin-bottom:16px">No inboxes connected yet — pick a provider below.</p>';
+  renderMailboxHero(data.senders);
   $('senderList').querySelectorAll('[data-del-sender]').forEach(btn => btn.addEventListener('click', async () => {
     if (!confirm('Remove this inbox from the rotation?')) return;
     await api('DELETE', `/api/app/senders/${btn.dataset.delSender}`);
     loadSenders();
-    refreshSetup();
   }));
   $('senderList').querySelectorAll('[data-test-sender]').forEach(btn => btn.addEventListener('click', async () => {
-    const to = $('testEmailTo').value || me?.email;
-    if (!to) { $('senderResult').innerHTML = 'Enter a test recipient in step 3 above.'; return; }
+    const to = me?.email;
+    if (!to) return;
     btn.textContent = '…';
     const { data: r } = await api('POST', '/api/app/tools/test-email', { to, senderId: btn.dataset.testSender });
     btn.textContent = 'Send test';
     $('senderResult').innerHTML = r.ok
-      ? `<span class="ok-tag">✓ Sent</span> via ${esc(r.sender || 'rotation')}${r.demo ? ' (demo — logged, not sent)' : ''}.`
+      ? `<span class="ok-tag">✓ Sent</span> to ${esc(to)} via ${esc(r.sender || 'rotation')}${r.demo ? ' (demo — logged, not sent)' : ''}.`
       : `<span class="no-tag">✗ ${esc(r.error || 'Failed')}</span>`;
   }));
 }
 
-// ---------- quick-setup wizard ----------
-const setupKey = () => `ov-setup:${me?.email || ''}`;
-function loadSetupMarks() {
-  try { return JSON.parse(localStorage.getItem(setupKey()) || '{}'); } catch { return {}; }
-}
-function markStepDone(step) {
-  const marks = { ...loadSetupMarks(), [step]: true };
-  localStorage.setItem(setupKey(), JSON.stringify(marks));
-  applySetupMarks();
-}
-function applySetupMarks() {
-  const marks = loadSetupMarks();
-  $('setupDomainStep').classList.toggle('done', Boolean(marks.domain));
-  $('setupTestStep').classList.toggle('done', Boolean(marks.test));
+// ---------- settings hero (mailboxes / integrations / notifications) ----------
+const MAILBOX_PROVIDERS = {
+  gmail: { letter: 'G', cls: 'mb-google', label: 'Google Workspace' },
+  microsoft: { letter: 'M', cls: 'mb-ms', label: 'Microsoft 365' },
+};
+
+function renderMailboxHero(senders) {
+  const el = $('mailboxHeroList');
+  if (!el) return;
+  if (!senders.length) {
+    el.innerHTML = '<p class="settings-note" style="padding:14px 0;">No inboxes connected yet.</p>';
+    return;
+  }
+  el.innerHTML = senders.map(s => {
+    const p = MAILBOX_PROVIDERS[s.provider] || { letter: (s.email || '?')[0].toUpperCase(), cls: 'mb-other', label: 'SMTP inbox' };
+    const warming = Boolean(s.warmup?.isWarming);
+    const pct = s.warmup ? Math.min(100, Math.round((s.capToday / Math.max(1, Number(s.dailyLimit) || 50)) * 100)) : 100;
+    return `<div class="mailbox-row">
+      <div class="mailbox-main">
+        <span class="mb-avatar ${p.cls}">${p.letter}</span>
+        <div>
+          <div class="mailbox-email">${esc(s.email)}</div>
+          <div class="mailbox-meta">${p.label} · warmup ${pct}%</div>
+        </div>
+      </div>
+      <span class="status-pill ${warming ? 'pill-amber' : 'pill-green'}"><i></i>${warming ? 'Warming' : 'Healthy'}</span>
+    </div>`;
+  }).join('');
 }
 
-// Sender step derives from live server state; domain/test steps are marked
-// locally once the user runs them (localStorage, per account).
-async function refreshSetup() {
-  const { data } = await api('GET', '/api/app/senders');
+async function loadSettingsHero() {
+  const { data } = await api('GET', '/api/app/settings/integrations');
   if (!data.ok) return;
-  const count = (data.senders?.length || 0) + (data.gateway ? 1 : 0);
-  const st = $('setupSenderStatus');
-  st.textContent = count ? `✓ ${count} inbox${count > 1 ? 'es' : ''} connected` : 'Not connected';
-  st.classList.toggle('ok', count > 0);
-  $('gotoSenderBtn').textContent = count ? 'Add another' : 'Connect';
-  $('setupSenderStep').classList.toggle('done', count > 0);
-  applySetupMarks();
+  $('apolloHeroPill').hidden = !data.apollo;
+  $('apolloHeroSetup').hidden = data.apollo;
+  $('llmHeroPill').hidden = !data.llm;
+  $('llmHeroOff').hidden = data.llm;
+  $('crmSyncToggle').checked = Boolean(data.crmSync);
+  const n = me?.notifications || {};
+  $('notifHotLead').checked = n.hotLead !== false;
+  $('notifDailyDigest').checked = n.dailyDigest !== false;
+  $('notifBounce').checked = Boolean(n.bounceWarnings);
 }
 
-function bindSetup() {
-  $('gotoSenderBtn').addEventListener('click', () => {
-    $('senderCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+function bindSettingsHero() {
+  const gotoTab = stab => {
+    document.querySelector(`.settings-tab[data-stab="${stab}"]`)?.click();
+    $('settingsTabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  $('connectMailboxBtn').addEventListener('click', () => {
+    gotoTab('inboxes');
     $('connectGoogle').classList.add('pulse');
     $('connectMicrosoft').classList.add('pulse');
     setTimeout(() => ['connectGoogle', 'connectMicrosoft'].forEach(id => $(id).classList.remove('pulse')), 1600);
   });
-  if (me?.email && !$('testEmailTo').value) $('testEmailTo').value = me.email;
+  $('apolloHeroSetup').addEventListener('click', () => gotoTab('integrations'));
+
+  $('crmSyncToggle').addEventListener('change', async e => {
+    const on = e.target.checked;
+    const { data } = await api('POST', '/api/app/settings', { crmSync: on });
+    if (!data.ok) { e.target.checked = !on; return toast('Could not save CRM sync setting', 'err'); }
+    if (me) me.crmSync = on;
+    toast(on ? 'CRM sync on — events flow to your webhooks' : 'CRM sync off — webhook delivery paused');
+  });
+
+  const bindNotif = (id, key, label) => $(id).addEventListener('change', async e => {
+    const on = e.target.checked;
+    const { data } = await api('POST', '/api/app/settings', { notifications: { [key]: on } });
+    if (!data.ok) { e.target.checked = !on; return toast('Could not save notification setting', 'err'); }
+    if (me?.notifications) me.notifications[key] = on;
+    toast(`${label} ${on ? 'on' : 'off'}`);
+  });
+  bindNotif('notifHotLead', 'hotLead', 'Hot lead alert');
+  bindNotif('notifDailyDigest', 'dailyDigest', 'Daily digest');
+  bindNotif('notifBounce', 'bounceWarnings', 'Bounce warnings');
 }
 
 // ---------- domain health (onboarding diagnostic) ----------
 function bindDomainDiag() {
-  $('sdAuditBtn').addEventListener('click', () => runDomainDiag($('sdDomain').value));
   document.addEventListener('click', async e => {
     const btn = e.target.closest('.audit-copy');
     if (!btn) return;
@@ -1308,26 +1343,18 @@ function renderAudit(target, r, fallbackDomain) {
       : '<p class="settings-note">Fix the failing items above in your DNS provider (GoDaddy, Namecheap, Cloudflare…), then run the check again. DNS changes can take a few minutes to show up.</p>'}`;
 }
 
-async function runDomainDiag(domain) {
-  const out = $('sdAuditResult');
-  out.innerHTML = 'Running DNS checks…';
-  const { data } = await api('GET', `/api/app/tools/domain-audit?domain=${encodeURIComponent(domain || '')}`);
-  renderAudit(out, data.result, domain);
-  if (data.result) markStepDone('domain');
-}
-
 const FREE_MAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'hotmail.com', 'outlook.com', 'live.com', 'msn.com', 'aol.com', 'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com', 'pm.me', 'qq.com', '163.com', '126.com', 'yeah.net', 'foxmail.com', 'mail.com', 'gmx.com', 'gmx.net', 'zoho.com', 'yandex.com', 'yandex.ru']);
 
 async function loadDomainDiag() {
   const domain = (me?.email.split('@')[1] || '').toLowerCase();
   // Gmail/Outlook etc. sign DKIM themselves — checking their domain here only
   // confuses users with a failing DKIM probe. Leave the field empty instead.
-  if (domain && !FREE_MAIL_DOMAINS.has(domain) && !$('sdDomain').value) $('sdDomain').value = domain;
+  if (domain && !FREE_MAIL_DOMAINS.has(domain) && !$('dDomain').value) $('dDomain').value = domain;
   // The signup-time diagnostic result is logged in the activity feed — show it
   // instantly instead of re-running DNS lookups.
   const { data } = await api('GET', '/api/app/activity');
   const audit = (data.events || []).find(e => e.type === 'domain-audit' && e.meta?.checks);
-  if (audit) renderAudit($('sdAuditResult'), { score: audit.meta.score, checks: audit.meta.checks }, domain);
+  if (audit) renderAudit($('auditResult'), { score: audit.meta.score, checks: audit.meta.checks }, domain);
 }
 
 // ---------- Compliance & account data rights ----------
@@ -1676,16 +1703,6 @@ async function loadEngine() {
       <p class="settings-note">Campaigns simulate sending until you connect an inbox on the Inboxes tab (or your admin adds a gateway key). Nothing is actually delivered.</p>`;
   }
 }
-
-$('testEmailBtn').addEventListener('click', async () => {
-  const out = $('testEmailResult');
-  out.innerHTML = 'Sending…';
-  const { status, data } = await api('POST', '/api/app/tools/test-email', { to: $('testEmailTo').value });
-  out.innerHTML = status === 200
-    ? '<span class="ok-tag">✓ Sent</span> — check the inbox.'
-    : `<span class="no-tag">✗ Failed</span> — ${esc(data.error || 'unknown error')}`;
-  if (status === 200) markStepDone('test');
-});
 
 // ---------- lead finder ----------
 let leadFinderLeads = [];

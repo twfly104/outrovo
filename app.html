@@ -578,36 +578,66 @@
       <!-- Settings -->
       <section class="app-page" id="page-settings" hidden>
         <h1>Settings</h1>
-        <p class="page-sub">Three steps and you're sending. Everything else is optional and tucked away below.</p>
+        <p class="page-sub">Inboxes, integrations and alerts. Everything else is tucked away below.</p>
 
-        <!-- Quick setup -->
-        <div class="setup-wizard">
-          <div class="setup-step" id="setupSenderStep">
-            <div class="step-head"><span class="step-num">1</span><h3>Connect your inbox</h3></div>
-            <p>Authorize Google or Microsoft with one click — no passwords, no SMTP settings. Caps and warmup are handled for you.</p>
-            <div class="step-foot">
-              <span class="step-status" id="setupSenderStatus">Not connected</span>
-              <button class="btn btn-primary btn-s" id="gotoSenderBtn">Connect</button>
+        <div class="settings-hero">
+          <div class="app-card-block mailbox-card">
+            <div id="mailboxHeroList"></div>
+            <button type="button" class="connect-mailbox-btn" id="connectMailboxBtn">+ Connect mailbox</button>
+          </div>
+
+          <div class="app-card-block integ-card">
+            <div class="integ-row">
+              <div class="integ-main">
+                <div class="integ-name">Apollo.io</div>
+                <div class="integ-desc">Lead database · 240M+ contacts</div>
+              </div>
+              <span class="status-pill pill-green" id="apolloHeroPill" hidden><i></i>Linked</span>
+              <button type="button" class="btn btn-ghost btn-s" id="apolloHeroSetup" hidden>Set up</button>
+            </div>
+            <div class="integ-row">
+              <div class="integ-main">
+                <div class="integ-name">OpenAI</div>
+                <div class="integ-desc">Powers ✦ Intel analysis &amp; openers</div>
+              </div>
+              <span class="status-pill pill-green" id="llmHeroPill" hidden><i></i>Linked</span>
+              <span class="status-pill pill-gray" id="llmHeroOff" hidden>Not configured</span>
+            </div>
+            <div class="integ-row">
+              <div class="integ-main">
+                <div class="integ-name">CRM sync</div>
+                <div class="integ-desc">Push replies to HubSpot</div>
+              </div>
+              <label class="ov-switch"><input type="checkbox" id="crmSyncToggle" /><span class="ov-track"></span></label>
             </div>
           </div>
-          <div class="setup-step" id="setupDomainStep">
-            <div class="step-head"><span class="step-num">2</span><h3>Check your domain</h3></div>
-            <p>One DNS check before your first campaign catches SPF/DKIM/DMARC problems that keep mail out of the inbox.</p>
-            <div class="step-fields">
-              <input id="sdDomain" placeholder="yourdomain.com" />
-              <button class="btn btn-dark btn-s" id="sdAuditBtn">Run check</button>
+        </div>
+
+        <div class="app-card-block notif-card">
+          <h2>Notifications</h2>
+          <p class="sec-hint">What lands in your Slack.</p>
+          <div class="notif-row">
+            <div class="integ-main">
+              <div class="integ-name">Hot lead alert</div>
+              <div class="integ-desc">Instant ping when someone replies “Interested”</div>
             </div>
-            <div class="tool-result" id="sdAuditResult"></div>
+            <label class="ov-switch"><input type="checkbox" id="notifHotLead" /><span class="ov-track"></span></label>
           </div>
-          <div class="setup-step" id="setupTestStep">
-            <div class="step-head"><span class="step-num">3</span><h3>Send a test email</h3></div>
-            <p>Prove the pipeline end-to-end — a sample goes out through your connected inbox.</p>
-            <div class="step-fields">
-              <input id="testEmailTo" placeholder="you@yourdomain.com" />
-              <button class="btn btn-primary btn-s" id="testEmailBtn">Send test</button>
+          <div class="notif-row">
+            <div class="integ-main">
+              <div class="integ-name">Daily digest</div>
+              <div class="integ-desc">9:00 AM summary of sends, opens, replies</div>
             </div>
-            <div class="tool-result" id="testEmailResult"></div>
+            <label class="ov-switch"><input type="checkbox" id="notifDailyDigest" /><span class="ov-track"></span></label>
           </div>
+          <div class="notif-row">
+            <div class="integ-main">
+              <div class="integ-name">Bounce warnings</div>
+              <div class="integ-desc">Alert when bounce rate crosses 3%</div>
+            </div>
+            <label class="ov-switch"><input type="checkbox" id="notifBounce" /><span class="ov-track"></span></label>
+          </div>
+          <p class="settings-note" style="margin-top:14px;">Alerts deliver as webhook events — add your Slack incoming webhook under Integrations → CRM &amp; automation below.</p>
         </div>
 
         <nav class="settings-tabs" id="settingsTabs">
