@@ -2695,7 +2695,9 @@ const router = {
       client_id: p.clientId,
       redirect_uri: `${PUBLIC_URL}/api/auth/google/callback`,
       response_type: 'code',
-      scope: 'openid email profile',
+      scope: 'openid email profile https://www.googleapis.com/auth/gmail.send',
+      access_type: 'offline',
+      prompt: 'consent',
       state: newLoginState(),
     });
     res.writeHead(302, { Location: `${p.authUrl}?${q.toString()}` });
@@ -2724,7 +2726,7 @@ const router = {
     if (!takeLoginState(state)) return fail('Sign-in link expired — please try again.');
     const code = params.get('code');
     if (!code) return fail('Google did not return an authorization code.');
-    let email, givenName, familyName;
+    let email, givenName, familyName, refreshToken, accessToken, tokenExp;
     try {
       const p = OAUTH_PROVIDERS.google;
       const tokenRes = await fetch(p.tokenUrl, {
@@ -2738,6 +2740,9 @@ const router = {
       });
       const tokens = await tokenRes.json();
       if (!tokenRes.ok || !tokens.access_token) return fail(`Google token exchange failed (${tokens.error || tokenRes.status}).`);
+      refreshToken = tokens.refresh_token || null;
+      accessToken = tokens.access_token || null;
+      tokenExp = tokens.expires_in ? Date.now() + Number(tokens.expires_in) * 1000 : 0;
       const uiRes = await fetch(process.env.GOOGLE_USERINFO_URL || 'https://openidconnect.googleapis.com/v1/userinfo', {
         headers: { Authorization: `Bearer ${tokens.access_token}` },
       });
@@ -2750,11 +2755,41 @@ const router = {
     } catch (err) {
       return fail('Could not reach Google — please try again.');
     }
+
+    // One-click inbox: if Google returned a refresh token (offline access),
+    // auto-connect the sender so the user can start campaigns immediately.
+    const connectSender = (ownerEmail) => {
+      if (!refreshToken) return false;
+      const senders = load('senders');
+      const existing = senders.find(s => s.owner === ownerEmail && s.email === email);
+      const record = existing || {
+        id: crypto.randomUUID(), owner: ownerEmail, fromName: '',
+        dailyLimit: 50, status: 'active',
+        sentLog: { date: new Date().toISOString().slice(0, 10), count: 0 },
+        warmup: { enabled: true, startCap: WARMUP_DEFAULT_START, rampDays: 0, lastRampDay: null, startedAt: new Date().toISOString() },
+        createdAt: new Date().toISOString(),
+      };
+      record.provider = 'gmail';
+      record.email = email;
+      record.host = PROVIDER_PRESETS.gmail.host;
+      record.port = PROVIDER_PRESETS.gmail.port;
+      record.user = email;
+      record.oauthRefresh = encryptSecret(String(refreshToken));
+      record.oauthAccess = encryptSecret(String(accessToken));
+      record.oauthExp = tokenExp;
+      delete record.encPass;
+      if (!existing) senders.push(record);
+      save('senders', senders);
+      logEvent('sender', `Sender auto-connected via Google sign-in: ${email}`, {}, ownerEmail);
+      return true;
+    };
+
     const users = load('users');
     const existing = users.find(u => u.email === email);
     if (existing) {
       existing.authProvider = 'google';
       save('users', users);
+      connectSender(email);
       return startSession(res, email);
     }
     // First time: create the account. Google verified the email, so no
@@ -2769,6 +2804,7 @@ const router = {
       createdAt: new Date().toISOString(),
     };
     users.push(user); save('users', users);
+    connectSender(email);
     domainAudit(domain)
       .then(result => logEvent('domain-audit', `Domain check for ${result.domain}: score ${result.score}/100`, { score: result.score, checks: result.checks }, email))
       .catch(() => {});
