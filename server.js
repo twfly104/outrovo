@@ -1934,6 +1934,61 @@ async function aiGenerateSequence(input) {
   return { steps: localSequence(input), ai: false };
 }
 
+const AI_STEP_SYSTEM_PROMPT = `You write the NEXT step of a cold outreach sequence.
+Return ONLY a JSON object: {"step": ...} where the step is one of:
+{"type":"email","subject":"...","body":"...","delayMinutes":N}
+{"type":"task","note":"...","delayMinutes":N}  (a manual LinkedIn action)
+{"type":"wait","delayMinutes":N}
+Rules: default to an email unless asked otherwise. Use {{firstName}} and {{company}}
+tokens where useful. Bodies: under 90 words, plain text, one clear ask, no hype,
+no emojis. Do not repeat earlier steps — follow-ups should add a new angle.
+delayMinutes: realistic gap after the previous step (2880=2 days, 4320=3 days).`;
+
+async function aiGenerateStep({ campaignName, existingSteps, instruction }) {
+  const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+  const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+  const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+  const prior = existingSteps.map((s, i) => {
+    if (s.type === 'email') return `${i + 1}. email — subject: ${s.subject || ''}`;
+    if (s.type === 'task') return `${i + 1}. LinkedIn task — ${s.note || ''}`;
+    return `${i + 1}. wait ${s.delayMinutes || 0} min`;
+  }).join('\n');
+  if (key) {
+    try {
+      const res = await fetch(`${base}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: AI_STEP_SYSTEM_PROMPT },
+            { role: 'user', content: JSON.stringify({ campaign: campaignName, stepsSoFar: prior || '(none yet)', instruction: instruction || 'Write a natural next step.' }) },
+          ],
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const parsed = JSON.parse(json.choices?.[0]?.message?.content || '{}');
+        const [step] = normalizeSteps([parsed.step || {}]);
+        if (step && (step.body || step.note || step.type === 'wait')) return { step, ai: true, model };
+      }
+    } catch { /* fall through to local engine */ }
+  }
+  // Local fallback: a polite follow-up bump after a 3-day gap.
+  return {
+    step: {
+      type: 'email',
+      subject: `Re: ${existingSteps.find(s => s.type === 'email')?.subject || campaignName || 'quick question'}`,
+      body: `Hi {{firstName}} — just floating this back up. Happy to send over a 2-minute rundown for {{company}} if easier. Worth a look?`,
+      note: '',
+      delayMinutes: 4320,
+    },
+    ai: false,
+  };
+}
+
 // ---------- plans & billing ----------
 // Pricing strategy: card-free 14-day trial with full features → paid per-seat
 // tiers with hard prospect limits. Stripe Checkout when STRIPE_SECRET_KEY is
@@ -4255,6 +4310,17 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const b = await readBody(req);
     if (!b.product?.trim()) return send(res, 400, { ok: false, error: 'Describe your product or offer first.' });
     const result = await aiGenerateSequence({ product: b.product, audience: b.audience, goal: b.goal, tone: b.tone });
+    send(res, 200, { ok: true, ...result });
+  },
+
+  'POST /api/app/ai/generate-step': async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const b = await readBody(req);
+    const result = await aiGenerateStep({
+      campaignName: String(b.campaignName || ''),
+      existingSteps: Array.isArray(b.existingSteps) ? b.existingSteps.slice(0, 10) : [],
+      instruction: String(b.instruction || ''),
+    });
     send(res, 200, { ok: true, ...result });
   },
 };

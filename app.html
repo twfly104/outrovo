@@ -98,6 +98,16 @@
             <div class="seq-timeline" id="cdSteps"></div>
             <div class="seq-add-row">
               <button class="btn btn-ghost btn-s" id="cdAddStepBtn">+ Add step</button>
+              <button class="btn btn-ghost btn-s" id="cdAiStepBtn"><svg class="tab-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M3 12h3m12 0h3M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"/></svg>Add step with AI</button>
+            </div>
+            <div class="app-card-block" id="cdAiPanel" hidden>
+              <h2>Add a step with AI</h2>
+              <p class="settings-note">Say what this step should do — AI writes it against the sequence so far, then you review it before saving.</p>
+              <div class="ai-scan-row">
+                <input id="cdAiPrompt" placeholder="e.g. a gentle 3-day follow-up with a case-study angle" />
+                <button class="btn btn-primary btn-s" id="cdAiGenerateBtn">Write step</button>
+              </div>
+              <span class="import-note" id="cdAiNote"></span>
             </div>
             <div class="app-card-block" id="cdStepEditor" hidden>
               <h2>New step</h2>

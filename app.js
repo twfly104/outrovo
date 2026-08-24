@@ -565,6 +565,7 @@ function renderCampaignDetail(c) {
   $('cdSteps').innerHTML = campaignStepsHtml(c);
   $('cdStats').innerHTML = campaignStatsHtml(c);
   $('cdStepEditor').hidden = true;
+  $('cdAiPanel').hidden = true;
   $('cdStepNote').textContent = '';
   // Settings tab — every control mirrors the saved campaign settings.
   $('cdDailyCap').value = c.dailyCap ?? 25;
@@ -694,6 +695,34 @@ function bindCampaignDetail() {
   $('cdAddStepBtn').addEventListener('click', () => {
     $('cdStepEditorRows').innerHTML = '';
     addStepRow('email', {}, $('cdStepEditorRows'));
+    $('cdStepNote').textContent = '';
+    $('cdAiPanel').hidden = true;
+    $('cdStepEditor').hidden = false;
+    $('cdStepEditor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+  // "Add step with AI" — AI drafts the next step, user reviews it in the
+  // normal step editor before saving.
+  $('cdAiStepBtn').addEventListener('click', () => {
+    $('cdStepEditor').hidden = true;
+    $('cdAiNote').textContent = '';
+    $('cdAiPanel').hidden = false;
+    $('cdAiPrompt').focus();
+  });
+  $('cdAiGenerateBtn').addEventListener('click', async () => {
+    const c = campaigns.find(x => x.id === selectedCampaign);
+    if (!c) return;
+    $('cdAiGenerateBtn').disabled = true;
+    $('cdAiNote').textContent = 'Writing…';
+    const { data } = await api('POST', '/api/app/ai/generate-step', {
+      campaignName: c.name,
+      existingSteps: c.steps,
+      instruction: $('cdAiPrompt').value.trim(),
+    });
+    $('cdAiGenerateBtn').disabled = false;
+    if (!data.ok || !data.step) { $('cdAiNote').textContent = data.error || 'Could not write a step — try again.'; return; }
+    $('cdAiNote').textContent = data.ai ? 'Drafted — review it below, then Save step.' : 'AI is offline, so this is a template follow-up — edit it, then Save step.';
+    $('cdStepEditorRows').innerHTML = '';
+    addStepRow(data.step.type, data.step, $('cdStepEditorRows'));
     $('cdStepNote').textContent = '';
     $('cdStepEditor').hidden = false;
     $('cdStepEditor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
