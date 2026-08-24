@@ -2040,6 +2040,14 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 /* ---------- shared scan/status styles ---------- */
 .ai-scan-row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
 .ai-scan-row .btn-ghost { border-style: dashed; }
+#cdAiPanel .ai-scan-row { align-items: center; margin-bottom: 6px; }
+#cdAiPrompt {
+  flex: 1; font: inherit; font-size: 0.92rem; padding: 11px 14px;
+  border: 1.5px solid var(--line); border-radius: 10px; background: var(--card);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+#cdAiPrompt:focus { outline: none; border-color: var(--crest); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14); }
+#cdAiPrompt::placeholder { color: var(--ink-faint); }
 .ai-status { font-size: 0.84rem; color: var(--ink-soft); min-height: 1.2em; }
 .ai-status.loading { color: var(--crest-deep); font-weight: 600; }
 .ai-status.ok { color: var(--forest); font-weight: 600; }

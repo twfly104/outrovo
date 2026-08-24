@@ -10,6 +10,14 @@ const path = require('path');
 const crypto = require('crypto');
 const dns = require('dns').promises;
 
+// Minimal .env loader (KEY=VALUE lines) so local runs don't need a process manager.
+try {
+  for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
+} catch { /* no .env — real env only */ }
+
 let nodemailer = null;
 try { nodemailer = require('nodemailer'); } catch { /* demo mode only */ }
 
@@ -1976,14 +1984,27 @@ async function aiGenerateStep({ campaignName, existingSteps, instruction }) {
       }
     } catch { /* fall through to local engine */ }
   }
-  // Local fallback: a polite follow-up bump after a 3-day gap.
+  // Local fallback, steered by the instruction: LinkedIn-ish asks get a task,
+  // wait asks get a wait, anything else gets a polite follow-up email.
+  const wants = instruction.toLowerCase();
+  const dayMatch = wants.match(/(\d+)\s*-?\s*day/);
+  const delayMinutes = dayMatch ? Math.max(0, Number(dayMatch[1]) * 1440) : 4320;
+  if (/linked ?in|\btask\b|connect(ion)? request|direct message|profile view/.test(wants)) {
+    const note = /message|dm/.test(wants)
+      ? 'Send a LinkedIn message to {{firstName}} — reference the email, keep it to 2 sentences, one soft ask.'
+      : 'Send a connection request to {{firstName}} at {{company}} — no pitch, short note referencing your email.';
+    return { step: { type: 'task', subject: '', body: '', note, delayMinutes }, ai: false };
+  }
+  if (/\bwait\b|\bdelay\b|\bpause\b/.test(wants)) {
+    return { step: { type: 'wait', subject: '', body: '', note: '', delayMinutes }, ai: false };
+  }
   return {
     step: {
       type: 'email',
       subject: `Re: ${existingSteps.find(s => s.type === 'email')?.subject || campaignName || 'quick question'}`,
       body: `Hi {{firstName}} — just floating this back up. Happy to send over a 2-minute rundown for {{company}} if easier. Worth a look?`,
       note: '',
-      delayMinutes: 4320,
+      delayMinutes,
     },
     ai: false,
   };
