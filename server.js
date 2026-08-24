@@ -1961,6 +1961,7 @@ async function aiGenerateStep({ campaignName, existingSteps, instruction }) {
     if (s.type === 'task') return `${i + 1}. LinkedIn task — ${s.note || ''}`;
     return `${i + 1}. wait ${s.delayMinutes || 0} min`;
   }).join('\n');
+  let aiError = key ? '' : 'no LLM_API_KEY configured';
   if (key) {
     try {
       const res = await fetch(`${base}/chat/completions`, {
@@ -1981,8 +1982,12 @@ async function aiGenerateStep({ campaignName, existingSteps, instruction }) {
         const parsed = JSON.parse(json.choices?.[0]?.message?.content || '{}');
         const [step] = normalizeSteps([parsed.step || {}]);
         if (step && (step.body || step.note || step.type === 'wait')) return { step, ai: true, model };
+        aiError = 'the model returned an unusable step';
+      } else {
+        const errJson = await res.json().catch(() => null);
+        aiError = errJson?.error?.message || `HTTP ${res.status}`;
       }
-    } catch { /* fall through to local engine */ }
+    } catch (err) { aiError = err.message || 'request failed'; }
   }
   // Local fallback, steered by the instruction: LinkedIn-ish asks get a task,
   // wait asks get a wait, anything else gets a polite follow-up email.
@@ -1993,10 +1998,10 @@ async function aiGenerateStep({ campaignName, existingSteps, instruction }) {
     const note = /message|dm/.test(wants)
       ? 'Send a LinkedIn message to {{firstName}} — reference the email, keep it to 2 sentences, one soft ask.'
       : 'Send a connection request to {{firstName}} at {{company}} — no pitch, short note referencing your email.';
-    return { step: { type: 'task', subject: '', body: '', note, delayMinutes }, ai: false };
+    return { step: { type: 'task', subject: '', body: '', note, delayMinutes }, ai: false, aiError };
   }
   if (/\bwait\b|\bdelay\b|\bpause\b/.test(wants)) {
-    return { step: { type: 'wait', subject: '', body: '', note: '', delayMinutes }, ai: false };
+    return { step: { type: 'wait', subject: '', body: '', note: '', delayMinutes }, ai: false, aiError };
   }
   return {
     step: {
@@ -2007,6 +2012,7 @@ async function aiGenerateStep({ campaignName, existingSteps, instruction }) {
       delayMinutes,
     },
     ai: false,
+    aiError,
   };
 }
 

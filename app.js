@@ -720,7 +720,9 @@ function bindCampaignDetail() {
     });
     $('cdAiGenerateBtn').disabled = false;
     if (!data.ok || !data.step) { $('cdAiNote').textContent = data.error || 'Could not write a step — try again.'; return; }
-    $('cdAiNote').textContent = data.ai ? 'Drafted — review it below, then Save step.' : 'AI is offline, so this is a template step — edit it, then Save step.';
+    $('cdAiNote').textContent = data.ai
+      ? 'Drafted — review it below, then Save step.'
+      : `AI call failed (${(data.aiError || 'unknown').slice(0, 140)}) — template step below, edit it, then Save step.`;
     $('cdStepEditorRows').innerHTML = '';
     addStepRow(data.step.type, data.step, $('cdStepEditorRows'));
     $('cdStepNote').textContent = '';
