@@ -1,13 +1,15 @@
-/* Outrovo — minimal design system (~180 lines vs 1,700) */
+/* Outrovo — minimal design system (~180 lines vs 1,700)
+   Warm cream palette shared with the dashboard workpage. */
 
 :root{
-  --bg:#f7f7f8; --bg2:#eef0f2; --card:#fff; --ink:#0b0c0e; --ink2:#3f434a;
-  --ink3:#8a9199; --line:#e4e6ea; --accent:#f97316; --accent2:#ea580c;
+  --bg:#f8f6f2; --bg2:#f0ece3; --card:#fff; --ink:#1b1915; --ink2:#4c473e;
+  --ink3:#948d7f; --line:#e9e3d7; --accent:#f97316; --accent2:#ea580c;
   --dark:#15171b; --sun:#ffc832;
   --fd:'Instrument Sans',sans-serif; --fb:'Instrument Sans',sans-serif;
   --r:16px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
+::selection{background:var(--accent);color:#fff}
 body{font:16px/1.6 var(--fb);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}ul{list-style:none}
 .wrap{max-width:1120px;margin:auto;padding:0 24px;width:min(1120px,calc(100% - 48px))}
@@ -27,7 +29,7 @@ img{max-width:100%;display:block}
 .s{font:13px/1.4em}
 
 /* header */
-.hdr{position:sticky;top:0;z-index:50;background:rgba(247,247,248,.88);backdrop-filter:blur(12px);border-bottom:1px solid transparent;transition:.3s}
+.hdr{position:sticky;top:0;z-index:50;background:rgba(248,246,242,.88);backdrop-filter:blur(12px);border-bottom:1px solid transparent;transition:.3s}
 .hdr.sc{border-color:var(--line);box-shadow:0 6px 20px rgba(0,0,0,.04)}
 .nav{display:flex;align-items:center;gap:4px;height:70px}
 .logo{display:flex;align-items:center;gap:9px;font-family:var(--fd);font-size:1.35rem;font-weight:620}
@@ -47,8 +49,8 @@ img{max-width:100%;display:block}
 .hero-copy>*:nth-child(1){animation-delay:.05s}.hero-copy>*:nth-child(2){animation-delay:.15s}.hero-copy>*:nth-child(3){animation-delay:.25s}.hero-copy>*:nth-child(4){animation-delay:.35s}.hero-copy>*:nth-child(5){animation-delay:.45s}.hero-copy>*:nth-child(6){animation-delay:.55s}.hero-copy>*:nth-child(7){animation-delay:.65s}
 .hero h1{margin:16px 0 18px}
 .hero-sub{color:var(--ink2);font-size:1.08rem;max-width:56ch;margin:0 auto}
-.kw{display:inline-block;padding:0 .04em .07em;font-style:italic;background:linear-gradient(100deg,var(--accent),#e11d48,#f59e0b,var(--accent));background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:kw 9s linear infinite}
-@keyframes kw{to{background-position:300% 0}}
+/* Solid accent italic — same calm treatment as the workpage, no shifting gradient. */
+.kw{display:inline-block;padding:0 .04em .07em;font-style:italic;color:var(--accent)}
 .plist{display:grid;gap:11px;color:var(--ink2);font-size:1rem;margin:24px 0 30px}
 .plist li{display:flex;gap:11px;align-items:flex-start}
 .tick{width:20px;height:20px;border-radius:50%;background:rgba(249,115,22,.12);color:var(--accent);flex:none;display:grid;place-items:center;margin-top:2px;font-size:11px;font-weight:700}
@@ -80,7 +82,7 @@ img{max-width:100%;display:block}
 .appm-s{border-left:1px solid var(--line);padding:18px;background:var(--bg);display:flex;flex-direction:column;gap:14px}
 .kpi strong{display:block;font-family:var(--fd);font-size:1.65rem;line-height:1}.kpi span{font-size:.72rem;color:var(--ink3);text-transform:uppercase;letter-spacing:.07em;font-weight:600}.kpi .u{color:#2e9e5b;font-size:.78rem;font-weight:700}
 .bars{display:flex;align-items:flex-end;gap:6px;height:66px;margin-top:4px}
-.bars i{flex:1;border-radius:4px 4px 0 0;background:linear-gradient(180deg,#e3dcf9,#c5b8f0)}
+.bars i{flex:1;border-radius:4px 4px 0 0;background:linear-gradient(180deg,#efe7d8,#ddd2bd)}
 .bars i:nth-child(even){background:linear-gradient(180deg,#ffd2a3,var(--accent));animation:g 1.1s cubic-bezier(.22,1,.36,1) both}
 @keyframes g{from{transform:scaleY(0)}}
 .bars i:nth-child(1){height:35%;animation-delay:.5s}.bars i:nth-child(2){height:52%;animation-delay:.6s}.bars i:nth-child(3){height:44%;animation-delay:.7s}.bars i:nth-child(4){height:66%;animation-delay:.8s}.bars i:nth-child(5){height:58%;animation-delay:.9s}.bars i:nth-child(6){height:82%;animation-delay:1s}.bars i:nth-child(7){height:95%}
