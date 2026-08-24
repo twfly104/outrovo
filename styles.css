@@ -139,20 +139,8 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 
 .btn-s { padding: 10px 20px; font-size: 0.9rem; }
 
-/* ---------- Header — full-width fixed bar with hairline divider ---------- */
-.site-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  background: rgba(247, 247, 248, 0.85);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--line);
-  transition: background 0.3s;
-}
-.site-header.is-scrolled { background: rgba(247, 247, 248, 0.95); }
+/* ---------- Header — static bar with a hairline bottom divider ---------- */
+.site-header { border-bottom: 1px solid var(--line); }
 
 .nav {
   display: flex;

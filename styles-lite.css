@@ -10,7 +10,6 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 ::selection{background:var(--accent);color:#fff}
-html{background:var(--bg)}
 body{font:16px/1.6 var(--fb);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}ul{list-style:none}
 .wrap{max-width:1120px;margin:auto;padding:0 24px;width:min(1120px,calc(100% - 48px))}
@@ -29,16 +28,10 @@ img{max-width:100%;display:block}
 .btn-l:hover{background:var(--bg2)}
 .s{font:13px/1.4em}
 
-/* header — full-width fixed bar with a hairline divider, Supabase-style.
-   The bar stays pinned edge-to-edge; the border separates it from the
-   page while content scrolls beneath. */
-.hdr{position:fixed;top:0;left:0;right:0;z-index:50;
-  background:rgba(248,246,242,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--line);transition:background .3s}
-.hdr.sc{background:rgba(248,246,242,.95)}
-body{padding-top:64px}
-/* anchor jumps must clear the fixed header */
-section[id]{scroll-margin-top:84px}
+/* header — static bar, no stick/scroll JS. Separator is a hairline
+   border; anchors still jump below it. */
+.hdr.b{position:static;background:transparent;border-bottom:1px solid var(--line)}
+section[id]{scroll-margin-top:24px}
 .nav{display:flex;align-items:center;gap:26px;height:64px}
 .logo{display:flex;align-items:center;gap:9px;font-family:var(--fd);font-size:1.22rem;font-weight:620;transition:opacity .2s}
 .logo:hover{opacity:.72}

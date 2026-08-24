@@ -310,14 +310,7 @@
         a.style.maxHeight = a.scrollHeight + 'px';
       });
     });
-    // start at top on reload — avoids a paint flash with the fixed pill header
-    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-    scrollTo(0, 0);
-    // header shadow (set initial state too — scroll doesn't fire on restore)
-    const hdr = document.getElementById('hdr');
-    const syncHdr = () => hdr.classList.toggle('sc', scrollY > 8);
-    addEventListener('scroll', syncHdr, { passive: true });
-    syncHdr();
+    // header is static — nothing to sync
   </script>
   <script>
     // Landing assistant — every answer below is grounded in this site's own
