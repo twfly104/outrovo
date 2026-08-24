@@ -679,15 +679,21 @@ async function callEnrichment(email, name = {}, user = null) {
 }
 function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
 
-// ---------- lead finder (Apollo / builtin guess+verify) ----------
+// ---------- lead finder (Apollo → Hunter.io → builtin guess+verify) ----------
+// Provider priority: a configured Apollo key wins (full ICP search); without
+// one, Hunter.io (domain-search over target domains); the built-in crawler
+// is always the last resort so search never hard-fails on missing keys.
 function leadFinderProvider(user) {
   if (userApolloKey(user) || process.env.APOLLO_API_KEY) return 'apollo';
+  if (process.env.HUNTER_API_KEY) return 'hunter';
   return null;
 }
-const LEAD_SOURCES = ['apollo', 'builtin'];
 function leadFinderSourceOrder(user) {
-  const p = leadFinderProvider(user);
-  return p ? [p, 'builtin'] : ['builtin'];
+  const order = [];
+  if (userApolloKey(user) || process.env.APOLLO_API_KEY) order.push('apollo');
+  if (process.env.HUNTER_API_KEY) order.push('hunter');
+  order.push('builtin');
+  return order;
 }
 
 const APOLLO_BASE = () => (process.env.APOLLO_BASE_URL || 'https://api.apollo.io').replace(/\/$/, '');
@@ -768,6 +774,50 @@ function leadFinderDomains(keywords) {
   return (keywords || '')
     .split(/[,\s]+/).map(s => s.trim().replace(/^@/, '').replace(/^https?:\/\//, '').split('/')[0])
     .filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)).slice(0, 5);
+}
+
+// Hunter.io domain-search: no ICP search like Apollo — it returns the people
+// Hunter has on file for a domain, so it needs target domains in the
+// keywords (same contract as the built-in crawler). 1 credit per domain
+// per 10 emails, so cap at 3 domains per search.
+const HUNTER_BASE = () => (process.env.HUNTER_BASE_URL || 'https://api.hunter.io').replace(/\/$/, '');
+const EXEC_TITLES = /\b(founder|co-?founder|ceo|cto|cfo|coo|cmo|owner|president|partner|principal|chief|vp|vice president|head of|director)\b/i;
+async function hunterSearchLeads(f, perPage) {
+  const domains = leadFinderDomains(f.keywords).slice(0, 3);
+  if (!domains.length) {
+    const err = new Error('Hunter.io searches by company domain — add target domains (e.g. acme.com) to Ideal customer, or set APOLLO_API_KEY for full ICP search.');
+    err.code = 'NO_DOMAINS';
+    throw err;
+  }
+  const seniority = EXEC_TITLES.test(f.title || '') ? '&seniority=executive' : '';
+  const out = [];
+  const seen = new Set();
+  for (const domain of domains) {
+    if (out.length >= perPage * 3) break;
+    const res = await fetch(`${HUNTER_BASE()}/v2/domain-search?domain=${encodeURIComponent(domain)}&type=personal&limit=10${seniority}&api_key=${encodeURIComponent(process.env.HUNTER_API_KEY)}`);
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const err = new Error(`Hunter.io: ${data?.errors?.[0]?.details || `request failed (${res.status})`}`);
+      if (res.status === 401 || res.status === 403) err.code = 'INVALID_KEY';
+      else if (res.status === 429) err.code = 'RATE_LIMITED';
+      throw err;
+    }
+    for (const e of data?.data?.emails || []) {
+      const email = (e.value || '').trim().toLowerCase();
+      if (!isEmail(email) || seen.has(email)) continue;
+      if (e.verification?.status && e.verification.status !== 'valid') continue;
+      seen.add(email);
+      out.push({
+        email, source: 'hunter',
+        firstName: e.first_name || '', lastName: e.last_name || '',
+        company: data.data.organization || domain,
+        title: e.position || '', linkedinUrl: e.linkedin || '',
+        size: '', country: '',
+        emailStatus: e.verification?.status || '',
+      });
+    }
+  }
+  return out;
 }
 
 const GENERIC_LOCALS = new Set(['info', 'contact', 'hello', 'support', 'sales', 'team', 'office', 'mail', 'admin', 'no-reply', 'noreply']);
@@ -856,14 +906,16 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
   for (const src of order) {
     try {
       if (src === 'apollo') leads = await apolloSearchLeads(f, perPage, user);
+      else if (src === 'hunter') leads = await hunterSearchLeads(f, perPage);
       else leads = await builtinSearchLeads(f, perPage, sessionEmail);
       if (leads.length) break;
     } catch (err) {
-      // A free-plan or rejected Apollo key is a config issue, not a search
-      // failure — the built-in finder already covers the search, so report
-      // it as a soft warning instead of a provider error.
-      if (err.code === 'API_INACCESSIBLE') warnings.push('Apollo key has no API access — used the built-in finder instead.');
-      else if (err.code === 'INVALID_KEY') warnings.push('Apollo key was rejected — used the built-in finder instead.');
+      // A free-plan or rejected provider key is a config issue, not a search
+      // failure — the next source covers the search, so report it as a soft
+      // warning instead of a provider error.
+      if (err.code === 'API_INACCESSIBLE') warnings.push('Apollo key has no API access — fell back to the next source.');
+      else if (err.code === 'INVALID_KEY') warnings.push(`${src === 'hunter' ? 'Hunter.io' : 'Apollo'} key was rejected — fell back to the next source.`);
+      else if (err.code === 'NO_DOMAINS') warnings.push(err.message);
       else errors.push(`${src}: ${err.message}`);
     }
   }
@@ -876,63 +928,6 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
   if (!leads.length) return { leads: [], provider: null, errors, warnings };
   const verified = await verifyLeadBatch(leads, perPage);
   return { leads: verified.slice(0, perPage), provider: leads[0].source, errors, warnings };
-}
-
-// ---------- lead finder autopilot ----------
-// Saved search criteria that runs once per UTC day inside the engine tick:
-// finds fresh leads, keeps only MX-verified deliverables, and auto-enrolls
-// them into the chosen campaign. Daily cap + monthly quota guards prevent
-// silent credit burn; the first run of each day logs an activity event.
-const AUTOPILOT_MAX_DAILY = 10;
-function leadFinderAutopilot(user) {
-  const ap = user.leadFinderAutopilot;
-  if (!ap || !ap.enabled || !ap.campaignId || !ap.keywords?.trim()) return null;
-  return ap;
-}
-
-async function autopilotRun() {
-  const users = load('users');
-  const today = new Date().toISOString().slice(0, 10);
-  let changed = false;
-  for (const user of users) {
-    const ap = leadFinderAutopilot(user);
-    if (!ap) continue;
-    if (ap.lastRunDate === today) continue;
-    const plan = planOf(user);
-    ap.lastRunDate = today;
-    changed = true;
-    if (plan.expired) { ap.lastNote = 'Trial expired — autopilot paused.'; continue; }
-    const usage = leadFinderUsage(user, plan);
-    if (usage.used >= usage.quota) { ap.lastNote = `Monthly quota reached (${usage.quota}). Autopilot resumes next month.`; continue; }
-    const dailyCap = Math.min(Math.max(1, Number(ap.dailyLimit) || 5), AUTOPILOT_MAX_DAILY);
-    const limit = Math.min(dailyCap, usage.quota - usage.used);
-    try {
-      const found = await searchLeads({
-        keywords: ap.keywords.slice(0, 200), title: (ap.title || '').slice(0, 120),
-        size: ap.size || '', location: (ap.location || '').slice(0, 120),
-      }, limit, user.email, user);
-      user.leadFinder.used = usage.used + Math.min(found.leads.length, limit);
-      // Guardrail: only auto-enroll MX-verified deliverables — never risk
-      // the sender's domain reputation on unknown/invalid addresses.
-      const validOnly = found.leads.filter(l => l.verified === 'valid');
-      const result = validOnly.length ? enrollLeads(user.email, ap.campaignId, validOnly) : { added: 0 };
-      ap.lastNote = `${result.added || 0} new lead${result.added === 1 ? '' : 's'} auto-enrolled from ${found.leads.length} found into "${result.campaignName || 'your campaign'}"`;
-      if (!result.added) logEvent('lead-finder', `Autopilot: ${ap.lastNote}`, {}, user.email);
-      // Wake new prospects immediately if the campaign is already active.
-      const camp = load('campaigns').find(c => c.id === ap.campaignId && c.owner === user.email);
-      if (camp && camp.status === 'active' && result.added) {
-        const prospects = load('prospects');
-        let woke = false;
-        for (const p of prospects.filter(p => p.campaignId === camp.id && !p.finished && p.nextRunAt == null)) {
-          p.stepIndex = 0; p.nextRunAt = Date.now(); woke = true;
-        }
-        if (woke) save('prospects', prospects);
-      }
-    } catch (err) {
-      ap.lastNote = `Autopilot error: ${err.message}`;
-    }
-  }
-  if (changed) save('users', users);
 }
 
 function leadFinderUsage(user, plan) {
@@ -2286,7 +2281,6 @@ function engineTick() {
     }
   }
   if (changed) { save('prospects', prospects); save('tasks', tasks); }
-  autopilotRun().catch(() => {});
   digestTick();
 }
 
@@ -3136,13 +3130,11 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     // makes no sense as a company website.
     const domain = (session.email.split('@')[1] || '').toLowerCase();
     const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'hotmail.com', 'outlook.com', 'live.com', 'msn.com', 'aol.com', 'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com', 'pm.me', 'qq.com', '163.com', '126.com', 'yeah.net', 'foxmail.com', 'mail.com', 'gmx.com', 'gmx.net', 'zoho.com', 'yandex.com', 'yandex.ru']);
-    const seed = user.leadFinderAutopilot?.keywords || FREE_MAIL.has(domain)
-      ? null
-      : { website: domain.slice(0, 120) };
+    const seed = FREE_MAIL.has(domain) ? null : { website: domain.slice(0, 120) };
     send(res, 200, {
       ok: true, provider: leadFinderProvider(user) || 'builtin',
       used: usage.used, quota: usage.quota, month: usage.month,
-      autopilot: user.leadFinderAutopilot || null, seed,
+      seed,
       apolloKeySet: Boolean(userApolloKey(user)),
     });
   },
@@ -3180,36 +3172,6 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     } catch {
       send(res, 502, { ok: false, error: 'Could not read that site — check the URL or fill manually.' });
     }
-  },
-
-  'PUT /api/app/lead-finder/autopilot': async (req, res) => {
-    const session = requireAuth(req, res);
-    if (!session) return;
-    const b = await readBody(req);
-    const users = load('users');
-    const user = users.find(u => u.email === session.email);
-    if (!user) return send(res, 404, { ok: false, error: 'User not found' });
-    const enabled = !!b.enabled;
-    const ap = {
-      enabled,
-      keywords: (b.keywords || user.leadFinderAutopilot?.keywords || '').slice(0, 200),
-      title: (b.title || user.leadFinderAutopilot?.title || '').slice(0, 120),
-      size: b.size || user.leadFinderAutopilot?.size || '',
-      location: (b.location || user.leadFinderAutopilot?.location || '').slice(0, 120),
-      campaignId: b.campaignId || user.leadFinderAutopilot?.campaignId || '',
-      dailyLimit: Math.min(Math.max(1, parseInt(b.dailyLimit, 10) || user.leadFinderAutopilot?.dailyLimit || 5), AUTOPILOT_MAX_DAILY),
-      lastRunDate: user.leadFinderAutopilot?.lastRunDate || null,
-      lastNote: user.leadFinderAutopilot?.lastNote || null,
-    };
-    if (enabled) {
-      if (!ap.keywords.trim()) return send(res, 400, { ok: false, error: 'Enter target domains or keywords for the autopilot search.' });
-      const campaign = load('campaigns').find(c => c.id === ap.campaignId && c.owner === session.email);
-      if (!campaign) return send(res, 400, { ok: false, error: 'Choose one of your campaigns for auto-enrollment.' });
-    }
-    user.leadFinderAutopilot = ap;
-    save('users', users);
-    logEvent('lead-finder', enabled ? `Lead Finder autopilot ON — up to ${ap.dailyLimit} verified leads/day` : 'Lead Finder autopilot off', {}, session.email);
-    send(res, 200, { ok: true, autopilot: ap });
   },
 
   'POST /api/app/lead-finder/search': async (req, res) => {

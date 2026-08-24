@@ -43,10 +43,11 @@ This is the core of the product. Don't self-host SMTP on day one — deliverabil
 
 ## Optional (add when revenue justifies)
 
-### 7. Lead Finder data source: Apollo
+### 7. Lead Finder data source: Apollo / Hunter.io
 - **Apollo**: Basic $49/mo → 900 credits. Largest dataset, integrates with the enrich feature.
-- **The Free plan has NO API access** — `mixed_people/search` and `people/match` return `API_INACCESSIBLE`. A free key is fine to leave configured (the app falls back to the built-in finder and shows an actionable error), but Lead Finder will not return Apollo data until you upgrade.
-- **Recommendation: don't buy at first.** The built-in fallback (crawl target company domains + MX-verify) works; let early users use it and subscribe only when Lead Finder sees real usage. This is a variable cost — let it track revenue.
+- **The Free plan has NO API access** — `mixed_people/search` and `people/match` return `API_INACCESSIBLE`. A free key is fine to leave configured (the app falls back to the next source and shows an actionable error), but Lead Finder will not return Apollo data until you upgrade.
+- **Hunter.io**: set `HUNTER_API_KEY` — used automatically when no Apollo key is configured. Works on the **Free plan (25 credits/mo, no card)** — 1 credit per domain per 10 emails, searches cap at 3 domains. Note: Hunter searches *by company domain*, so users must put target domains (e.g. `acme.com`) in Ideal customer; for free-text ICP search only Apollo works.
+- **Recommendation: start with Hunter Free + the built-in crawler.** Subscribe to Apollo only when Lead Finder sees real usage. This is a variable cost — let it track revenue.
 
 ### 8. Google/Microsoft OAuth apps — $0
 - Free to register, but `gmail.send` is a *sensitive scope* → Google OAuth verification review required.
@@ -85,7 +86,8 @@ One-time: domain $10–15/yr, Google OAuth review (free, takes time).
 | `LLM_API_KEY` (+ optional `LLM_BASE_URL`, `LLM_MODEL`) | Real AI for assistant / sequence writer / scan-fill / reply drafts | Recommended |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | One-click Gmail connect | Optional |
 | `MS_CLIENT_ID` / `MS_CLIENT_SECRET` | One-click Microsoft connect | Optional |
-| `APOLLO_API_KEY` | Lead Finder data (else domain-crawl fallback; needs a paid Apollo plan) | Later |
+| `APOLLO_API_KEY` | Lead Finder ICP search (needs a paid Apollo plan; else Hunter/builtin fallback) | Later |
+| `HUNTER_API_KEY` | Lead Finder fallback via Hunter.io domain-search (Free plan works, 25 credits/mo) | Recommended |
 | `INBOUND_DOMAIN` | Reply-routing addresses for the unified inbox | Optional |
 
 Also: Render persistent disk mounted at `DATA_DIR`, and health check path `/api/health`.

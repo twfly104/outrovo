@@ -1439,7 +1439,7 @@ function canonTitle(raw) {
 function fillTitleEl(val) { const el = $('lfTitle'); if (el && !el.value && val) { el.value = canonTitle(val); return true; } return false; }
 
 // Tag inputs — chips backed by a hidden comma-joined input (the value the
-// search/autopilot code already reads). Enter/comma/paste adds; × removes.
+// search code already reads). Enter/comma/paste adds; × removes.
 // Country picker — every country built in, searchable. Region shortcuts sit
 // on top for broad targeting ("Europe" was already a supported preset).
 const REGION_PRESETS = ['Europe', 'North America', 'Latin America', 'Asia-Pacific', 'Middle East', 'Africa'];
@@ -1633,25 +1633,11 @@ $('lfTopupBtn')?.addEventListener('click', () => { $('creditBadge').click(); });
 async function loadLeadFinderStatus() {
   const { data } = await api('GET', '/api/app/lead-finder/status');
   if (!data.ok) return;
-  const src = data.provider === 'apollo' ? (data.apolloKeySet ? 'via your Apollo key' : 'via Apollo') : 'built-in verify';
-  const ap = data.autopilot;
-  $('leadFinderStatus').textContent = `${data.used}/${data.quota} credits used this month · ${src}${ap?.enabled ? ' · auto-pilot on' : ''}`;
+  const src = data.provider === 'apollo'
+    ? (data.apolloKeySet ? 'via your Apollo key' : 'via Apollo')
+    : data.provider === 'hunter' ? 'via Hunter.io' : 'built-in verify';
+  $('leadFinderStatus').textContent = `${data.used}/${data.quota} credits used this month · ${src}`;
   $('lfTopupBtn').hidden = false;
-  const toggle = $('autopilotEnabled');
-  toggle.checked = !!ap?.enabled;
-  $('autopilotSettings').hidden = !ap?.enabled;
-  $('apCampaign').innerHTML = campaigns.map(c => `<option value="${c.id}" ${ap?.campaignId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
-  if (ap?.dailyLimit) $('apDailyLimit').value = String(ap.dailyLimit);
-  $('autopilotNote').textContent = ap?.enabled && ap.lastNote ? `Last run: ${ap.lastNote}` : '';
-  // Auto-fill the search form from the saved autopilot criteria — only into
-  // fields the user hasn't already typed into, so it never clobbers edits.
-  const fill = (src) => {
-    if (src?.keywords && !$('lfKeywords').value) $('lfKeywords').value = src.keywords;
-    fillTitleEl(src?.title);
-    if (src?.size) $('lfSize').value = src.size;
-    if (src?.location && !$('lfLocation').value) $('lfLocation').value = src.location;
-  };
-  fill(ap || data.seed);
   syncDetected();
   syncChips();
 
@@ -1736,31 +1722,6 @@ async function applyLeadFinderPrefill() {
 // Industry select + free-text ICP feed Apollo's single keywords field.
 function leadSearchKeywords() {
   return [$('lfIndustry')?.value.trim(), $('lfKeywords').value.trim()].filter(Boolean).join(', ');
-}
-
-async function saveAutopilot(enabled) {
-  const body = {
-    enabled,
-    keywords: leadSearchKeywords(),
-    title: canonTitle($('lfTitle').value),
-    size: $('lfSize').value,
-    location: $('lfLocation').value.trim(),
-    campaignId: $('apCampaign').value,
-    dailyLimit: Number($('apDailyLimit').value || 5),
-  };
-  const { status, data } = await api('PUT', '/api/app/lead-finder/autopilot', body);
-  if (status !== 200 || !data.ok) {
-    $('autopilotEnabled').checked = false;
-    $('autopilotSettings').hidden = true;
-    $('autopilotNote').textContent = '';
-    $('leadFindNote').textContent = data.error || 'Could not save autopilot.';
-    toast(data.error || 'Could not save autopilot.', 'err');
-    return;
-  }
-  $('autopilotNote').textContent = enabled
-    ? `Auto-pilot on — up to ${data.autopilot.dailyLimit} verified leads/day into this campaign. First run on the next engine pass.`
-    : 'Auto-pilot off.';
-  loadLeadFinderStatus();
 }
 
 function intelCardHtml(d) {
@@ -1878,22 +1839,6 @@ function bindLeadFinder() {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !$('intelDrawer').hidden) closeLeadIntel();
   });
-  $('autopilotEnabled').addEventListener('change', e => {
-    // Auto-pilot enrolls into a campaign — with none, enabling would just
-    // bounce off the server and silently flip back. Say why instead.
-    if (e.target.checked && !campaigns.length) {
-      e.target.checked = false;
-      $('autopilotSettings').hidden = true;
-      toast('Create a campaign first — auto-pilot needs one to add leads to.', 'err');
-      $('leadFindNote').textContent = 'Auto-pilot needs a campaign. Create one in Campaigns, then turn auto-pilot on.';
-      return;
-    }
-    $('autopilotSettings').hidden = !e.target.checked;
-    if (e.target.checked) { $('apCampaign').innerHTML = campaigns.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join(''); }
-    saveAutopilot(e.target.checked);
-  });
-  $('apCampaign').addEventListener('change', () => { if ($('autopilotEnabled').checked) saveAutopilot(true); });
-  $('apDailyLimit').addEventListener('change', () => { if ($('autopilotEnabled').checked) saveAutopilot(true); });
   $('leadFindBtn').addEventListener('click', async () => {
     const btn = $('leadFindBtn');
     const note = $('leadFindNote');

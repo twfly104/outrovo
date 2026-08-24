@@ -1602,11 +1602,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .ab-cell { color: var(--ink-soft); }
 .ab-cell.ab-winner { color: #1a7a4a; font-weight: 700; }
 
-.autopilot-row { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
-.autopilot-toggle { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.92rem; cursor: pointer; color: var(--ink); }
-.autopilot-toggle input { accent-color: var(--crest, #f97316); width: 16px; height: 16px; cursor: pointer; }
-.autopilot-settings { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--cream, #f7f7f8); border: 1px solid var(--line); }
-.autopilot-settings .muted-note { margin: 8px 0 4px; font-size: 0.82rem; }
+
 #leadResults { margin-top: 18px; }
 #leadTable td:first-child, #leadTable th:first-child { width: 34px; }
 .app-body .field textarea {

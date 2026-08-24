@@ -33,8 +33,14 @@ services:
         sync: false
       # Powers Lead Finder search + prospect enrichment via Apollo. Paid
       # plans only — the Free plan has no API access; without a paid key the
-      # app uses its built-in domain-crawl + MX-verify fallback.
+      # app falls back to Hunter.io, then its built-in domain-crawl +
+      # MX-verify fallback.
       - key: APOLLO_API_KEY
+        sync: false
+      # Lead Finder fallback source when no Apollo key is set: Hunter.io
+      # domain-search over the target domains in the search keywords. Works
+      # on Hunter's Free plan (25 credits/mo) — no card required.
+      - key: HUNTER_API_KEY
         sync: false
       # Powers the landing-page "Ask us" assistant (POST /api/assistant) plus
       # the in-app AI sequence writer, site-scan prefill, reply-intent, and

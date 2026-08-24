@@ -96,10 +96,14 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   `GET /api/app/oauth/:id/start` (302 to consent, HMAC state binds session),
   `GET /api/app/oauth/:id/callback` (upserts sender, postMessages result to
   the opener popup). `publicSender` returns `oauth:true` and strips tokens.
-- `APOLLO_API_KEY` — powers Lead Finder search
-  (Campaigns page), including optional daily auto-pilot
-  (`PUT /api/app/lead-finder/autopilot`). Without it, Lead Finder falls back to crawling the
-  target company domains the user types in and MX-verifies what it finds.
+- Lead Finder source priority: Apollo (BYOK user key or `APOLLO_API_KEY`) →
+  Hunter.io (`HUNTER_API_KEY`) → built-in domain crawler. First source that
+  returns leads wins; rejected/expired keys degrade to a soft `warnings[]`
+  entry and the search falls through to the next source.
+- `APOLLO_API_KEY` — powers Lead Finder ICP search
+  (Find Leads page). Without it, Lead Finder tries Hunter.io, then falls
+  back to crawling the target company domains the user types in and
+  MX-verifies what it finds.
   BYOK: a user can also connect their own Apollo key in Settings > Lead data
   source (`GET/POST/DELETE /api/app/integrations/apollo-key`). It is stored
   AES-256-GCM encrypted on the user record (`apolloKeyEnc`, via
@@ -112,15 +116,24 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   and match endpoints return `API_INACCESSIBLE`; `apolloError()` surfaces
   that as an actionable message and search falls through to builtin.
   `APOLLO_BASE_URL` env overrides the API origin for mock-server tests.
+- `HUNTER_API_KEY` — Hunter.io domain-search fallback
+  (`GET /v2/domain-search?domain=…&type=personal&limit=10`, plus
+  `seniority=executive` when the title filter matches founder/C-level
+  terms). Hunter has no ICP search, so it needs target domains in the
+  keywords (same contract as the built-in crawler); with none it throws
+  `NO_DOMAINS`, surfaced as a warning telling the user to add domains or
+  set an Apollo key. Only `verification.status === 'valid'` emails are
+  kept. 401/403 → `INVALID_KEY` soft warning; `HUNTER_BASE_URL` overrides
+  the API origin for tests. Hunter Free = 25 credits/mo (1 per domain per
+  10 emails), so searches cap at 3 domains.
   Empty-search responses carry `errors[]` — the UI shows
   them instead of the generic "no leads matched" note.
   Quotas per plan: trial 25, starter 100, growth 1,000, scale/agency 10,000
   credits/month (1 credit per returned lead), tracked on `user.leadFinder`.
   `GET /api/app/lead-finder/status` also returns `seed = { website }` (the
   signup email's domain, scan box only Г”Г‡Г¶ never target keywords, so the user
-  never ends up searching for themselves) when autopilot has no saved
-  criteria; the form auto-fills from `autopilot` first, then `seed`, then
-  `GET /api/app/lead-finder/prefill` (scans the signup domain's site to
+  never ends up searching for themselves); the form auto-fills from `seed`,
+  then `GET /api/app/lead-finder/prefill` (scans the signup domain's site to
   infer keywords/title/size/location; uses LLM when `LLM_API_KEY` is set,
   heuristic regexes otherwise; fetches with `Accept-Language: en` to
   localize consistent results; sizes returned match the UI select options
