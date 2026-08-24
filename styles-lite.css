@@ -28,10 +28,15 @@ img{max-width:100%;display:block}
 .btn-l:hover{background:var(--bg2)}
 .s{font:13px/1.4em}
 
-/* header — static bar, no stick/scroll JS. Separator is a hairline
-   border; anchors still jump below it. */
-.hdr.b{position:static;background:transparent;border-bottom:1px solid var(--line)}
-section[id]{scroll-margin-top:24px}
+/* header — fixed bar pinned to the top, Supabase-style: it follows the
+   scroll; a hairline border plus cream-tinted blurred backdrop separates
+   it from the content sliding underneath */
+.hdr{position:fixed;top:0;left:0;right:0;z-index:50;
+  background:rgba(248,246,242,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line)}
+body{padding-top:64px}
+/* anchor jumps must clear the fixed header */
+section[id]{scroll-margin-top:84px}
 .nav{display:flex;align-items:center;gap:26px;height:64px}
 .logo{display:flex;align-items:center;gap:9px;font-family:var(--fd);font-size:1.22rem;font-weight:620;transition:opacity .2s}
 .logo:hover{opacity:.72}
