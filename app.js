@@ -1582,30 +1582,38 @@ function intelCardHtml(d) {
     </div>`;
 }
 
-async function toggleLeadIntel(btn, row) {
+let leadIntelCache = {};
+
+async function openLeadIntel(btn) {
   const i = Number(btn.dataset.intel);
   const lead = leadFinderLeads[i];
-  const tbody = row.parentNode;
-  const existing = tbody.querySelector(`tr[data-intel-row="${i}"]`);
-  if (existing) { existing.remove(); btn.textContent = 'Intel'; return; }
-  btn.disabled = true;
-  btn.textContent = '…';
-  const { status, data } = await api('POST', '/api/app/lead-finder/intel', {
-    company: lead.company, email: lead.email, pitch: servicePitch, title: lead.title,
-  });
-  btn.disabled = false;
-  btn.textContent = 'Intel';
-  const tr = document.createElement('tr');
-  tr.dataset.intelRow = i;
-  const content = status === 200 && data.ok
-    ? intelCardHtml(data)
-    : `<div class="intel-card"><p class="intel-empty">${esc(data.error || 'Research failed.')}</p></div>`;
-  tr.innerHTML = `<td colspan="7">${content}</td>`;
-  row.after(tr);
+  const drawer = $('intelDrawer');
+  const body = $('intelDrawerBody');
+  $('intelDrawerTitle').textContent = lead.company || lead.email;
+  body.innerHTML = '<div class="intel-card"><p class="intel-empty">Researching…</p></div>';
+  drawer.hidden = false;
+  requestAnimationFrame(() => drawer.classList.add('open'));
+  let res = leadIntelCache[i];
+  if (!res) {
+    res = await api('POST', '/api/app/lead-finder/intel', {
+      company: lead.company, email: lead.email, pitch: servicePitch, title: lead.title,
+    });
+    if (res.status === 200 && res.data.ok) leadIntelCache[i] = res;
+  }
+  body.innerHTML = res.status === 200 && res.data.ok
+    ? intelCardHtml(res.data)
+    : `<div class="intel-card"><p class="intel-empty">${esc(res.data.error || 'Research failed.')}</p></div>`;
+}
+
+function closeLeadIntel() {
+  const drawer = $('intelDrawer');
+  drawer.classList.remove('open');
+  setTimeout(() => { if (!drawer.classList.contains('open')) drawer.hidden = true; }, 280);
 }
 
 function renderLeadResults(leads) {
   leadFinderLeads = leads;
+  leadIntelCache = {};
   const box = $('leadResults');
   if (!leads.length) { box.hidden = true; return; }
   box.hidden = false;
@@ -1622,12 +1630,17 @@ function renderLeadResults(leads) {
     </tr>`).join('');
   tbody.onclick = e => {
     const btn = e.target.closest('[data-intel]');
-    if (btn) toggleLeadIntel(btn, btn.closest('tr'));
+    if (btn) openLeadIntel(btn);
   };
   $('leadEnrollCampaign').innerHTML = campaigns.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
 }
 
 function bindLeadFinder() {
+  $('closeIntelDrawer').addEventListener('click', closeLeadIntel);
+  $('intelDrawerBackdrop').addEventListener('click', closeLeadIntel);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !$('intelDrawer').hidden) closeLeadIntel();
+  });
   $('autopilotEnabled').addEventListener('change', e => {
     $('autopilotSettings').hidden = !e.target.checked;
     if (e.target.checked) { $('apCampaign').innerHTML = campaigns.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join(''); }

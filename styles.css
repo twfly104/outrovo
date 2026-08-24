@@ -2391,3 +2391,28 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .app-body .step-row,
 .app-body .lf-chip,
 .app-body .topup-pack { box-shadow: none; }
+
+/* ---------- Intel drawer (right slide-out) ---------- */
+.intel-drawer { position: fixed; inset: 0; z-index: 160; }
+.intel-drawer[hidden] { display: none; }
+.intel-drawer-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(11, 12, 14, 0.35);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.intel-drawer.open .intel-drawer-backdrop { opacity: 1; }
+.intel-drawer-panel {
+  position: absolute; top: 0; right: 0; height: 100%;
+  width: min(460px, 100%);
+  background: var(--card, #fff);
+  border-left: 1px solid var(--line, #e4e6ea);
+  transform: translateX(100%);
+  transition: transform 0.28s var(--ease-out, ease);
+  overflow-y: auto;
+  padding: 22px 24px 40px;
+}
+.intel-drawer.open .intel-drawer-panel { transform: none; }
+.intel-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.intel-drawer-head h2 { margin: 0; font-size: 1.15rem; }
+.app-body .intel-card { background: var(--paper); border: 1px solid var(--line); box-shadow: none; }
