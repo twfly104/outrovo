@@ -44,21 +44,22 @@
 
       <!-- Overview -->
       <section class="app-page" id="page-overview">
-        <h1>Overview</h1>
-        <div class="app-card-block">
-          <h2>At a glance</h2>
-          <div class="stat-grid" id="statGrid"></div>
+        <div class="ov-head">
+          <h1 id="ovGreeting">Good morning</h1>
+          <p class="ov-sub">Here's what's moving across your outbound motion today.</p>
         </div>
-        <div class="app-card-block">
-          <div class="li-meter-head">
-            <h2>LinkedIn to-dos</h2>
-            <span id="liMeter"></span>
+        <div class="stat-grid ov-grid" id="statGrid"></div>
+        <div class="ov-lower">
+          <div class="app-card-block">
+            <div class="ov-chart-head">
+              <h2>Sending volume</h2><span class="ov-label">LAST 14 DAYS</span>
+            </div>
+            <div class="ov-chart" id="ovChart"></div>
           </div>
-          <ul class="event-list" id="taskList"></ul>
-        </div>
-        <div class="app-card-block">
-          <h2>Event feed</h2>
-          <ul class="event-list" id="eventList"></ul>
+          <div class="app-card-block">
+            <h2>Recent replies</h2>
+            <ul class="event-list ov-replies" id="ovReplies"></ul>
+          </div>
         </div>
       </section>
 

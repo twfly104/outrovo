@@ -21,6 +21,25 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const fmtTime = t => new Date(t).toLocaleString();
 
 let me, campaigns = [], selectedCampaign = null;
+const AV_COLORS = ['#F2501E', '#16a34a', '#a855f7', '#0e1626', '#b3762e', '#d15554', '#2563eb'];
+function avColor(name) { const h = [...(name || '')].reduce((a, c) => a + c.charCodeAt(0), 0); return AV_COLORS[h % AV_COLORS.length]; }
+function dayOfWeekLetter(d) { return ['S', 'M', 'T', 'W', 'T', 'F', 'S'][new Date(d).getDay()]; }
+function greetingName() {
+  return (me?.firstName || me?.name || me?.company || '').split(/[ .]/)[0] || '';
+}
+function greeting() {
+  const h = new Date().getHours();
+  const w = h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
+  const n = greetingName();
+  return n ? `Good ${w}, ${n}` : `Good ${w}`;
+}
+function smallDisc(data) {
+  if (data == null || data === 0) return '—';
+  const v = Number(data);
+  if (v > 0) return `<span class="sd-up">▲ ${v.toFixed(1)}</span>`;
+  if (v < 0) return `<span class="sd-dn">▼ ${Math.abs(v).toFixed(1)}</span>`;
+  return '—';
+}
 // Remembered from the last successful Scan & fill / prefill — used to
 // personalize each lead's ✦ Intel research angle.
 let servicePitch = '';
@@ -117,7 +136,7 @@ function showPage(name) {
   if (name === 'inbox') loadInbox();
   if (name === 'campaigns') { backToList(); loadCampaigns(); }
   if (name === 'leads') loadLeadFinderStatus();
-  if (name === 'overview') { loadOverview(); loadActivity(); }
+  if (name === 'overview') { loadOverview(); loadOvExtras(); }
   if (name === 'settings') { loadEngine(); loadSenders(); refreshSetup(); loadDomainDiag(); loadLinkedInSafety(); loadIntegrationStatus(); loadApolloKeyStatus(); loadSuppression(); loadWebhooks(); }
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
@@ -134,15 +153,57 @@ function bindLogout() {
 
 // ---------- overview ----------
 async function loadOverview() {
+  $('ovGreeting').textContent = greeting();
   const { data } = await api('GET', '/api/app/overview');
   if (!data.ok) return;
   const s = data.stats;
-  const cards = [
-    ['Campaigns', s.campaigns], ['Active', s.active], ['People', s.prospects],
-    ['Emails sent', s.sent], ['Replies', s.replies ?? 0], ['Bounces', s.bounces ?? 0], ['Open to-dos', s.openTasks],
+  const openRate = s.sent ? ((s.replies || 0) / Math.max(1, s.sent) * 100).toFixed(1) + '%' : '—';
+  const replyRate = s.sent ? ((s.replies || 0) / Math.max(1, s.sent) * 100).toFixed(1) + '%' : '—';
+  const stats = [
+    ['Emails sent', s.sent || 0, smallDisc(s.sent)],
+    ['Open rate', openRate, smallDisc(s.replies)],
+    ['Reply rate', replyRate, smallDisc(s.replies)],
+    ['Active leads', s.prospects || 0, smallDisc(s.prospects)],
   ];
-  $('statGrid').innerHTML = cards.map(([label, n]) =>
-    `<div class="stat-card"><span>${label}</span><strong>${n}</strong></div>`).join('');
+  $('statGrid').innerHTML = stats.map(([label, val, trend]) => `
+    <div class="stat-card ov-stat">
+      <span class="ov-label">${label}</span>
+      <strong>${val}</strong>
+      <span class="ov-trend">${trend}</span>
+    </div>`).join('');
+}
+async function loadOvExtras() {
+  const [{ data: replies }, { data: events }] = await Promise.all([
+    api('GET', '/api/app/inbox'),
+    api('GET', '/api/app/activity'),
+  ]);
+  const nameCounts = {};
+  const days = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(Date.now() - (13 - i) * 864e5);
+    return { date: d.toISOString().slice(0, 10), label: dayOfWeekLetter(d), count: 0 };
+  });
+  (events.events || []).forEach(e => {
+    const d = e.at?.slice(0, 10);
+    days.forEach(dd => { if (dd.date === d && (e.type === 'sent' || e.type === 'campaign_started')) dd.count += 1; });
+  });
+  const maxCount = Math.max(...days.map(d => d.count), 1);
+  $('ovChart').innerHTML = days.map(d => `
+    <div class="ov-bar"><div class="ov-bar-fill" style="height:${Math.round(d.count / maxCount * 100)}%"></div><span>${d.label}</span></div>`).join('');
+  const recentReplies = (replies.replies || []).slice(0, 5).map(r => {
+    const label = r.prospect || r.from || r.subject || 'Reply';
+    const color = avColor(label);
+    const init = label.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    const subject = (r.body || '').slice(0, 60);
+    return `<li>
+      <span class="ov-avatar" style="background:${color}">${init}</span>
+      <div class="ov-replies-body">
+        <div class="ov-replies-name"><strong>${esc(label)}</strong><span>${esc(subject)}</span></div>
+        <span class="ov-replies-campaign">${esc(r.campaign || '')}</span>
+      </div>
+      <time>${fmtTime(r.at)}</time>
+    </li>`;
+  });
+  $('ovReplies').innerHTML = recentReplies.length ? recentReplies.join('') : '<li class="empty">No replies yet — when someone answers your campaign, it shows up here.</li>';
 }
 
 function renderEvents(events) {

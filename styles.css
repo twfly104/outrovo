@@ -2433,3 +2433,32 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .intel-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .intel-drawer-head h2 { margin: 0; font-size: 1.15rem; }
 .app-body .intel-card { background: var(--paper); border: 1px solid var(--line); box-shadow: none; }
+
+/* ---------- Overview mockup (Good morning + chart + replies) ---------- */
+.app-body .ov-head { margin-bottom: 22px; }
+.app-body .ov-head h1 { font-size: 2.1rem; font-weight: 700; color: #161412; }
+.app-body .ov-head .ov-sub { color: #8b8574; font-size: 0.98rem; margin-top: 3px; }
+.app-body .ov-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+.app-body .ov-stat { padding: 16px 18px; border: 1px solid #ebe6dc; border-radius: 14px; background: #fff; box-shadow: 0 10px 26px rgba(28,22,13,0.05); }
+.app-body .ov-label { display: block; font-size: 0.64rem; letter-spacing: 0.08em; color: #99958c; font-weight: 600; }
+.app-body .ov-stat strong { font-size: 1.9rem; font-weight: 700; color: #161412; margin-top: 4px; display: block; }
+.app-body .ov-trend { font-size: 0.78rem; color: #8b8574; }
+.app-body .ov-trend .sd-up { color: #16a34a; }
+.app-body .ov-trend .sd-dn { color: #d15554; }
+.app-body .ov-lower { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; align-items: start; }
+.app-body .ov-chart-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.app-body .ov-chart { display: flex; gap: 10px; align-items: flex-end; height: 150px; }
+.app-body .ov-bar { flex: 1; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.app-body .ov-bar span { font-size: 0.58rem; color: #8b8574; }
+.app-body .ov-bar-fill { min-width: 10px; width: 100%; border-radius: 6px 6px 0 0; background: var(--crest); transition: height 0.3s; min-height: 4px; }
+.app-body .ov-replies { gap: 6px; }
+.app-body .ov-replies li { display: flex; align-items: flex-start; gap: 12px; padding: 10px 4px; border-bottom: 1px solid #f4f0e6; }
+.app-body .ov-replies li:last-child { border-bottom: 0; }
+.app-body .ov-avatar { width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 0.7rem; flex-shrink: 0; }
+.app-body .ov-replies-body { flex: 1; min-width: 0; }
+.app-body .ov-replies-name { font-size: 0.9rem; color: #161412; }
+.app-body .ov-replies-name strong { font-weight: 700; }
+.app-body .ov-replies-name span { color: #8b8574; font-weight: 400; }
+.app-body .ov-replies-campaign { display: block; font-size: 0.78rem; color: #8b8574; }
+.app-body .ov-replies time { font-size: 0.78rem; color: #8b8574; }
+@media (max-width: 860px) { .app-body .ov-grid { grid-template-columns: 1fr 1fr; } .app-body .ov-lower { grid-template-columns: 1fr; } }
