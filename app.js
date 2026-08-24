@@ -94,20 +94,12 @@ async function init() {
 }
 
 // ---------- nav ----------
-const PAGE_TITLES = { overview: 'Overview', campaigns: 'Campaigns', leads: 'Find Leads', inbox: 'Inbox', agency: 'Agency', settings: 'Settings' };
-function setCrumb(html) { $('crumb').innerHTML = html; }
-function crumbBackListener() {
-  const link = document.querySelector('#crumb .crumb-link');
-  if (link) link.addEventListener('click', () => { backToList(); loadCampaigns(); });
-}
-
 function bindNav() {
   $('appNav').addEventListener('click', e => {
     const btn = e.target.closest('button');
-    if (!btn || !btn.dataset.page) return;
+    if (!btn) return;
     showPage(btn.dataset.page);
   });
-  $('topNewCampaignBtn').addEventListener('click', () => { $('campaignModal').hidden = false; });
 
   // Action cards on overview jump to sections
   document.querySelectorAll('.action-card[data-goto]').forEach(card => {
@@ -116,7 +108,6 @@ function bindNav() {
 }
 
 function showPage(name) {
-  setCrumb(`<span class="crumb-here">${PAGE_TITLES[name] || name}</span>`);
   document.querySelectorAll('#appNav button').forEach(b => {
     b.classList.toggle('active', b.dataset.page === name);
   });
@@ -462,9 +453,7 @@ function renderCampaignDetail(c) {
   const status = $('cdStatus');
   status.className = `status ${c.status}`;
   status.textContent = c.status;
-  const active = c.status === 'active';
-  $('cdRunBtn').innerHTML = `${active ? '<svg class="tab-ico" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4.5" height="16" rx="1"/><rect x="15" y="4" width="4.5" height="16" rx="1"/></svg>Pause campaign'
-    : '<svg class="tab-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Run campaign'}`;
+  $('cdRunBtn').textContent = c.status === 'active' ? 'Pause campaign' : 'Run campaign';
   $('cdSteps').innerHTML = campaignStepsHtml(c);
   $('cdStats').innerHTML = campaignStatsHtml(c);
   $('cdDailyCap').value = c.dailyCap ?? 25;
@@ -496,8 +485,6 @@ function openCampaign(id) {
   selectedCampaign = id;
   $('campaignListView').hidden = true;
   $('campaignDetail').hidden = false;
-  setCrumb(`<button class="crumb-link">Campaigns</button><span class="crumb-sep">/</span><span class="crumb-here">${esc(c.name)}</span>`);
-  crumbBackListener();
   renderCampaignDetail(c);
   switchCampaignTab('steps');
   $('bulkToolResult').innerHTML = '';
@@ -506,7 +493,6 @@ function openCampaign(id) {
 
 function backToList() {
   selectedCampaign = null;
-  setCrumb('<span class="crumb-here">Campaigns</span>');
   $('campaignDetail').hidden = true;
   $('campaignListView').hidden = false;
   $('addLeadsModal').hidden = true;
@@ -1640,7 +1626,7 @@ function renderLeadResults(leads) {
       <td>${esc(l.company) || '—'}</td>
       <td>${esc(l.title) || '—'}</td>
       <td>${l.verified === 'valid' ? '<span class="ok-tag">✓ deliverable</span>' : '<span class="warn-tag">unknown</span>'}</td>
-      <td><button class="btn btn-intel btn-xs" data-intel="${i}"><svg class="tab-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l1.8 6.2 6.2 1.8-6.2 1.8-1.8 6.2-1.8-6.2-6.2-1.8 6.2-1.8z"/></svg>Intel</button></td>
+      <td><button class="btn btn-ghost btn-xs" data-intel="${i}">Intel</button></td>
     </tr>`).join('');
   tbody.onclick = e => {
     const btn = e.target.closest('[data-intel]');

@@ -2360,63 +2360,38 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   .app-user { margin-left: auto; }
 }
 
-/* ---------- Cream top-nav redesign (app dashboard; marketing pages untouched) ---------- */
-.app-body { background: #f8f6f2; }
-.app-body .app-shell { display: flex; flex-direction: column; }
-.app-body .app-topbar {
-  position: sticky; top: 0; z-index: 60;
-  display: flex; align-items: center; justify-content: space-between; gap: 20px;
-  padding: 10px 26px;
-  background: rgba(248, 246, 242, 0.92);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid #ebe6dc;
-}
-.app-body .topbar-left { display: flex; align-items: center; gap: 18px; }
-.app-body .app-topbar .logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 1.05rem; color: #161412; text-decoration: none; }
-.app-body .app-topbar .logo-img { width: 26px; height: 26px; }
-.app-body .crumb { font-size: 0.92rem; color: #8b8574; }
-.app-body .crumb-here { color: #161412; font-weight: 600; }
-.app-body .crumb-link { background: none; border: 0; color: #8b8574; font: inherit; cursor: pointer; padding: 0; }
-.app-body .crumb-link:hover { color: var(--crest); }
-.app-body .crumb-sep { margin: 0 8px; }
-.app-body .topbar-right { display: flex; align-items: center; gap: 12px; }
-.app-body .topnav { display: flex; align-items: center; gap: 4px; }
-.app-body .topnav > button[data-page] {
-  background: none; border: 0; cursor: pointer;
-  font: inherit; font-size: 0.88rem; font-weight: 500; color: #6f6a5d;
-  padding: 6px 10px; border-radius: 8px;
-}
-.app-body .topnav > button[data-page]:hover { color: #161412; background: #efeadd; }
-.app-body .topnav > button[data-page].active { color: #161412; }
-.app-body .topnav > button[data-page].active::after { content: ""; display: block; height: 2px; margin-top: 3px; background: var(--crest); border-radius: 1px; }
-.app-body .topnav .btn { margin-left: 10px; }
-.app-body .topbar-upgrade { font-size: 0.8rem; color: var(--crest-deep); text-decoration: none; }
-.app-body .topbar-icon { background: none; border: 1px solid #e7e2d6; border-radius: 8px; color: #6f6a5d; cursor: pointer; padding: 5px; line-height: 1; }
-.app-body .topbar-icon:hover { background: #efeadd; color: #161412; }
-.app-body .topbar-right .avatar {
-  width: 30px; height: 30px; border-radius: 999px;
-  background: #161412; color: #f8f6f2;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 0.72rem; font-weight: 700;
-}
-.app-body .app-main { padding: 30px 36px 70px; max-width: 1240px; margin: 0 auto; width: 100%; }
-.app-body .btn { border-radius: 10px; gap: 7px; }
-.app-body .btn-primary { box-shadow: 0 6px 16px rgba(242, 80, 30, 0.28); }
-.app-body .btn-ghost { border-color: #e7e2d6; }
-.app-body .tab-ico { width: 12px; height: 12px; flex-shrink: 0; }
-.app-body .settings-tab { display: inline-flex; align-items: center; gap: 6px; }
-.app-body .btn-intel { border-color: transparent; color: var(--crest-deep); background: rgba(242, 80, 30, 0.1); }
-.app-body .btn-intel:hover { background: rgba(242, 80, 30, 0.18); }
+/* ---------- Simplicity pass (flat, quiet — app dashboard only) ---------- */
+.app-body .app-page { animation: none; }
+.app-body .btn { border-radius: 10px; box-shadow: none; gap: 8px; }
+.app-body .btn:hover { transform: none; box-shadow: none; }
+.app-body .btn:hover svg { transform: none; }
+.app-body .btn-ghost { border-color: var(--line); }
+.app-body .btn-ghost:hover { background: var(--paper-deep); color: var(--ink); }
 .app-body .app-card-block,
-.app-body .campaign-item {
-  border: 1px solid #ebe6dc; border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 10px 26px rgba(28, 22, 13, 0.05);
+.app-body .campaign-card,
+.app-body .campaign-item,
+.app-body .inbox-list li,
+.app-body .stat-card { box-shadow: none; border-radius: 12px; }
+.app-body .stat-card:hover,
+.app-body .campaign-item:hover,
+.app-body .campaign-card:hover { transform: none; box-shadow: none; }
+.app-body .inbox-list li:hover { box-shadow: none; }
+.app-body .app-nav button { border-radius: 8px; }
+.app-body .icon-btn { border-radius: 8px; }
+.app-body .icon-btn:hover { transform: none; }
+.app-body .app-upsell {
+  background: none;
+  color: var(--crest-deep);
+  border: 1px solid rgba(249, 115, 22, 0.4);
+  box-shadow: none;
 }
-.app-body .campaign-item:hover, .app-body .app-card-block:hover { box-shadow: 0 10px 26px rgba(28, 22, 13, 0.07); transform: none; }
-.app-body .inbox-list li { border: 1px solid #ebe6dc; border-radius: 12px; background: #fff; }
-.app-body .stat-card { border-radius: 14px; border: 1px solid #ebe6dc; box-shadow: 0 8px 20px rgba(28,22,13,0.04); }
-@media (max-width: 920px) { .app-body .topnav > button[data-page]:not(#topNewCampaignBtn) { display: none; } }
+.app-body .app-upsell:hover { background: rgba(249, 115, 22, 0.08); transform: none; }
+.app-body .app-user .avatar { box-shadow: none; }
+.app-body .credit-badge { box-shadow: none; }
+.app-body .step-row,
+.app-body .lf-chip,
+.app-body .topup-pack { box-shadow: none; }
+
 /* ---------- Intel drawer (right slide-out) ---------- */
 .intel-drawer { position: fixed; inset: 0; z-index: 160; }
 .intel-drawer[hidden] { display: none; }
