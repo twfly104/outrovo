@@ -46,7 +46,7 @@ This is the core of the product. Don't self-host SMTP on day one — deliverabil
 ### 7. Lead Finder data source: Apollo / Hunter.io
 - **Apollo**: Basic $49/mo → 900 credits. Largest dataset, integrates with the enrich feature.
 - **The Free plan has NO API access** — `mixed_people/search` and `people/match` return `API_INACCESSIBLE`. A free key is fine to leave configured (the app falls back to the next source and shows an actionable error), but Lead Finder will not return Apollo data until you upgrade.
-- **Hunter.io**: set `HUNTER_API_KEY` — used automatically when no Apollo key is configured. Works on the **Free plan (25 credits/mo, no card)** — 1 credit per domain per 10 emails, searches cap at 3 domains. Note: Hunter searches *by company domain*, so users must put target domains (e.g. `acme.com`) in Ideal customer; for free-text ICP search only Apollo works.
+- **Hunter.io**: set `HUNTER_API_KEY` — used automatically when no Apollo key is configured. Works on the **Free plan (25 credits/mo, no card)** — 1 credit per domain per 10 emails, searches cap at 3 domains. Free-text ICP searches (e.g. "B2B SaaS founders") go through Hunter's Discover API to find matching companies first, so the full search form works without Apollo.
 - **Recommendation: start with Hunter Free + the built-in crawler.** Subscribe to Apollo only when Lead Finder sees real usage. This is a variable cost — let it track revenue.
 
 ### 8. Google/Microsoft OAuth apps — $0

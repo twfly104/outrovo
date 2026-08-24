@@ -776,16 +776,43 @@ function leadFinderDomains(keywords) {
     .filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)).slice(0, 5);
 }
 
-// Hunter.io domain-search: no ICP search like Apollo — it returns the people
-// Hunter has on file for a domain, so it needs target domains in the
-// keywords (same contract as the built-in crawler). 1 credit per domain
-// per 10 emails, so cap at 3 domains per search.
+// Hunter.io has no people search, so it works in two hops: free-text ICP
+// goes through Discover (natural-language company search → domains), then
+// domain-search reveals the people at those companies. Keywords that already
+// contain domains skip Discover. 1 credit per domain per 10 emails, so cap
+// at 3 domains per search.
 const HUNTER_BASE = () => (process.env.HUNTER_BASE_URL || 'https://api.hunter.io').replace(/\/$/, '');
 const EXEC_TITLES = /\b(founder|co-?founder|ceo|cto|cfo|coo|cmo|owner|president|partner|principal|chief|vp|vice president|head of|director)\b/i;
+// UI size select ("11,50") → Hunter headcount ranges ("11-50").
+const HUNTER_HEADCOUNT = { '1,10': ['1-10'], '11,50': ['11-50'], '51,200': ['51-200'], '201,500': ['201-500'], '501,1000': ['501-1000'], '1001,10000': ['1001-5000', '5001-10000'] };
+async function hunterDiscoverDomains(f, limit = 3) {
+  const query = [f.keywords, f.location ? `in ${splitFilter(f.location).join(' or ')}` : ''].filter(Boolean).join(' ');
+  if (!query.trim()) return [];
+  const body = { query, limit: 10, offset: 0 };
+  const headcount = HUNTER_HEADCOUNT[f.size];
+  if (headcount) body.filters = { headcount };
+  const res = await fetch(`${HUNTER_BASE()}/v2/discover?api_key=${encodeURIComponent(process.env.HUNTER_API_KEY)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const err = new Error(`Hunter.io Discover: ${data?.errors?.[0]?.details || `request failed (${res.status})`}`);
+    if (res.status === 401 || res.status === 403) err.code = 'INVALID_KEY';
+    else if (res.status === 429) err.code = 'RATE_LIMITED';
+    throw err;
+  }
+  // Prefer companies Hunter actually has personal emails for.
+  return (data?.data || [])
+    .filter(c => c.domain)
+    .sort((a, b) => (b.emails_count?.personal || 0) - (a.emails_count?.personal || 0))
+    .slice(0, limit)
+    .map(c => c.domain);
+}
 async function hunterSearchLeads(f, perPage) {
-  const domains = leadFinderDomains(f.keywords).slice(0, 3);
+  let domains = leadFinderDomains(f.keywords).slice(0, 3);
+  if (!domains.length) domains = await hunterDiscoverDomains(f);
   if (!domains.length) {
-    const err = new Error('Hunter.io searches by company domain — add target domains (e.g. acme.com) to Ideal customer, or set APOLLO_API_KEY for full ICP search.');
+    const err = new Error('Hunter.io found no companies matching that ICP — try broader keywords, add target domains (e.g. acme.com) to Ideal customer, or set APOLLO_API_KEY.');
     err.code = 'NO_DOMAINS';
     throw err;
   }

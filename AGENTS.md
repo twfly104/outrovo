@@ -116,16 +116,16 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   and match endpoints return `API_INACCESSIBLE`; `apolloError()` surfaces
   that as an actionable message and search falls through to builtin.
   `APOLLO_BASE_URL` env overrides the API origin for mock-server tests.
-- `HUNTER_API_KEY` — Hunter.io domain-search fallback
-  (`GET /v2/domain-search?domain=…&type=personal&limit=10`, plus
-  `seniority=executive` when the title filter matches founder/C-level
-  terms). Hunter has no ICP search, so it needs target domains in the
-  keywords (same contract as the built-in crawler); with none it throws
-  `NO_DOMAINS`, surfaced as a warning telling the user to add domains or
-  set an Apollo key. Only `verification.status === 'valid'` emails are
-  kept. 401/403 → `INVALID_KEY` soft warning; `HUNTER_BASE_URL` overrides
-  the API origin for tests. Hunter Free = 25 credits/mo (1 per domain per
-  10 emails), so searches cap at 3 domains.
+- `HUNTER_API_KEY` — Hunter.io fallback, two hops: free-text ICP goes
+  through Discover (`POST /v2/discover`, natural-language `query` built
+  from keywords + location, `headcount` filter mapped from the size
+  select) to get company domains; keywords that already contain domains
+  skip Discover. Then `GET /v2/domain-search?domain=…&type=personal&limit=10`
+  (plus `seniority=executive` when the title filter matches founder/C-level
+  terms) reveals the people. Only `verification.status === 'valid'` emails
+  are kept. 401/403 → `INVALID_KEY` soft warning; `HUNTER_BASE_URL`
+  overrides the API origin for tests. Hunter Free = 25 credits/mo (1 per
+  domain per 10 emails), so searches cap at 3 domains.
   Empty-search responses carry `errors[]` — the UI shows
   them instead of the generic "no leads matched" note.
   Quotas per plan: trial 25, starter 100, growth 1,000, scale/agency 10,000
