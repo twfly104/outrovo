@@ -29,29 +29,31 @@ img{max-width:100%;display:block}
 .btn-l:hover{background:var(--bg2)}
 .s{font:13px/1.4em}
 
-/* header — floating pill, detached from the page (Supabase-style):
-   fixed, inset from the edges, content scrolls beneath the gap */
-.hdr{position:fixed;top:14px;left:0;right:0;z-index:50;pointer-events:none}
-.hdr .nav{pointer-events:auto}
-body{padding-top:0}
-/* anchor jumps must clear the floating header */
-section[id]{scroll-margin-top:96px}
-.nav{display:flex;align-items:center;gap:4px;height:58px;padding:0 10px 0 8px;margin-top:0;
-  background:rgba(255,255,255,.9);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  border:1px solid var(--line);border-radius:999px;
-  box-shadow:0 4px 24px rgba(27,25,21,.07);transition:box-shadow .3s,border-color .3s}
-.hdr.sc .nav{box-shadow:0 10px 34px rgba(27,25,21,.12);border-color:#e2dbcb}
-.logo{display:flex;align-items:center;gap:9px;font-family:var(--fd);font-size:1.25rem;font-weight:620;
-  padding:6px 12px 6px 6px;border-radius:999px;transition:background .2s}
-.logo:hover{background:var(--bg2)}
-.logo img{width:30px;height:30px}
-.nav a{padding:8px 13px;border-radius:999px;font-weight:550;font-size:.93rem;color:var(--ink2);transition:.2s}
-.nav a:hover{background:var(--bg2);color:var(--ink)}
-.nav .c{margin-left:auto;display:flex;gap:8px}
+/* header — full-width fixed bar with a hairline divider, Supabase-style.
+   The bar stays pinned edge-to-edge; the border separates it from the
+   page while content scrolls beneath. */
+.hdr{position:fixed;top:0;left:0;right:0;z-index:50;
+  background:rgba(248,246,242,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line);transition:background .3s}
+.hdr.sc{background:rgba(248,246,242,.95)}
+body{padding-top:64px}
+/* anchor jumps must clear the fixed header */
+section[id]{scroll-margin-top:84px}
+.nav{display:flex;align-items:center;gap:26px;height:64px}
+.logo{display:flex;align-items:center;gap:9px;font-family:var(--fd);font-size:1.22rem;font-weight:620;transition:opacity .2s}
+.logo:hover{opacity:.72}
+.logo img{width:28px;height:28px}
+.nav .l{font-size:.9rem;font-weight:520;color:var(--ink2);padding:6px 2px;transition:color .2s}
+.nav .l:hover{color:var(--ink)}
+.nav .c{margin-left:auto;display:flex;align-items:center;gap:10px}
+.nav .c .lg{padding:7px 15px;border:1px solid var(--line);border-radius:8px;font-size:.88rem;font-weight:550;color:var(--ink);transition:.2s}
+.nav .c .lg:hover{background:var(--bg2)}
+.nav .c .btn{padding:8px 16px;border-radius:8px;font-size:.88rem;box-shadow:none}
+.nav .c .btn:hover{box-shadow:none}
 @media(max-width:760px){.nav .l{display:none}.nav .c .o,.nav .c .lg{display:none}}
 
-/* hero — extra top room so it clears the floating pill header */
-.hero{padding:150px 0 0;overflow:hidden}
+/* hero */
+.hero{padding:88px 0 0;overflow:hidden}
 .hero-g{display:block;text-align:center}
 .hero-copy{max-width:780px;margin:0 auto}
 .hero .ctad,.hero .hmeta{justify-content:center}
