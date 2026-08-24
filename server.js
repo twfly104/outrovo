@@ -788,7 +788,11 @@ const HUNTER_HEADCOUNT = { '1,10': ['1-10'], '11,50': ['11-50'], '51,200': ['51-
 async function hunterDiscoverDomains(f, limit = 3) {
   const query = [f.keywords, f.location ? `in ${splitFilter(f.location).join(' or ')}` : ''].filter(Boolean).join(' ');
   if (!query.trim()) return [];
-  const body = { query, limit: 10, offset: 0 };
+  // NOTE: no limit/offset — pagination params are Premium-only and make
+  // Hunter reject the whole call on Free plans ("results are limited to
+  // 100 results on your current plan"). Default page is fine: we take the
+  // top 3 domains anyway.
+  const body = { query };
   const headcount = HUNTER_HEADCOUNT[f.size];
   if (headcount) body.filters = { headcount };
   const res = await fetch(`${HUNTER_BASE()}/v2/discover?api_key=${encodeURIComponent(process.env.HUNTER_API_KEY)}`, {
