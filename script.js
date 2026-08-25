@@ -35,15 +35,8 @@ const io = new IntersectionObserver(entries => {
 
 document.querySelectorAll('.reveal').forEach(el => io.observe(el));
 
-// Mobile menu
-const toggle = document.getElementById('navToggle');
-const menu = document.getElementById('mobileMenu');
-if (toggle && menu) {
-  toggle.addEventListener('click', () => menu.classList.toggle('open'));
-  menu.querySelectorAll('a').forEach(a =>
-    a.addEventListener('click', () => menu.classList.remove('open'))
-  );
-}
+// Mobile menu: handled by an inline handler in pricing.html (the only page
+// with #navToggle/#mobileMenu). Global wiring here would double-toggle.
 
 // Demo modal
 const modal = document.getElementById('demoModal');

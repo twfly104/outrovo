@@ -648,3 +648,12 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
 - .auth-side panel was white (var(--card)) — now var(--paper-deep) so the
   split screen stays in the warm family. Dashboard unaffected: .app-body
   re-declares every token (line ~1470) + hardcodes bg #f8f6f2.
+
+## Iteration 20 — mobile hamburger fix (Aug 2026)
+- Pricing 三橫線 never opened: script.js toggle handler AND pricing.html inline
+  handler BOTH fired per click -> always canceled. Removed the script.js block
+  (it only existed for pricing anyway). Verified via headless CDP click test.
+- Button styles made bare (no bordered box) + header CTA hidden on mobile so
+  the toggle isn't squeezed into a sliver -> matches index burger look.
+- Mobile menu z-index raised to 200 (was 99, lost to header/stacking-ctx),
+  and site-header bg switched from old off-white rgba to cream.
