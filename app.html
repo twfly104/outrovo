@@ -721,7 +721,23 @@
                   </div>
                 </div>
                 <p class="settings-note">MCP endpoint: <code id="mcpUrl"></code> — authenticate with header <code>Authorization: Bearer &lt;your API key&gt;</code> or <code>x-integration-token</code>.</p>
-                <p class="settings-note">CLI: <code>npm i -g outrovo</code> then <code>outrovo login</code> with the same key.</p>
+                <p class="settings-note">CLI: <code>npm i -g outrovo</code> then <code>outrovo init --token &lt;your API key&gt;</code>. Source and docs: <a href="https://github.com/twfly104/outrovo/tree/main/cli" target="_blank" rel="noopener">github.com/twfly104/outrovo/tree/main/cli</a>.</p>
+                <p class="settings-note">Five tools available: <code>overview_stats</code>, <code>list_campaigns</code>, <code>ab_results</code>, <code>add_prospect</code>, <code>list_replies</code>.</p>
+              </div>
+
+              <div class="dev-block">
+                <div class="dev-block-head">
+                  <div>
+                    <div class="integ-name">Slack app</div>
+                    <div class="integ-desc">Hot leads, daily digest, and deliverability alerts straight to a channel.</div>
+                  </div>
+                  <span id="slackStatus" class="integ-badge">Not connected</span>
+                </div>
+                <p class="settings-note" id="slackDesc">Install the Outrovo Slack app — one click, no webhook URL to paste.</p>
+                <div style="display:flex;gap:10px;margin-top:10px;">
+                  <a href="/api/app/integrations/slack/install" class="btn btn-primary btn-s" id="slackInstallBtn">Install Slack app</a>
+                  <button type="button" class="btn btn-ghost btn-s" id="slackRemoveBtn" hidden style="color:#d93025;border-color:#d93025;">Disconnect</button>
+                </div>
               </div>
 
             </div>

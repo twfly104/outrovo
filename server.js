@@ -113,7 +113,7 @@ const isEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || '');
 // Slack-facing alert prefs (delivered to the user's own webhooks, e.g. a
 // Slack incoming hook). Defaults match the Settings toggles on first paint.
 const notifyPrefs = u => ({ hotLead: true, dailyDigest: true, bounceWarnings: false, ...(u?.notifyPrefs || {}) });
-const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company, owner: u.owner || null, whiteLabel: u.whiteLabel || null, mailingAddress: u.mailingAddress || '', bookingLink: u.bookingLink || '', crmSync: u.crmSync !== false, notifications: notifyPrefs(u) });
+const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company, owner: u.owner || null, whiteLabel: u.whiteLabel || null, mailingAddress: u.mailingAddress || '', bookingLink: u.bookingLink || '', crmSync: u.crmSync !== false, notifications: notifyPrefs(u), slackConnected: Boolean(u.slack?.botTokenEnc), slackTeam: u.slack?.teamName || null });
 const newToken = () => crypto.randomBytes(24).toString('hex');
 
 // Client IP behind Render/Vercel proxies lives in x-forwarded-for (first hop).
@@ -1076,7 +1076,7 @@ function enrollLeads(sessionEmail, campaignId, leads) {
 // user.integrations: [{ url, provider, secret, events[] }]. Events fan out
 // to matching webhooks (Zapier catch hooks, HubSpot/Pipedrive workflow
 // webhooks, or any endpoint). Failures are logged, never block the engine.
-const INTEGRATION_EVENTS = ['sent', 'bounce', 'unsubscribe', 'reply', 'task', 'campaign', 'click', 'digest'];
+const INTEGRATION_EVENTS = ['sent', 'bounce', 'unsubscribe', 'reply', 'task', 'campaign', 'click', 'digest', 'deliverability'];
 async function fireWebhooks(ownerEmail, eventType, payload = {}) {
   const user = load('users').find(u => u.email === ownerEmail);
   if (!user) return;
@@ -1085,7 +1085,7 @@ async function fireWebhooks(ownerEmail, eventType, payload = {}) {
   if (eventType === 'bounce' && !prefs.bounceWarnings) return;
   if (eventType === 'reply' && payload.intent === 'interested' && !prefs.hotLead) return;
   if (eventType === 'digest' && !prefs.dailyDigest) return;
-  const hooks = (user?.integrations || []).filter(i => i.url && (i.events?.includes(eventType) || !i.events?.length));
+      const hooks = (user?.integrations || []).filter(i => i.url && (i.events?.includes(eventType) || !i.events?.length));
   for (const hook of hooks) {
     try {
       const body = JSON.stringify({ event: eventType, provider: hook.provider || 'webhook', at: new Date().toISOString(), data: payload });
@@ -1097,6 +1097,34 @@ async function fireWebhooks(ownerEmail, eventType, payload = {}) {
       clearTimeout(timer);
     } catch (err) {
       logEvent('error', `Webhook delivery failed (${hook.provider || hook.url}): ${err.message}`, {}, hook.owner || null);
+    }
+  }
+
+  // Native Slack app install: post via chat.postMessage when a Slack workspace
+  // is connected. Runs alongside webhooks so users with both don't lose data.
+  if (user.slack?.botTokenEnc && (eventType === 'reply' || eventType === 'digest' || eventType === 'deliverability')) {
+    try {
+      const token = decryptSecret(user.slack.botTokenEnc);
+      const channelId = user.slack.channelId;
+      if (token && channelId) {
+        let text;
+        if (eventType === 'reply' && payload.intent === 'interested') {
+          text = `:fire: Hot lead — ${payload.fromEmail || payload.from || 'a prospect'} replied interested to *${payload.subject || 'your campaign'}*.`;
+        } else if (eventType === 'digest') {
+          text = `:bar_chart: Outrovo daily digest — ${payload.sent || 0} sent, ${payload.replies || 0} replies, ${payload.bounced || 0} bounced.`;
+        } else if (eventType === 'deliverability') {
+          text = `:warning: Domain ${payload.domain} regressed — ${payload.regressed?.map(r => r.name).join(', ')} now failing.`;
+        }
+        if (text) {
+          await fetch('https://slack.com/api/chat.postMessage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ channel: channelId, text }),
+          });
+        }
+      }
+    } catch (err) {
+      logEvent('error', `Slack post failed: ${err.message}`, {}, user.email);
     }
   }
 }
@@ -2524,6 +2552,41 @@ async function domainAudit(domain) {
   return { domain, score: Math.round((passed / checks.length) * 100), checks };
 }
 
+// ---------- daily deliverability watchdog ----------
+// Re-audit each user's signup domain once a day. If any check regresses from
+// ok -> broken, fire a 'deliverability' webhook event so the user's Slack /
+// Zapier / automation endpoint gets a heads-up before sends start bouncing.
+const DELIVERY_WATCH_INTERVAL_MS = 24 * 3600e3;
+const _lastAudit = new Map(); // ownerEmail -> { domain, results: { checkName: ok } }
+async function deliverabilityTick() {
+  try {
+    const users = load('users');
+    for (const user of users) {
+      const domain = (user.email || '').split('@')[1];
+      if (!domain) continue;
+      let result;
+      try { result = await domainAudit(domain); } catch { continue; }
+      const prev = _lastAudit.get(user.email);
+      const now = Object.fromEntries(result.checks.map(c => [c.name, c.ok]));
+      _lastAudit.set(user.email, { domain, results: now, at: Date.now() });
+      if (!prev) continue;
+      const regressed = result.checks.filter(c => prev.results[c.name] === true && !c.ok);
+      if (regressed.length) {
+        logEvent('deliverability', `Domain ${domain} regressed: ${regressed.map(r => r.name).join(', ')}`, { score: result.score }, user.email);
+        fireWebhooks(user.email, 'deliverability', {
+          domain,
+          score: result.score,
+          regressed: regressed.map(r => ({ name: r.name, detail: r.detail })),
+          checks: result.checks,
+        });
+      }
+    }
+  } catch (err) {
+    logEvent('error', `Deliverability watchdog failed: ${err.message}`);
+  }
+}
+if (!process.env.VERCEL) setInterval(deliverabilityTick, DELIVERY_WATCH_INTERVAL_MS).unref();
+
 // ---------- landing assistant ----------
 // The public chat panel on index.html posts here. Answers come from a real
 // LLM API: ASSISTANT_API_KEY (falling back to LLM_API_KEY/OPENAI_API_KEY,
@@ -3293,6 +3356,84 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     const user = users.find(u => u.email === session.email);
     if (!user) return send(res, 404, { ok: false });
     user.integrations = (user.integrations || []).filter(i => i.id !== id);
+    save('users', users);
+    send(res, 200, { ok: true });
+  },
+
+  // ---------- Slack native app (OAuth install + bot posting) ----------
+  // Beyond webhooks: if SLACK_CLIENT_ID/SECRET are set, users install the
+  // Outrovo Slack app once. Hot leads / daily digest / deliverability alerts
+  // then post via chat.postMessage (fallback: user's incoming webhook URL).
+  'GET /api/app/integrations/slack/install': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const clientId = process.env.SLACK_CLIENT_ID;
+    if (!clientId) return send(res, 503, { ok: false, error: 'Slack app not configured (SLACK_CLIENT_ID missing).' });
+    const state = oauthState(session.token, 'slack');
+    const params = new URLSearchParams({
+      client_id: clientId,
+      scope: 'chat:write,channels:read',
+      redirect_uri: `${PUBLIC_URL}/api/app/integrations/slack/callback`,
+      state,
+    });
+    res.writeHead(302, { Location: `https://slack.com/oauth/v2/authorize?${params}` });
+    res.end();
+  },
+
+  'GET /api/app/integrations/slack/callback': async (req, res, _id, query) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const clientId = process.env.SLACK_CLIENT_ID;
+    const clientSecret = process.env.SLACK_CLIENT_SECRET;
+    if (!clientId || !clientSecret) return send(res, 503, { ok: false, error: 'Slack app not configured.' });
+    const code = query.get('code');
+    const state = query.get('state');
+    if (!code || !state || state !== oauthState(session.token, 'slack')) {
+      return send(res, 400, { ok: false, error: 'Invalid OAuth state.' });
+    }
+    try {
+      const tokenRes = await fetch('https://slack.com/api/oauth.v2.access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          code,
+          redirect_uri: `${PUBLIC_URL}/api/app/integrations/slack/callback`,
+        }),
+      });
+      const data = await tokenRes.json();
+      if (!data.ok) throw new Error(data.error || 'oauth failed');
+      const users = load('users');
+      const user = users.find(u => u.email === session.email);
+      if (!user) return send(res, 404, { ok: false });
+      user.slack = {
+        teamId: data.team?.id,
+        teamName: data.team?.name,
+        botToken: data.access_token,          // encrypted at rest via encryptSecret
+        botTokenEnc: encryptSecret(data.access_token),
+        channelId: data.incoming_webhook?.channel_id || null,
+        channelName: data.incoming_webhook?.channel || null,
+        webhookUrl: data.incoming_webhook?.url || null,
+        installedAt: new Date().toISOString(),
+      };
+      delete user.slack.botToken; // never persist the plain token
+      save('users', users);
+      logEvent('integration', `Slack app installed (${user.slack.teamName})`, {}, user.email);
+      res.writeHead(302, { Location: '/dashboard#settings?slack=connected' });
+      res.end();
+    } catch (err) {
+      send(res, 500, { ok: false, error: 'Slack install failed: ' + err.message });
+    }
+  },
+
+  'DELETE /api/app/integrations/slack': (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const users = load('users');
+    const user = users.find(u => u.email === session.email);
+    if (!user) return send(res, 404, { ok: false });
+    delete user.slack;
     save('users', users);
     send(res, 200, { ok: true });
   },

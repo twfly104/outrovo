@@ -1273,7 +1273,7 @@ function bindAccount() {
 // ---------- BYOK: Apollo lead data source ----------
 // ---------- suppression list ----------
 // ---------- developer: API key + webhooks + MCP/CLI ----------
-function bindDeveloper() {
+async function bindDeveloper() {
   $('genApiKeyBtn').addEventListener('click', async () => {
     if (!confirm('Generate a new API key? Any existing key stops working immediately.')) return;
     const { data } = await api('POST', '/api/app/integrations/token');
@@ -1295,6 +1295,21 @@ function bindDeveloper() {
     $('apiKeyNew').hidden = true;
     $('apiKeyStatus').textContent = 'No key — generate one to use the API, MCP or CLI.';
     $('revokeApiKeyBtn').hidden = true;
+  });
+
+  // Slack app install / disconnect
+  const meData = await api('GET', '/api/me').then(r => r.data).catch(() => null);
+  if (meData?.slackConnected) {
+    $('slackStatus').textContent = 'Connected' + (meData.slackTeam ? ' · ' + meData.slackTeam : '');
+    $('slackStatus').classList.add('ok');
+    $('slackInstallBtn').hidden = true;
+    $('slackRemoveBtn').hidden = false;
+    $('slackDesc').textContent = 'Hot leads, daily digest and deliverability alerts post to your Slack workspace.';
+  }
+  $('slackRemoveBtn').addEventListener('click', async () => {
+    if (!confirm('Disconnect Slack? Hot-lead alerts will stop posting to your channel.')) return;
+    await api('DELETE', '/api/app/integrations/slack');
+    location.reload();
   });
   $('webhookForm').addEventListener('submit', async e => {
     e.preventDefault();

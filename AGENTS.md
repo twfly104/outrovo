@@ -691,3 +691,24 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
 - Unified: styles.css now mirrors styles-lite header metrics exactly.
   CDP probe across 1904px viewport: headerRect/navHeight/logoRect/fonts/
   linkYs/action widths all identical between the two pages.
+
+## Iteration 25 — AI-agent differentiation layer (Aug 2026)
+- **Landing page**: new "For AI agents" band on index.html between Features
+  and How it works — 3 cards (MCP server / Real CLI / Slack alerts) with
+  copy pointing at outrovo.co/api/mcp + npx outrovo.
+- **CLI package** at cli/: zero-dependency node script, talks MCP JSON-RPC
+  directly to /api/mcp. Commands: init/stats/campaigns/replies/ab/add-prospect.
+  Config in ~/.outrovo/config.json (chmod 600). Publish-ready npm package.
+- **app.html** Settings → Developer gets a new "Slack app" block with
+  install/disconnect buttons.
+- **Deliverability watchdog**: deliverabilityTick() in server.js re-audits
+  each user's signup domain daily via existing domainAudit(); fires new
+  'deliverability' webhook event only on regression (ok → broken).
+- **Slack OAuth app**: SLACK_CLIENT_ID/SECRET env vars enable
+  GET /api/app/integrations/slack/install + /callback. Bot token encrypted
+  via encryptSecret (same AES-256-GCM as sender credentials) and stored
+  in user.slack. fireWebhooks() now also posts via chat.postMessage when
+  a Slack install is present (hot lead / digest / deliverability alerts).
+- publicUser() gains slackConnected + slackTeam so the Settings UI can
+  reflect install state.
+- All 5 strategic differentiation points now live in production code.
