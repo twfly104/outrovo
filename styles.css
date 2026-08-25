@@ -135,10 +135,8 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 
 /* ---------- Header — fixed bar pinned on scroll, hairline divider ---------- */
 .site-header {
-  position: fixed;
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
   z-index: 100;
   background: rgba(248, 246, 242, 0.88);
   backdrop-filter: blur(14px);
@@ -984,7 +982,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 /* ============================================================
    Pricing page
    ============================================================ */
-.pricing-hero { text-align: center; padding: 132px 0 30px; }
+.pricing-hero { text-align: center; padding: 88px 0 30px; }
 .pricing-hero h1 { margin: 16px 0 14px; }
 .pricing-hero .lede { margin-inline: auto; }
 

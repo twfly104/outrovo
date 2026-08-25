@@ -675,3 +675,10 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
   cream bg, 1.6rem display-font links, same 16px padding.
 - Pricing #navToggle got inline style="background:none;border:0" so phones
   with stale cached styles.css still show the bare burger (matches index).
+
+## Iteration 23 — header parity index vs pricing (Aug 2026)
+- pricing header was `position: fixed` (index: sticky) -> unified to sticky,
+  hero padding-top 132->88 to keep breathing room without double offset.
+- Removed "Book a call" ghost button + gray active pill on nav; actions now
+  Log in + "Start free" (identical to index). Mobile menu CTA renamed to
+  "Start free" too. Verified desktop+mobile screenshots identical.
