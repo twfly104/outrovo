@@ -932,6 +932,42 @@ function guessEmailPatterns(first, last, domain) {
   return [...new Set(pats)];
 }
 
+// Static guess list plus homepage-discovered links (discoverCrawlPaths).
+// MAX_CRAWL_PAGES caps total fetches per domain so a big guess list can
+// never turn into a crawl burst.
+const CRAWL_PATHS = ['', '/about', '/about-us', '/contact', '/contact-us', '/team', '/our-team', '/leadership', '/people', '/staff', '/company', '/impressum'];
+const MAX_CRAWL_PAGES = 8;
+const MAX_DISCOVERED_PATHS = 4;
+
+// Team/about/contact pages often live at site-specific paths (e.g.
+// /our-people, /company/team) that no static list can guess. Pull the
+// promising internal links off the homepage and follow a few of them.
+function discoverCrawlPaths(html, domain) {
+  const out = [];
+  const seen = new Set(CRAWL_PATHS);
+  const re = /href\s*=\s*["']([^"'#?]+)["']/gi;
+  let m;
+  while ((m = re.exec(html)) && out.length < MAX_DISCOVERED_PATHS) {
+    let p = m[1].trim();
+    if (/^(mailto|tel|javascript|data):/i.test(p)) continue;
+    if (/^https?:\/\//i.test(p)) {
+      try {
+        const u = new URL(p);
+        if (u.hostname.toLowerCase().replace(/^www\./, '') !== domain.replace(/^www\./, '')) continue;
+        p = u.pathname;
+      } catch { continue; }
+    }
+    if (!p.startsWith('/')) continue;
+    p = p.replace(/\/+$/, '').toLowerCase(); // '/' (homepage) is already crawled as ''
+    if (seen.has(p)) continue;
+    if (!/(about|contact|team|staff|leadership|people)/i.test(p)) continue;
+    if (/\.(png|jpe?g|gif|webp|svg|css|js|pdf|zip)$/i.test(p)) continue;
+    seen.add(p);
+    out.push(p);
+  }
+  return out;
+}
+
 async function builtinSearchLeads(f, perPage, sessionEmail) {
   // Free source: user supplies target domains (e.g. acme.com, orbcall.io);
   // we crawl the site's public pages for published emails, then MX-verify.
@@ -940,8 +976,14 @@ async function builtinSearchLeads(f, perPage, sessionEmail) {
   const out = [];
   for (const domain of domains) {
     const found = new Set();
-    for (const path of ['', '/about', '/contact', '/team']) {
-      if (found.size >= 10) break;
+    let queue = [...CRAWL_PATHS];
+    const seen = new Set();
+    let pages = 0;
+    while (queue.length && found.size < 10 && pages < MAX_CRAWL_PAGES) {
+      const path = queue.shift();
+      if (seen.has(path)) continue;
+      seen.add(path);
+      pages++;
       try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 6000);
@@ -952,6 +994,9 @@ async function builtinSearchLeads(f, perPage, sessionEmail) {
         clearTimeout(timer);
         if (!res.ok) continue;
         const html = await res.text();
+        // Homepage first pass: the site's own about/team/contact links go
+        // ahead of the remaining static guesses.
+        if (path === '') queue = [...discoverCrawlPaths(html, domain), ...queue];
         const matches = html.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
         for (const m of matches) {
           const e = m.toLowerCase();
