@@ -657,3 +657,13 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
   the toggle isn't squeezed into a sliver -> matches index burger look.
 - Mobile menu z-index raised to 200 (was 99, lost to header/stacking-ctx),
   and site-header bg switched from old off-white rgba to cream.
+
+## Iteration 21 — mobile menu transparent background root cause (Aug 2026)
+- Menu opened but painted transparent: #mobileMenu lived INSIDE <header>, and
+  header's `backdrop-filter: blur(14px)` makes it a containing block for fixed
+  descendants, so `position: fixed; inset: 65px 0 0` resolved against the
+  header's own 65px box -> menu box height 0, bg invisible, links overflowed.
+- Fix: moved #mobileMenu out of <header> in pricing.html (sibling before
+  <main>). CDP geometry check: rect [0,65,390,779], bg rgb(248,246,242).
+- Lesson: warn-trivially test geometry with CDP getBoundingClientRect, not
+  just class toggling, when verifying overlays.
