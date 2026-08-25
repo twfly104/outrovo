@@ -20,7 +20,8 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - Backend: `server.js` (Node >= 18, one dep: `nodemailer` Г”Г‡Г¶ `npm install` first).
   Static hosting + JSON API + campaign engine. Persistence in `data/*.json`
   (gitignored). Passwords scrypt-hashed, sessions in httpOnly cookie
-  `drummer_session` (7 days).
+  `outrovo_session` (7 days; `Secure` added automatically when the request
+  is HTTPS — direct TLS or `x-forwarded-proto: https`).
 - Engine: ticks every `ENGINE_INTERVAL_MS` (default 15s). Steps: `email`
   (subject/body, `{{firstName}}`-style templating), `task` (manual LinkedIn
   queue), `wait`. Without `SMTP_HOST/USER/PASS` env it runs in DEMO mode Г”Г‡Г¶
@@ -626,3 +627,15 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
   pane instead of clicking a tab. KEEP the .settings-tabs/.settings-tab CSS —
   campaign detail still uses it.
 
+
+## Iteration 18 — auth hardening (Aug 2026)
+- Login/signup were unlimited per IP (credential-stuffing target). Both now
+  ride `authOk` = 10 attempts / 10 min / IP via a new `makeLimiter` factory
+  (`assistantOk` reimplemented on it, behavior unchanged: 30/10min).
+- New helpers near `newToken`: `requestIp(req)` (XFF first hop, also used by
+  the assistant route now) and `sessionCookie(token, req)` which appends
+  `Secure` only when the request is HTTPS (`req.socket.encrypted` or
+  `x-forwarded-proto: https`) — local http dev keeps working.
+- All 3 session-cookie setters (signup, login, Google OAuth `startSession`)
+  go through `sessionCookie`. Verified: 11th rapid bad login → 429; HTTPS
+  proxied login sets `Secure`; plain http signup does not.

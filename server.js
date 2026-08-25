@@ -116,6 +116,16 @@ const notifyPrefs = u => ({ hotLead: true, dailyDigest: true, bounceWarnings: fa
 const publicUser = u => ({ firstName: u.firstName, lastName: u.lastName, email: u.email, company: u.company, owner: u.owner || null, whiteLabel: u.whiteLabel || null, mailingAddress: u.mailingAddress || '', bookingLink: u.bookingLink || '', crmSync: u.crmSync !== false, notifications: notifyPrefs(u) });
 const newToken = () => crypto.randomBytes(24).toString('hex');
 
+// Client IP behind Render/Vercel proxies lives in x-forwarded-for (first hop).
+const requestIp = req => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'anon').split(',')[0].trim();
+
+// Session cookie: Secure only when the request itself is HTTPS (direct TLS or
+// proxy header) so local http development still works.
+function sessionCookie(token, req, maxAge = 7 * 86400) {
+  const https = req.socket.encrypted || req.headers['x-forwarded-proto'] === 'https';
+  return `outrovo_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${https ? '; Secure' : ''}`;
+}
+
 function getSession(req) {
   const cookie = (req.headers.cookie || '').match(/outrovo_session=([^;]+)/);
   if (!cookie) return null;
@@ -2554,18 +2564,21 @@ const ASSISTANT_FACTS = [
 
 const ASSISTANT_SYSTEM = `${ASSISTANT_PERSONA}\n\nFACTS (ground every answer in these):\n- ${ASSISTANT_FACTS.join('\n- ')}`;
 
-const assistantRate = new Map(); // ip → { count, reset }
-const ASSISTANT_WINDOW = 600e3, ASSISTANT_LIMIT = 30; // 30 questions / 10 min
+// Per-IP sliding-window limiter; store maps ip → { count, reset }.
+function makeLimiter(limit, windowMs, store = new Map()) {
+  return ip => {
+    const now = Date.now();
+    const e = store.get(ip);
+    if (!e || now > e.reset) { store.set(ip, { count: 1, reset: now + windowMs }); return true; }
+    e.count++;
+    return e.count <= limit;
+  };
+}
+
+const assistantOk = makeLimiter(30, 600e3); // 30 questions / 10 min
+const authOk = makeLimiter(10, 600e3); // 10 login+signup attempts / 10 min — slows credential stuffing
 const assistantCache = new Map(); // normalized question → { answer, time }
 const ASSISTANT_CACHE_TTL = 3600e3; // 1h — landing questions repeat a lot
-
-function assistantOk(ip) {
-  const now = Date.now();
-  const e = assistantRate.get(ip);
-  if (!e || now > e.reset) { assistantRate.set(ip, { count: 1, reset: now + ASSISTANT_WINDOW }); return true; }
-  e.count++;
-  return e.count <= ASSISTANT_LIMIT;
-}
 
 // LLM replies are sanitized before the client drops them into innerHTML —
 // keep only a few inline tags and local links so an injected prompt can't
@@ -2612,6 +2625,7 @@ const router = {
   'GET /api/health': (req, res) => send(res, 200, { ok: true, users: load('users').length, engine: !smtpConfigured ? 'demo' : 'smtp' }),
 
   'POST /api/signup': async (req, res) => {
+    if (!authOk(requestIp(req))) return send(res, 429, { ok: false, error: 'Too many attempts — try again in a few minutes.' });
     const b = await readBody(req);
     const errors = {};
     if (!b.firstName?.trim()) errors.firstName = 'required';
@@ -2640,7 +2654,7 @@ const router = {
     domainAudit(email.split('@')[1])
       .then(result => logEvent('domain-audit', `Domain check for ${result.domain}: score ${result.score}/100`, { score: result.score, checks: result.checks }, email))
       .catch(() => {});
-    send(res, 201, { ok: true, user: publicUser(user) }, { 'Set-Cookie': `outrovo_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 86400}` });
+    send(res, 201, { ok: true, user: publicUser(user) }, { 'Set-Cookie': sessionCookie(token, req) });
   },
 
   // Public landing-page assistant — LLM-backed, rate-limited per IP.
@@ -2653,7 +2667,7 @@ const router = {
   },
 
   'POST /api/assistant': async (req, res) => {
-    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'anon').split(',')[0].trim();
+    const ip = requestIp(req);
     if (!assistantOk(ip)) return send(res, 429, { ok: false, error: 'Too many questions — slow down a little.' });
     const b = await readBody(req);
     const q = String(b.q || '').trim().slice(0, 300);
@@ -2714,7 +2728,7 @@ const router = {
       save('sessions', sessions);
       res.writeHead(302, {
         Location: '/app.html',
-        'Set-Cookie': `outrovo_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 86400}`,
+        'Set-Cookie': sessionCookie(token, req),
       });
       res.end();
     };
@@ -2777,6 +2791,7 @@ const router = {
   },
 
   'POST /api/login': async (req, res) => {
+    if (!authOk(requestIp(req))) return send(res, 429, { ok: false, error: 'Too many attempts — try again in a few minutes.' });
     const b = await readBody(req);
     if (!isEmail(b.email) || !b.password) return send(res, 400, { ok: false, error: 'Email and password required.' });
     const user = load('users').find(u => u.email === b.email.trim().toLowerCase());
@@ -2785,7 +2800,7 @@ const router = {
     const token = newToken();
     sessions.push({ token, email: user.email, expires: new Date(Date.now() + 7 * 864e5).toISOString() });
     save('sessions', sessions);
-    send(res, 200, { ok: true, user: publicUser(user) }, { 'Set-Cookie': `outrovo_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 86400}` });
+    send(res, 200, { ok: true, user: publicUser(user) }, { 'Set-Cookie': sessionCookie(token, req) });
   },
 
   'POST /api/logout': (req, res) => {
