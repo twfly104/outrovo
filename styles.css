@@ -987,9 +987,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .pricing-hero { text-align: center; padding: 132px 0 30px; }
 .pricing-hero h1 { margin: 16px 0 14px; }
 .pricing-hero .lede { margin-inline: auto; }
-/* Pricing page now uses .hero — center the content since pricing is full-width */
-.hero .pricing-center { text-align: center; }
-.hero .pricing-center .eyebrow { display: inline-flex; }
 
 .bill-toggle {
   display: inline-flex;
