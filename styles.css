@@ -1090,9 +1090,80 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   text-align: center;
   font-size: 0.88rem;
   color: var(--ink-faint);
-  padding-bottom: 64px;
 }
 .plans-note strong { color: var(--ink); }
+
+/* Add-ons & services section (industry-standard upsell cards) */
+.addons-section {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 56px 0 64px;
+}
+.addons-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-align: center;
+  margin-bottom: 28px;
+  color: var(--ink);
+}
+.addons-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.addon-card {
+  background: var(--w, #fff);
+  border: 1px solid var(--line, #e8e4da);
+  border-radius: 16px;
+  padding: 26px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+  transition: box-shadow 0.18s, border-color 0.18s, transform 0.18s;
+}
+.addon-card:hover {
+  box-shadow: 0 12px 32px rgba(28,22,13,0.08);
+  border-color: #d8d2c4;
+  transform: translateY(-2px);
+}
+.addon-icon {
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  border-radius: 12px;
+  background: rgba(232, 93, 4, 0.08);
+  color: var(--crest, #e85d04);
+  flex-shrink: 0;
+}
+.addon-body { flex: 1; }
+.addon-name {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.addon-body p {
+  font-size: 0.86rem;
+  color: var(--ink-faint);
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+.addon-price {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--crest, #e85d04);
+}
+.addon-cta {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+  align-self: flex-start;
+}
+.addon-cta:hover { color: var(--crest, #e85d04); }
+@media (max-width: 820px) { .addons-grid { grid-template-columns: 1fr; } }
 
 /* Included strip */
 .included-strip {
