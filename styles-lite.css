@@ -51,8 +51,8 @@ section[id]{scroll-margin-top:84px}
 /* Mobile menu: burger replaces inline links under 760px */
 .burger{display:none;margin-left:auto;background:none;border:0;color:var(--ink);cursor:pointer;padding:8px;border-radius:10px}
 .burger:hover{background:var(--card)}
-.mmenu{display:none;flex-direction:column;padding:8px 20px 18px;border-top:1px solid var(--line);background:rgba(248,246,242,.97)}
-.mmenu a{padding:13px 4px;font-size:1rem;font-weight:520;color:var(--ink2);border-bottom:1px solid var(--line)}
+.mmenu{display:none;flex-direction:column;padding:8px 20px 24px;border-top:1px solid var(--line);background:#f8f6f2}
+.mmenu a{padding:16px 4px;font-family:var(--font-display);font-size:1.6rem;color:var(--ink);border-bottom:1px solid var(--line)}
 .mmenu a:last-child{border-bottom:0}
 .mmenu a:hover{color:var(--ink)}
 .mmenu.open{display:flex}
@@ -267,3 +267,4 @@ section[id]{scroll-margin-top:84px}
 .asst-send{width:42px;height:42px;border:none;border-radius:50%;background:var(--accent);color:#fff;cursor:pointer;display:grid;place-items:center;flex:none;transition:background .2s}
 .asst-send:hover{background:var(--accent2)}
 @media(max-width:480px){.asst{right:16px;bottom:16px;height:min(540px,calc(100vh - 40px))}.asst-fab{right:16px;bottom:16px}}
+.mmenu .menu-cta{display:flex;justify-content:center;margin-top:24px;padding:14px;font-size:.95rem;color:#fff;background:#f97316;border-radius:999px}

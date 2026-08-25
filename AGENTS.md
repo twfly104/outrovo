@@ -667,3 +667,11 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
   <main>). CDP geometry check: rect [0,65,390,779], bg rgb(248,246,242).
 - Lesson: warn-trivially test geometry with CDP getBoundingClientRect, not
   just class toggling, when verifying overlays.
+
+## Iteration 22 — unify mobile menus (Aug 2026)
+- Pricing menu now includes "Start free trial" CTA (index menu adds "Start
+  free") — both orange pill, centered, same spacing.
+- .mmenu in styles-lite.css now mirrors pricing's mobile-menu look: opaque
+  cream bg, 1.6rem display-font links, same 16px padding.
+- Pricing #navToggle got inline style="background:none;border:0" so phones
+  with stale cached styles.css still show the bare burger (matches index).
