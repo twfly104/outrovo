@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Developers — MCP & CLI — Outrovo</title>
+  <meta name="description" content="MCP endpoint, CLI and webhooks for developers. Drive Outrovo from Claude, Cursor, or your own script." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="logo.svg" />
+  <style>
+    .doc{max-width:780px;margin:0 auto;padding:80px 24px 120px}
+    .doc h1{font-size:2.4rem;letter-spacing:-0.02em;margin:14px 0 16px}
+    .doc h2{font-size:1.3rem;margin:48px 0 12px;letter-spacing:-0.01em}
+    .doc p{color:var(--ink2);line-height:1.7;margin:0 0 14px}
+    .doc ul{padding-left:20px;color:var(--ink2);line-height:1.7;margin:0 0 14px}
+    .doc code{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:2px 6px;font-size:0.86em;font-family:"SF Mono",Menlo,Consolas,monospace}
+    .doc pre{background:var(--ink);color:#fff;border-radius:12px;padding:18px 20px;overflow-x:auto;font-size:0.84rem;line-height:1.65;margin:14px 0 20px;font-family:"SF Mono",Menlo,Consolas,monospace}
+    .doc pre code{background:none;border:0;color:inherit;padding:0}
+    .doc table{width:100%;border-collapse:collapse;margin:14px 0 20px;font-size:0.9rem}
+    .doc th,.doc td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+    .doc th{font-weight:600;font-size:0.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3)}
+    .doc .cta-row{display:flex;gap:12px;margin-top:48px;flex-wrap:wrap}
+  </style>
+</head>
+<body>
+  <header class="hdr" id="hdr">
+    <div class="wrap">
+      <a class="logo" href="index.html">
+        <img src="logo.svg" class="logo-img" alt="Outrovo logo">Outrovo
+      </a>
+      <nav class="nav-links">
+        <a href="index.html#product">Product</a>
+        <a href="index.html#steps">How it works</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="index.html#faq">FAQ</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="btn btn-ghost btn-s" href="login.html">Log in</a>
+        <a class="btn btn-primary btn-s" href="signup.html">Start free</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="doc">
+      <span class="eyebrow">For developers</span>
+      <h1>MCP, CLI &amp; webhooks</h1>
+      <p>Outrovo is built for AI agents and scripts, not only the dashboard. One integration token drives everything below. Generate yours in <strong>Settings → Developer → API key</strong>.</p>
+
+      <h2>1 — MCP server (Claude, Cursor, any MCP client)</h2>
+      <p>Point your MCP client at the endpoint — it speaks JSON-RPC 2.0 over HTTP POST:</p>
+      <pre>URL:    https://outrovo.co/api/mcp
+Auth:   Authorization: Bearer &lt;your token&gt;
+        (or header: x-integration-token)
+
+Tools:  overview_stats · list_campaigns · ab_results
+        add_prospect · list_replies</pre>
+      <p>Claude Desktop example (<code>claude_desktop_config.json</code>):</p>
+      <pre>{
+  "mcpServers": {
+    "outrovo": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://outrovo.co/api/mcp",
+               "--header", "Authorization: Bearer ${MCP_TOKEN}"],
+      "env": { "MCP_TOKEN": "ovk_your_token_here" }
+    }
+  }
+}</pre>
+
+      <h2>2 — CLI (your terminal)</h2>
+      <pre>npm i -g outrovo
+outrovo init --token ovk_your_token
+outrovo stats              # campaigns, sends, replies, bounces
+outrovo campaigns          # table of campaigns
+outrovo replies --limit 20 # recent replies with AI intent label
+outrovo ab abc123          # A/B results for a campaign
+outrovo add-prospect --campaign abc123 --email a@b.com --first Jane</pre>
+      <p>Zero dependencies, Node 18+. Config lives in <code>~/.outrovo/config.json</code> (chmod 600). Same token as MCP.</p>
+
+      <h2>3 — Webhooks (events pushed to you)</h2>
+      <p>Register an HTTPS endpoint in <strong>Settings → Developer → Webhooks</strong>. We POST JSON:</p>
+      <pre>{
+  "event": "reply",
+  "at": "2026-08-25T07:00:00.000Z",
+  "data": { "fromEmail": "ceo@acme.com", "subject": "Re: intro",
+            "intent": "interested" }
+}</pre>
+      <p>Set a secret and verify <code>X-Outrovo-Signature</code> (HMAC-SHA256 hex of the raw body).</p>
+      <table>
+        <tr><th>Event</th><th>Fires when</th></tr>
+        <tr><td><code>sent</code></td><td>an email leaves a sequence</td></tr>
+        <tr><td><code>reply</code></td><td>a prospect replies (carries <code>intent</code>: interested / not_interested / unsubscribe / ooo)</td></tr>
+        <tr><td><code>bounce</code></td><td>a send hard-bounces</td></tr>
+        <tr><td><code>unsubscribe</code></td><td>a prospect opts out</td></tr>
+        <tr><td><code>task</code></td><td>a LinkedIn to-do is created or completed</td></tr>
+        <tr><td><code>campaign</code></td><td>a campaign launches or pauses</td></tr>
+        <tr><td><code>click</code></td><td>a tracked link is clicked</td></tr>
+        <tr><td><code>digest</code></td><td>the daily summary runs</td></tr>
+        <tr><td><code>deliverability</code></td><td>a domain health check regresses (SPF/DKIM/DMARC/MX)</td></tr>
+      </table>
+
+      <h2>4 — LinkedIn autopilot bridge</h2>
+      <p>Same token, one endpoint for external LinkedIn tools (browser extensions, our CLI, or your own):</p>
+      <pre>GET  https://outrovo.co/api/integrations/linkedin/tasks
+POST https://outrovo.co/api/integrations/linkedin/callback
+       { "taskId": "...", "outcome": "done|failed|connected|replied", "note": "..." }</pre>
+      <p>Marking <code>replied</code> stops that prospect's email sequence automatically.</p>
+
+      <h2>Fair use</h2>
+      <ul>
+        <li>60 requests/min per token — plenty for agents and scripts.</li>
+        <li>Tokens are yours; don't share them. Rotate in Settings if one leaks.</li>
+        <li>Need a higher limit? Write us — we raise per-use-case, no tiers.</li>
+      </ul>
+
+      <div class="cta-row">
+        <a class="btn btn-primary" href="signup.html">Get your token</a>
+        <a class="btn btn-ghost" href="index.html">Back to product</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="ft">
+    <div class="wrap" style="text-align:center;font-size:0.8rem;color:var(--ink3);">
+      © 2026 Outrovo Inc. · <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a>
+    </div>
+  </footer>
+</body>
+</html>
