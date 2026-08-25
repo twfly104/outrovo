@@ -932,6 +932,61 @@ function guessEmailPatterns(first, last, domain) {
   return [...new Set(pats)];
 }
 
+// Pages where companies publish people emails, beyond the homepage.
+const CRAWL_PATHS = ['/about', '/contact', '/team', '/about-us', '/contact-us', '/our-team', '/leadership', '/people', '/staff', '/company', '/impressum'];
+const MAX_CRAWL_PAGES = 8; // per domain, homepage included — politeness budget
+const MAX_DISCOVERED_PATHS = 3;
+
+async function fetchLeadPage(domain, path) {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(`https://${domain}${path}`, {
+      signal: ctrl.signal, redirect: 'follow',
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OutrovoLeadFinder/1.0)' },
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    return await res.text();
+  } catch { return null; /* unreachable site — skip */ }
+}
+
+// Team/about/contact pages aren't always at the canonical URL — mine the
+// homepage's internal links for likely people pages.
+function discoverContactPaths(html, domain) {
+  const paths = [];
+  const re = /href=["']([^"']+)["']/gi;
+  let m;
+  while ((m = re.exec(html)) && paths.length < MAX_DISCOVERED_PATHS) {
+    const href = m[1].trim();
+    if (/^(mailto|tel|javascript):/i.test(href)) continue;
+    let path = null;
+    if (href.startsWith('/')) path = href;
+    else {
+      const abs = href.match(/^https?:\/\/(?:www\.)?([^/?#]+)(\/[^?#]*)?/i);
+      if (abs && (abs[1] === domain || abs[1].endsWith('.' + domain))) path = abs[2] || '';
+    }
+    if (!path) continue;
+    path = path.split(/[?#]/)[0];
+    if (path.length < 2) continue;
+    if (!/about|contact|team|staff|leadership/i.test(path)) continue;
+    if (/\.(pdf|jpe?g|png|gif|webp|svg|css|js|zip)$/i.test(path)) continue;
+    if (!paths.some(p => p.toLowerCase() === path.toLowerCase())) paths.push(path);
+  }
+  return paths;
+}
+
+function collectLeadEmails(html, domain, found) {
+  const matches = html.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
+  for (const m of matches) {
+    const e = m.toLowerCase();
+    if (!e.endsWith('@' + domain)) continue;
+    if (GENERIC_LOCALS.has(e.split('@')[0])) continue;
+    if (/\.(png|jpg|jpeg|gif|webp|svg|css|js)$/.test(e)) continue;
+    found.add(e);
+  }
+}
+
 async function builtinSearchLeads(f, perPage, sessionEmail) {
   // Free source: user supplies target domains (e.g. acme.com, orbcall.io);
   // we crawl the site's public pages for published emails, then MX-verify.
@@ -940,27 +995,22 @@ async function builtinSearchLeads(f, perPage, sessionEmail) {
   const out = [];
   for (const domain of domains) {
     const found = new Set();
-    for (const path of ['', '/about', '/contact', '/team']) {
+    const home = await fetchLeadPage(domain, '');
+    if (home) collectLeadEmails(home, domain, found);
+    // The homepage's own links are the best evidence for where a site keeps
+    // its people pages, so discovered paths rank ahead of the canonical list.
+    const seen = new Set();
+    const queue = [];
+    for (const p of [...(home ? discoverContactPaths(home, domain) : []), ...CRAWL_PATHS]) {
+      const k = p.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      queue.push(p);
+    }
+    for (const path of queue.slice(0, MAX_CRAWL_PAGES - 1)) {
       if (found.size >= 10) break;
-      try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 6000);
-        const res = await fetch(`https://${domain}${path}`, {
-          signal: ctrl.signal, redirect: 'follow',
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OutrovoLeadFinder/1.0)' },
-        });
-        clearTimeout(timer);
-        if (!res.ok) continue;
-        const html = await res.text();
-        const matches = html.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
-        for (const m of matches) {
-          const e = m.toLowerCase();
-          if (!e.endsWith('@' + domain)) continue;
-          if (GENERIC_LOCALS.has(e.split('@')[0])) continue;
-          if (/\.(png|jpg|jpeg|gif|webp|svg|css|js)$/.test(e)) continue;
-          found.add(e);
-        }
-      } catch { /* unreachable site — skip */ }
+      const html = await fetchLeadPage(domain, path);
+      if (html) collectLeadEmails(html, domain, found);
     }
     for (const email of found) {
       const local = email.split('@')[0];
