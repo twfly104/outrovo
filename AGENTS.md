@@ -682,3 +682,12 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
 - Removed "Book a call" ghost button + gray active pill on nav; actions now
   Log in + "Start free" (identical to index). Mobile menu CTA renamed to
   "Start free" too. Verified desktop+mobile screenshots identical.
+
+## Iteration 24 — true header pixel parity (Aug 2026)
+- Remaining drifts between pricing (styles.css) and index (styles-lite):
+  wrap 1180 vs 1120 and missing 24px horizontal padding -> logo x off by 24;
+  nav-links had pill padding (9/14) vs lite 6/2 + gap 4 vs 26; login ghost
+  border radius/padding; primary btn had btn-s + pill radius vs lite 8px.
+- Unified: styles.css now mirrors styles-lite header metrics exactly.
+  CDP probe across 1904px viewport: headerRect/navHeight/logoRect/fonts/
+  linkYs/action widths all identical between the two pages.
