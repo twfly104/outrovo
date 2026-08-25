@@ -639,3 +639,12 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
 - All 3 session-cookie setters (signup, login, Google OAuth `startSession`)
   go through `sessionCookie`. Verified: 11th rapid bad login → 429; HTTPS
   proxied login sets `Secure`; plain http signup does not.
+
+## Iteration 19 — marketing palette unified to cream (Aug 2026)
+- Owner: "pricing page and main page 顏色配置 equal". styles.css :root tokens
+  now mirror styles-lite (index): paper #f8f6f2, paper-deep #f0ece3,
+  ink #1b1915 / #4c473e / #948d7f, line #e9e3d7, crest #f97316 / #ea580c.
+- body::before dot-grid overlay REMOVED from styles.css (index has no texture).
+- .auth-side panel was white (var(--card)) — now var(--paper-deep) so the
+  split screen stays in the warm family. Dashboard unaffected: .app-body
+  re-declares every token (line ~1470) + hardcodes bg #f8f6f2.

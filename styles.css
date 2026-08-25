@@ -4,18 +4,21 @@
    ============================================================ */
 
 :root {
-  /* Softer, calmer palette — warmer paper, gentler ink, orange kept but tamed */
-  --paper: #fafaf9;
-  --paper-deep: #f1f2f0;
-  --ink: #1a1b1e;
-  --ink-soft: #4b4f57;
-  --ink-faint: #9aa1ab;
-  --crest: #e85d04;
-  --crest-deep: #d14f02;
+  /* Marketing palette — the same warm cream as styles-lite.css (index page:
+     --bg #f8f6f2, --ink #1b1915, --accent #f97316...) so pricing/signup/
+     login/legal match the landing page exactly. .app-body re-declares its
+     own tokens, so the dashboard is unaffected. */
+  --paper: #f8f6f2;
+  --paper-deep: #f0ece3;
+  --ink: #1b1915;
+  --ink-soft: #4c473e;
+  --ink-faint: #948d7f;
+  --crest: #f97316;
+  --crest-deep: #ea580c;
   --forest: #15171b;
   --forest-deep: #0f1114;
   --moss: #fde8d7;
-  --line: #e6e8eb;
+  --line: #e9e3d7;
   --card: #ffffff;
   --sun: #ffc832;
 
@@ -47,17 +50,8 @@ body {
   overflow-x: hidden;
 }
 
-/* Subtle paper grain + dotted field */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background-image: radial-gradient(rgba(22, 40, 31, 0.055) 1px, transparent 1.4px);
-  background-size: 26px 26px;
-  mask-image: linear-gradient(to bottom, black 0%, transparent 60%);
-}
+/* Dot-grid overlay removed — index (styles-lite) has no body texture, so the
+   marketing pages must not either, to keep all pages visually identical. */
 
 ::selection { background: var(--crest); color: #fff; }
 
@@ -1133,7 +1127,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   display: grid; place-items: center;
   border-radius: 12px;
   background: rgba(232, 93, 4, 0.08);
-  color: var(--crest, #e85d04);
+  color: var(--crest, #f97316);
   flex-shrink: 0;
 }
 .addon-body { flex: 1; }
@@ -1153,7 +1147,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .addon-price {
   font-size: 0.88rem;
   font-weight: 700;
-  color: var(--crest, #e85d04);
+  color: var(--crest, #f97316);
 }
 .addon-cta {
   font-size: 0.85rem;
@@ -1162,7 +1156,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   text-decoration: none;
   align-self: flex-start;
 }
-.addon-cta:hover { color: var(--crest, #e85d04); }
+.addon-cta:hover { color: var(--crest, #f97316); }
 @media (max-width: 820px) { .addons-grid { grid-template-columns: 1fr; } }
 
 /* Included strip */
@@ -1228,7 +1222,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   grid-template-columns: 1fr 1fr;
 }
 .auth-side {
-  background: var(--card);
+  background: var(--paper-deep);
   color: var(--ink);
   padding: 48px 56px;
   display: flex;
