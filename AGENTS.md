@@ -712,3 +712,19 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
 - publicUser() gains slackConnected + slackTeam so the Settings UI can
   reflect install state.
 - All 5 strategic differentiation points now live in production code.
+
+## Iteration 26 — 大佬 standard pass (Aug 2026)
+- Landing restructure for general buyers: big mid-page "For AI agents" band
+  replaced by a compact "For developers" strip placed between FAQ and CTA
+  (quiet, single paragraph + GitHub link). Hero/features/4-steps stay clean.
+- Features list gains a 4th bullet: "AI intent tagging & instant alerts".
+- Footer: "Developers · MCP & CLI" link added under Product; footer Features
+  list updated to match (AI intent tagging replaces smart-schedule row).
+- Pricing: Pro $99 → $89/mo (yearly $71, −20% toggle already existed) to land
+  inside the recommended $69–89 team band. Server PLANS.growth.priceMonthly
+  and the landing assistant's canned pricing fact updated to match.
+- Starter now lists domain health check, AI reply intent tags, and Slack /
+  webhook notifications — deliverability is NOT gated behind higher tiers
+  (matches how the server already behaves: domainAudit + watchdog run for
+  every user, classifyReply runs on all plans).
+- Verified via CDP screenshots: 4-bullet features, dev strip, $39/89/149 cards.
