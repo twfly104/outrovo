@@ -60,8 +60,10 @@ section[id]{scroll-margin-top:84px}
 .hero-copy>*:nth-child(1){animation-delay:.05s}.hero-copy>*:nth-child(2){animation-delay:.15s}.hero-copy>*:nth-child(3){animation-delay:.25s}.hero-copy>*:nth-child(4){animation-delay:.35s}.hero-copy>*:nth-child(5){animation-delay:.45s}.hero-copy>*:nth-child(6){animation-delay:.55s}.hero-copy>*:nth-child(7){animation-delay:.65s}
 .hero h1{margin:16px 0 18px}
 .hero-sub{color:var(--ink2);font-size:1.08rem;max-width:56ch;margin:0 auto}
-/* Solid accent italic — same calm treatment as the workpage, no shifting gradient. */
-.kw{display:inline-block;padding:0 .04em .07em;font-style:italic;color:var(--accent)}
+/* Animated gradient keyword — shifts hue through accent → red → amber. */
+.kw{display:inline-block;padding:0 .04em .07em;font-style:italic;background:linear-gradient(100deg,var(--accent),#e11d48,#f59e0b,var(--accent));background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:kw-hue 9s linear infinite}
+@keyframes kw-hue{to{background-position:300% 0}}
+@media (prefers-reduced-motion:reduce){.kw{animation:none}}
 .plist{display:grid;gap:11px;color:var(--ink2);font-size:1rem;margin:24px 0 30px}
 .plist li{display:flex;gap:11px;align-items:flex-start}
 .tick{width:20px;height:20px;border-radius:50%;background:rgba(249,115,22,.12);color:var(--accent);flex:none;display:grid;place-items:center;margin-top:2px;font-size:11px;font-weight:700}
