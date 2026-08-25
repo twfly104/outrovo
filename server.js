@@ -1051,11 +1051,12 @@ function enrollLeads(sessionEmail, campaignId, leads) {
   const prospects = load('prospects');
   const existing = new Set(prospects.filter(p => p.campaignId === campaignId).map(p => p.email));
   const ownerCampaignIds = new Set(load('campaigns').filter(c => c.owner === sessionEmail).map(c => c.id));
-  let added = 0, skippedSuppressed = 0;
+  let added = 0, skippedSuppressed = 0, skippedDupes = 0;
   for (const l of leads) {
     if (prospects.filter(p => ownerCampaignIds.has(p.campaignId)).length >= plan.maxProspects) break;
     const email = (l.email || '').trim().toLowerCase();
-    if (!isEmail(email) || existing.has(email)) continue;
+    if (!isEmail(email)) continue;
+    if (existing.has(email)) { skippedDupes++; continue; }
     if (isSuppressed(sessionEmail, email)) { skippedSuppressed++; continue; }
     existing.add(email);
     prospects.push({
@@ -1069,7 +1070,7 @@ function enrollLeads(sessionEmail, campaignId, leads) {
   }
   save('prospects', prospects);
   logEvent('lead-finder', `${added} Lead Finder prospects added to “${campaign.name}”`, { campaign: campaign.name, added }, sessionEmail);
-  return { added, skippedSuppressed, campaignName: campaign.name };
+  return { added, skippedSuppressed, skippedDupes, campaignName: campaign.name };
 }
 
 // ---------- CRM / automation webhooks ----------
