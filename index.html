@@ -23,6 +23,16 @@
         <a class="lg" href="login.html">Log in</a>
         <a class="btn btn-a s" href="signup.html">Start free</a>
       </div>
+      <button class="burger" id="navBurger" aria-label="Open menu" aria-expanded="false">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+    <div class="mmenu" id="navMenu" hidden>
+      <a href="#product">Product</a>
+      <a href="#steps">How it works</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="#faq">FAQ</a>
+      <a href="login.html">Log in</a>
     </div>
   </header>
 
@@ -514,6 +524,20 @@
         input.value = '';
         ask(q);
       });
+    })();
+  </script>
+  <script>
+    (() => {
+      const burger = document.getElementById('navBurger');
+      const menu = document.getElementById('navMenu');
+      if (!burger || !menu) return;
+      const toggle = open => {
+        menu.classList.toggle('open', open);
+        menu.hidden = !open;
+        burger.setAttribute('aria-expanded', String(open));
+      };
+      burger.addEventListener('click', () => toggle(menu.hidden));
+      menu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => toggle(false)));
     })();
   </script>
 </body>

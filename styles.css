@@ -2801,7 +2801,25 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .app-body .campaign-item:hover, .app-body .app-card-block:hover { box-shadow: 0 10px 26px rgba(28, 22, 13, 0.07); transform: none; }
 .app-body .inbox-list li { border: 1px solid #ebe6dc; border-radius: 12px; background: #fff; }
 .app-body .stat-card { border-radius: 14px; border: 1px solid #ebe6dc; box-shadow: 0 8px 20px rgba(28,22,13,0.04); }
-@media (max-width: 920px) { .app-body .app-sidebar { position: static; height: auto; width: 100%; flex-direction: row; flex-wrap: wrap; align-items: center; } .app-body .app-nav { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; } }
+@media (max-width: 920px) {
+  .app-body .app-shell { flex-direction: column; }
+  .app-body .app-sidebar {
+    position: static; height: auto; width: 100%;
+    flex-direction: row; flex-wrap: wrap; align-items: center;
+    gap: 10px; padding: 12px 14px;
+    border-right: 0; border-bottom: 1px solid #ebe6dc;
+  }
+  .app-body .app-sidebar .logo { margin-bottom: 0; }
+  .app-body .app-upsell { display: none; }
+  .app-body .app-nav { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; gap: 6px; flex: 1 1 100%; order: 3; -webkit-overflow-scrolling: touch; }
+  .app-body .app-nav button { padding: 8px 13px; font-size: 0.88rem; white-space: nowrap; }
+  .app-body .app-user { margin-left: auto; padding: 6px 8px; }
+  .app-body .app-user > div { display: none; }
+  .app-body .app-main { padding: 20px 14px 56px; }
+}
+@media (max-width: 560px) {
+  .app-body .credit-badge { display: none; }
+}
 /* ---------- Intel drawer (right slide-out) ---------- */
 .intel-drawer { position: fixed; inset: 0; z-index: 160; }
 .intel-drawer[hidden] { display: none; }

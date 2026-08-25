@@ -48,7 +48,15 @@ section[id]{scroll-margin-top:84px}
 .nav .c .lg:hover{background:var(--bg2)}
 .nav .c .btn{padding:8px 16px;border-radius:8px;font-size:.88rem;box-shadow:none}
 .nav .c .btn:hover{box-shadow:none}
-@media(max-width:760px){.nav .l{display:none}.nav .c .o,.nav .c .lg{display:none}}
+/* Mobile menu: burger replaces inline links under 760px */
+.burger{display:none;margin-left:auto;background:none;border:0;color:var(--ink);cursor:pointer;padding:8px;border-radius:10px}
+.burger:hover{background:var(--card)}
+.mmenu{display:none;flex-direction:column;padding:8px 20px 18px;border-top:1px solid var(--line);background:rgba(248,246,242,.97)}
+.mmenu a{padding:13px 4px;font-size:1rem;font-weight:520;color:var(--ink2);border-bottom:1px solid var(--line)}
+.mmenu a:last-child{border-bottom:0}
+.mmenu a:hover{color:var(--ink)}
+.mmenu.open{display:flex}
+@media(max-width:760px){.nav .l{display:none}.nav .c .o,.nav .c .lg{display:none}.burger{display:block}}
 
 /* hero */
 .hero{padding:88px 0 0;overflow:hidden}
