@@ -2599,7 +2599,7 @@ const ASSISTANT_PERSONA = `You are the Outrovo agent — the built-in product ex
 const ASSISTANT_FACTS = [
   'Outrovo is a cold-outreach platform: find leads with the built-in Lead Finder, send email + LinkedIn sequences (AI-drafted if you want), and read every reply in one unified inbox. Verification, warm-up and domain checks are built in, not paid add-ons.',
   'Services in one line: lead finding, email + LinkedIn sequences, AI copywriting, email verification, warm-up, domain health checks, unified inbox, CRM integrations.',
-  'Pricing: Starter $39/slot/mo, Pro $89 (most popular), Scale $149 — less billed annually (−20%). Agency $249/mo with client workspaces and white-labeling.',
+  'Pricing per sending slot: Starter $39/mo monthly or $31/mo billed yearly, Pro $89/mo monthly or $71/mo billed yearly (most popular), Scale $149/mo monthly or $119/mo billed yearly. Yearly billing saves 20%. Agency $249/mo with client workspaces and white-labeling.',
   'Unlike per-seat tools (Lemlist charges $50-90+ per sender seat), every Outrovo plan includes UNLIMITED sending inboxes — connect as many as you like, campaigns rotate across them, no per-inbox fees.',
   'Lead Finder “Add Credits” packs: pay-as-you-go bundles (500 credits $19, 2,000 $49, 10,000 $149) that never expire, on top of the monthly plan credits.',
   'Done-for-you domain setup is a $99 one-time service: we configure SPF, DKIM, DMARC and secondary domain DNS with you instead of trial-and-error. Purchased inside the app.',
