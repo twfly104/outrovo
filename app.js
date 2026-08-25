@@ -1934,7 +1934,6 @@ function renderLeadResults(leads, keywords = '') {
     const btn = e.target.closest('[data-intel]');
     if (btn) openLeadIntel(btn);
   };
-  $('leadEnrollCampaign').innerHTML = campaigns.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
 }
 
 function bindLeadFinder() {
@@ -2009,9 +2008,8 @@ function bindLeadFinder() {
       const btn = e.target.closest('[data-pick]');
       if (!btn) return;
       picker.hidden = true;
-      $('leadEnrollCampaign').value = btn.dataset.pick;
       enrollHint('');
-      enrollSelectedLeads();
+      enrollSelectedLeads(btn.dataset.pick);
     };
   });
   document.addEventListener('click', e => {
@@ -2019,22 +2017,27 @@ function bindLeadFinder() {
     if (picker && !picker.hidden && !e.target.closest('.lf-enroll')) picker.hidden = true;
   });
 
-  async function enrollSelectedLeads() {
+  async function enrollSelectedLeads(campaignId) {
     const selected = [...document.querySelectorAll('#leadTable input[data-lead]:checked')]
       .map(cb => leadFinderLeads[Number(cb.dataset.lead)]).filter(Boolean);
-    const campaignId = $('leadEnrollCampaign').value;
     if (!campaignId) { enrollHint('Choose a campaign first.'); return; }
     if (!selected.length) { enrollHint('Select at least one lead.'); return; }
     enrollHint('Adding…');
     try {
       const { status, data } = await api('POST', '/api/app/lead-finder/enroll', { campaignId, leads: selected });
-      const msg = status === 200 && data.ok
-        ? `✓ Added ${data.added} to “${data.campaignName}”${data.skippedSuppressed ? ` · ${data.skippedSuppressed} suppressed skipped` : ''}.`
-        : (data.error || 'Enroll failed.');
+      let msg;
+      if (status === 200 && data.ok) {
+        msg = data.added > 0
+          ? `✓ Added ${data.added} to “${data.campaignName}”.`
+          : `Already in “${data.campaignName}” — no duplicates added.`;
+        if (data.skippedSuppressed) msg += ` · ${data.skippedSuppressed} suppressed skipped`;
+      } else {
+        msg = data.error || 'Enroll failed.';
+      }
       $('leadFindNote').textContent = msg;
       enrollHint(status === 200 && data.ok ? '' : msg);
       if (status === 200 && data.ok) {
-        toast(`Added ${data.added} lead${data.added === 1 ? '' : 's'} to “${data.campaignName}”`);
+        toast(data.added > 0 ? `Added ${data.added} lead${data.added === 1 ? '' : 's'} to “${data.campaignName}”` : msg);
         $('leadResults').hidden = true;
         leadFinderLeads = [];
         loadCampaigns();
