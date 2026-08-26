@@ -716,7 +716,7 @@ function leadFinderProvider(user) {
 }
 function leadFinderSourceOrder(user) {
   const order = [];
-  if (userApolloKey(user) || process.env.APOLLO_API_KEY) order.push('apollo');
+  if (userApolloKey(user) || process.env.APOLLO_API_KEY) order.push('apollo', 'apollo-orgs');
   if (process.env.HUNTER_API_KEY) order.push('hunter');
   order.push('builtin');
   return order;
@@ -796,6 +796,87 @@ async function apolloSearchLeads(f, perPage, user = null) {
   });
 }
 
+// Free-plan Apollo fallback: people-search endpoints are plan-gated, but
+// organizations/search works on Free accounts. Search companies via Apollo
+// org search (native keyword/location/headcount filters), then resolve people
+// per domain via Hunter domain-search or the builtin crawler. Leads are
+// tagged 'apollo-orgs' so the UI shows Apollo drove the discovery.
+const SKIP_INDUSTRY = /marketing|advertis|public relations|information technology|software|internet|staffing|recruit|consult/i;
+async function apolloOrgsOrganizations(f, perPage, user = null) {
+  const key = userApolloKey(user) || process.env.APOLLO_API_KEY;
+  const want = Math.min(8, Math.max(3, perPage)), pageSize = 25;
+  const locations = splitFilter(f.location);
+  const body = {
+    per_page: pageSize,
+    q_keywords: f.keywords || undefined,
+    organization_locations: locations.length ? locations : undefined,
+    organization_num_employees_ranges: f.size ? [f.size] : undefined,
+  };
+  const shortlist = [];
+  // Paginate until the shortlist fills: the first page is dominated by
+  // marketing/IT providers (what an outbound tool sells TO), which the
+  // industry filter then drops. Three pages max keeps free-plan credit burn
+  // down while still surfacing a usable company set.
+  for (let page = 1; page <= 3 && shortlist.length < want; page++) {
+    const res = await fetch(`${APOLLO_BASE()}/api/v1/organizations/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': key },
+      body: JSON.stringify({ ...body, page }),
+    });
+    if (!res.ok) throw await apolloError(res, 'org-search');
+    const data = await res.json();
+    if (data.error && !data.organizations) {
+      const err = new Error(`Apollo org search: ${data.error}`);
+      err.code = 'INVALID_KEY';
+      throw err;
+    }
+    const orgs = (data.organizations || [])
+      .map(o => ({ domain: (o.primary_domain || '').replace(/^www\./, '').toLowerCase() || (o.website_url || '').replace(/^(https?:|)\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '').replace(/\/.*$/, '').toLowerCase(),
+        industry: o.industry || '' }))
+      .filter(o => o.domain && /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(o.domain) && !SKIP_INDUSTRY.test(o.industry));
+    for (const o of orgs) {
+      if (!shortlist.includes(o.domain)) shortlist.push(o.domain);
+      if (shortlist.length >= want) break;
+    }
+  }
+  return { domains: shortlist };
+}
+
+// people resolution for org domains: Hunter first, else builtin-crawl.
+// Both return lead rows; we tag them 'apollo-orgs' so status shows the
+// discovery source, and push fallthrough/downgrade guidance via warnings.
+async function apolloOrgsSearchLeads(f, perPage, sessionEmail, user = null) {
+  const direct = leadFinderDomains(f.keywords).slice(0, 10);
+  let domains = direct;
+  if (!domains.length) {
+    const orgs = await apolloOrgsOrganizations(f, perPage, user);
+    domains = orgs.domains;
+    if (!domains.length) return { leads: [], warnings: ['Apollo organization search matched no companies — try broader keywords.'] };
+  }
+  // Once we have domains, resolve people the same way hunterSearchLeads /
+  // builtinSearchLeads do — passing explicit domains so their own free-text
+  // discovery (hunterDiscover / tryLlmDomainDiscover) is skipped.
+  let leads = [];
+  const warnings = [];
+  try {
+    if (process.env.HUNTER_API_KEY) leads = await hunterSearchLeads({ ...f, __domains: domains }, perPage, sessionEmail);
+    else { await tryBuiltIn(); if (!leads.length) warnings.push('Apollo found the companies, but with no Hunter key the built-in crawler came up empty. Connect Hunter.io (Settings → Lead data source) for named contacts.'); }
+  } catch (err) {
+    if (err.code === 'NO_DOMAINS') warnings.push(err.message);
+    else throw err;
+  }
+  if (!leads.length) await tryBuiltIn();
+  return { leads: leads.map(l => ({ ...l, source: 'apollo-orgs' })), warnings };
+
+  async function tryBuiltIn() {
+    if (leads.length) return leads;
+    const b = await builtinSearchLeads({ ...f, __domains: domains }, perPage, sessionEmail);
+    if (b.warning) warnings.push(b.warning);
+    leads = b.leads;
+    return leads;
+  }
+}
+
 function leadFinderDomains(keywords) {
   return (keywords || '')
     .split(/[,\s]+/).map(s => s.trim().replace(/^@/, '').replace(/^https?:\/\//, '').split('/')[0])
@@ -843,7 +924,7 @@ async function hunterDiscoverDomains(f, limit = 3) {
     .map(c => c.domain);
 }
 async function hunterSearchLeads(f, perPage) {
-  let domains = leadFinderDomains(f.keywords).slice(0, 3);
+  let domains = (f.__domains && f.__domains.length ? f.__domains : leadFinderDomains(f.keywords)).slice(0, 3);
   if (!domains.length) domains = await hunterDiscoverDomains(f);
   if (!domains.length) {
     const err = new Error('Hunter.io found no companies matching that ICP — try broader keywords, add target domains (e.g. acme.com) to Ideal customer, or set APOLLO_API_KEY.');
@@ -1234,10 +1315,11 @@ async function leadershipGuessLeads(domain, f) {
 }
 
 async function builtinSearchLeads(f, perPage, sessionEmail) {
-  // Free source: when the keywords are domains, crawl them; otherwise try
-  // free-text discovery first. Returns { leads, warning } so searchLeads can
-  // surface the actionable guidance in warnings[] rather than a silent [].
-  const { domains, warning } = await discoverDomains(f);
+  // Free source: explicit __domains short-circuit discovery (e.g. Apollo org
+  // search already found the companies); else when the keywords are domains,
+  // crawl them, otherwise try free-text discovery first. Returns { leads,
+  // warning } so searchLeads can surface actionable guidance.
+  const { domains, warning } = (f.__domains && f.__domains.length) ? { domains: f.__domains, warning: '' } : await discoverDomains(f);
   if (!domains.length) return { leads: [], warning: warning || '' };
   const out = [];
   for (const domain of domains) {
@@ -1320,6 +1402,10 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
     try {
       if (src === 'apollo') {
         leads = await apolloSearchLeads(f, perPage, user);
+      } else if (src === 'apollo-orgs') {
+        const found = await apolloOrgsSearchLeads(f, perPage, sessionEmail, user);
+        warnings.push(...found.warnings);
+        leads = found.leads;
       } else if (src === 'hunter') {
         leads = await hunterSearchLeads(f, perPage);
       } else {
@@ -1327,6 +1413,9 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
         if (builtin.warning) warnings.push(builtin.warning);
         leads = builtin.leads;
       }
+      // Provider worked: the block message ("Apollo key has no API access...") is
+      // noise once leads landed. Drop it; real failures still land in errors[].
+      if (leads.length) warnings.length && warnings.splice(0, warnings.length, ...warnings.filter(w => !/apollo.*api access/i.test(w)));
       if (leads.length) break;
       // Hunter ran but returned nothing verified: if the search was
       // domain-targeted, don't fall through to the crawler (it would scrape
