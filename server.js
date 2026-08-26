@@ -872,7 +872,13 @@ async function apolloOrgsSearchLeads(f, perPage, sessionEmail, user = null) {
     else { await tryBuiltIn(); if (!leads.length) warnings.push('Apollo found the companies, but with no Hunter key the built-in crawler came up empty. Connect Hunter.io (Settings → Lead data source) for named contacts.'); }
   } catch (err) {
     if (err.code === 'NO_DOMAINS') warnings.push(err.message);
-    else throw err;
+    // Hunter quota/rate-limit errors (message mentions "limit" or status 429):
+    // don't kill the whole apollo-orgs step — the shortlisted org domains are
+    // still valid, so resolve them via the builtin crawler instead.
+    else if (process.env.HUNTER_API_KEY && /limit|quota|429|billing period/i.test(err.message)) {
+      warnings.push(`Hunter.io quota exhausted (${err.message}) — resolved via built-in crawler instead.`);
+      await tryBuiltIn();
+    } else throw err;
   }
   if (!leads.length) await tryBuiltIn();
   return { leads: leads.map(l => ({ ...l, source: 'apollo-orgs' })), warnings };
