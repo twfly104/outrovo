@@ -925,26 +925,27 @@ function hunterCovered(f) {
 // entire local-part ("affiliates", "bizdev", "brandmarketing"), plus
 // separators handled by extracting sub-words (investors.gd → investors).
 const GENERIC_LOCALS = new Set(['info', 'contact', 'hello', 'support', 'sales', 'team', 'office', 'mail', 'admin', 'no-reply', 'noreply', 'press', 'media', 'pr', 'partners', 'partnerships', 'jobs', 'careers', 'hr', 'billing', 'legal', 'privacy']);
-const GENERIC_ALIAS = /^(?:it|no|pay|opt(?:in|out)?|test|example|demo|sample|foo|bar|abc|xyz|affiliates?|biz|bizdev|businessdev|brand|brandmarketing|marcom|marketing|news|newsroom|editorial|investors?|ir|charity|foundation|giving|community|esg|csr|dei|events?|webinar|webinars|promo|promotions?|offers|deals|newsletter|subscrib(?:e|er|ers)|unsubscribe|legal|compliance|security|abuse|spam|postmaster|webmaster|hostmaster|dns|noc|tech|technical|infrastructure|finance|accounting|invoice|payments?|orders?|returns?|reply|bounces?|despatch|dispatch|recruit|recruiting|talent|hire|hiring|legal|privacy|solutions?|development|dept|department|theteam|root|ops|operations|administrate|administrator|administration|adm|owner|owners|founder|founders|corp|corporate|company|business|enterprise|general|reception|front|hq|welcome|hello(?:world)?|enquiries|inquiries|guest|visitor|visitors?|prospect|service|services|help|helpdesk|support|care|clients?|customer|customers|success|accounts?|user|users|member|members|social|socialmedia|linkedin|facebook|twitter|in|comm|comms|communication|communications)$/i;
+const GENERIC_ALIAS = /^(?:it|no|pay|opt(?:in|out)?|test|example|demo|sample|foo|bar|abc|xyz|git|inquiry|inquiries|enquiries|verify|verification|verifications|background|backgroundcheck|backgroundverification|people|peoplesupport|peopleservices|affiliates?|biz|bizdev|businessdev|brand|brandmarketing|marcom|marketing|news|newsroom|editorial|investors?|ir|charity|foundation|giving|community|esg|csr|dei|events?|webinar|webinars|promo|promotions?|offers|deals|newsletter|subscrib(?:e|er|ers)|unsubscribe|legal|compliance|security|abuse|spam|postmaster|webmaster|hostmaster|dns|noc|tech|technical|infrastructure|finance|accounting|invoice|payments?|orders?|returns?|reply|bounces?|despatch|dispatch|recruit|recruiting|talent|hire|hiring|legal|privacy|solutions?|development|dept|department|theteam|root|ops|operations|administrate|administrator|administration|adm|owner|owners|founder|founders|corp|corporate|company|business|enterprise|general|reception|front|hq|welcome|hello(?:world)?|guest|visitor|visitors?|prospect|service|services|help|helpdesk|support|care|clients?|customer|customers|success|accounts?|user|users|member|members|social|socialmedia|linkedin|facebook|twitter|in|comm|comms|communication|communications)$/i;
 function isGenericLocal(local) {
   const l = String(local || '').toLowerCase();
   if (!l) return true;
   if (GENERIC_LOCALS.has(l)) return true;
   if (GENERIC_ALIAS.test(l)) return true;
-  // "bizdev.team@" style: every sub-token generic → generic.
+  // Split on any separator: catch composite junk whether separators exist or
+  // not ("people.support-ok", "background-verification.india").
   const subs = l.split(/[._-]+/).filter(Boolean);
-  if (subs.length > 1 && subs.every(s => GENERIC_LOCALS.has(s) || GENERIC_ALIAS.test(s))) return true;
+  if (subs.some(s => GENERIC_LOCALS.has(s) || GENERIC_ALIAS.test(s))) return true;
+  // Composite without separators: ≥5-char generic substring anywhere in the
+  // local ("tvmedia", "mopsdeals", "peoplesupport", "backgroundcheck").
+  if (GENERIC_SUB.test(l)) return true;
   // Run-together department phrases ("customeradvocacyinquiry") never match
-  // the word list, but a single concatenated string this long is never a
-  // person alias. Real people use separators or short names.
+  // any word above and contain no separators — never a person.
   if (/^[a-z]+$/.test(l) && l.length > 14) return true;
-  // Composite junk ("tvmedia", "mopsdeals"): contain a ≥5-char generic word
-  // without separators.
-  if (l.length <= 14 && GENERIC_SUB.test(l)) return true;
   return false;
 }
-// ≥5-char substrings that mark an unseparated local-part as a department.
-const GENERIC_SUB = /media|sales|press|legal|billing|business|marketing|partner|career|invest|charity|brand|finance|invoice|recruit|talent|security|compliance|service|account|customer|client|visitor|promo|deals|offer|newsletter|contact|office|admin|operations|development|department|founder|owner|corporate|company|enterprise|reception|social|linkedin|human|member|events|webinar|news/;
+// ≥5-char substrings that mark ANY form of unseparated local as a department
+// alias ("jv_sales_people" splits handled above; run-together forms hit here).
+const GENERIC_SUB = /media|sales|press|legal|billing|business|market|partner|career|invest|charity|brand|finance|invoice|recruit|talent|security|complian|service|account|customer|client|visitor|promo|deals|offer|news|contact|office|admin|operat|develop|depart|founder|owner|corporat|company|enterprise|recept|social|linked|member|event|webin|peopl|human|verify|inquir|support|help|enquir|mail/;
 function guessEmailPatterns(first, last, domain) {
   const f = (first || '').toLowerCase().replace(/[^a-z]/g, '');
   const l = (last || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -1167,6 +1168,61 @@ async function discoverDomains(f) {
   return { domains };
 }
 
+// Last-resort person resolution: the company site published no usable
+// emails, so ask the LLM for public leadership names (CTO/VP/…) and pattern-
+// guess their corporate addresses. Every guess is MX-verified upstream; the
+// caller marks these leads as 'guessed' so the UI never presents them as
+// confirmed contacts. Requires an LLM key; silently skips without one.
+async function leadershipGuessLeads(domain, f) {
+  const titles = (Array.isArray(f.title) ? f.title : [f.title]).filter(Boolean);
+  const want = titles.length ? titles.join(', ') : 'CTO, VP of Engineering, Head of Product, CEO, Founder';
+  // Reasoning models (gpt-oss) answer this nondeterministically — same
+  // prompt sometimes returns the right exec, sometimes {"people":[]}. Ask
+  // twice (titles first, generic C-suite fallback) and keep the first hit.
+  const prompts = [
+    JSON.stringify({ domain, titles: want }),
+    JSON.stringify({ domain, titles: 'CEO, CTO, COO, Founder, Managing Director' }),
+  ];
+  let people = [];
+  for (const user of prompts) {
+    const llm = await callLlmJson(
+      'List well-known public executives of the company at the given domain whose role matches the requested titles (from your training knowledge). Return JSON ONLY {"people":[{"firstName":"...","lastName":"...","title":"..."}]} with up to 4 people. Return {"people":[]} only if you genuinely do not know the company.',
+      user,
+      25000,
+    );
+    if (llm.result?.people?.length) { people = llm.result.people; break; }
+  }
+  if (!people.length) return [];
+  const out = [];
+  const domainMx = (await verifyEmail(`nothing-here-${Date.now()}@${domain}`).catch(() => null))?.mx?.length ? true : null;
+  for (const p of people.slice(0, 4)) {
+    const first = String(p.firstName || '').trim(), last = String(p.lastName || '').trim(), title = String(p.title || '').trim();
+    if (!first || !PERSON_NAME_RE.test(`${first} ${last}`.trim())) continue;
+    // Full-name catch-all check: if the domain has no MX at all, a guessed
+    // address can't be delivered; without MX evidence, pattern guessing is
+    // the only signal and we keep the lead flagged as guessed.
+    const patterns = guessEmailPatterns(first, last, domain);
+    if (!patterns.length) continue;
+    let email = '';
+    for (const cand of patterns) {
+      try {
+        const v = await verifyEmail(cand);
+        if (v.verdict === 'deliverable') { email = cand; break; }
+        if (v.mx?.length && !email) email = cand; // MX exists — keep as best guess
+      } catch { /* try next pattern */ }
+    }
+    if (!email) continue;
+    if (isGenericLocal(email.split('@')[0])) continue;
+    out.push({
+      email, source: 'builtin', guessed: true,
+      firstName: cap(first), lastName: cap(last),
+      company: domain, title: title || want.split(',')[0].trim(), linkedinUrl: '', emailStatus: '',
+    });
+    if (domainMx === false) break; // no MX — guesses won't deliver anyway
+  }
+  return out;
+}
+
 async function builtinSearchLeads(f, perPage, sessionEmail) {
   // Free source: when the keywords are domains, crawl them; otherwise try
   // free-text discovery first. Returns { leads, warning } so searchLeads can
@@ -1209,6 +1265,15 @@ async function builtinSearchLeads(f, perPage, sessionEmail) {
         company: domain, title: (hint && hint.title) || f.title || '', linkedinUrl: '', emailStatus: '',
       });
       if (out.length >= perPage * 6) break;
+    }
+    // Crawl yielded nothing usable on this domain (only department aliases,
+    // or nothing at all): resolve named executives via the LLM and pattern-
+    // guess their addresses. Better a flagged guess than another info@ row.
+    if (!found.size && out.length < perPage * 6) {
+      try {
+        const guessed = await leadershipGuessLeads(domain, f);
+        out.push(...guessed);
+      } catch { /* guess path is best-effort */ }
     }
     if (out.length >= perPage * 6) break;
   }
@@ -1272,7 +1337,11 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
   const campaignIds = new Set(campaigns.map(c => c.id));
   const existing = new Set(load('prospects').filter(p => campaignIds.has(p.campaignId)).map(p => p.email));
   leads = leads.filter(l => !existing.has(l.email) && !isSuppressed(sessionEmail, l.email));
+  const beforeJunkFilter = leads.length;
   leads = leads.filter(l => !isGenericLocal(l.email.split('@')[0]));
+  if (!leads.length && beforeJunkFilter > 0) {
+    warnings.push(`Found ${beforeJunkFilter} address(es) but all were department/system inboxes (e.g. info@, affiliates@) — dropped. This site doesn't publish individual contacts publicly; connect an Apollo key (Settings → Lead data source) for named contacts.`);
+  }
   if (!leads.length) return { leads: [], provider: null, errors, warnings };
   const verified = await verifyLeadBatch(leads, perPage);
   return { leads: verified.slice(0, perPage), provider: leads[0].source, errors, warnings };
