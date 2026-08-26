@@ -99,18 +99,16 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   the opener popup). `publicSender` returns `oauth:true` and strips tokens.
 - Lead Finder source priority: Apollo people-search (BYOK key or
   `APOLLO_API_KEY`, plan-gated) → Apollo org fallback (`apollo-orgs`:
-  Free-plan `organizations/search` gives company domains, then Hunter
-  domain-search or the builtin crawler resolves people per domain; leads are
-  tagged source `apollo-orgs` and shown in the status line as "via Apollo
-  companies (free plan)") → Hunter.io (`HUNTER_API_KEY`) → built-in domain
+  Free-plan `organizations/search` gives company domains, then the
+  builtin crawler resolves people per domain; leads are tagged source
+  `apollo-orgs`) → built-in domain
   crawler. First source that returns leads wins; rejected/expired/plan-gated
   keys degrade to a soft `warnings[]` entry and the search falls through to
   the next source. Once leads land, the "Apollo key has no API access" soft
   warning is dropped from `warnings[]` so the success path stays clean.
 - `APOLLO_API_KEY` — powers Lead Finder ICP search
-  (Find Leads page). Without it, Lead Finder tries Hunter.io, then falls
-  back to crawling the target company domains the user types in and
-  MX-verifies what it finds.
+  (Find Leads page). Without it, Lead Finder falls back to crawling the
+  target company domains the user types in and MX-verifies what it finds.
   BYOK: a user can also connect their own Apollo key in Settings > Lead data
   source (`GET/POST/DELETE /api/app/integrations/apollo-key`). It is stored
   AES-256-GCM encrypted on the user record (`apolloKeyEnc`, via
@@ -123,18 +121,7 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   and match endpoints return `API_INACCESSIBLE`; `apolloError()` surfaces
   that as an actionable message and search falls through to builtin.
   `APOLLO_BASE_URL` env overrides the API origin for mock-server tests.
-- `HUNTER_API_KEY` — Hunter.io fallback, two hops: free-text ICP goes
-  through Discover (`POST /v2/discover`, natural-language `query` built
-  from keywords + location, `headcount` filter mapped from the size
-  select) to get company domains; keywords that already contain domains
-  skip Discover. Then `GET /v2/domain-search?domain=…&type=personal&limit=10`
-  (plus `seniority=executive` when the title filter matches founder/C-level
-  terms) reveals the people. Only `verification.status === 'valid'` emails
-  are kept. 401/403 → `INVALID_KEY` soft warning; `HUNTER_BASE_URL`
-  overrides the API origin for tests. Hunter Free = 25 credits/mo (1 per
-  domain per 10 emails), so searches cap at 3 domains.
-  Empty-search responses carry `errors[]` — the UI shows
-  them instead of the generic "no leads matched" note.
+  Hunter.io was removed — Apollo is the only external lead source.
   Quotas per plan: trial 25, starter 100, growth 1,000, scale/agency 10,000
   credits/month (1 credit per returned lead), tracked on `user.leadFinder`.
   `GET /api/app/lead-finder/status` also returns `seed = { website }` (the

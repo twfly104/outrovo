@@ -705,22 +705,18 @@ async function callEnrichment(email, name = {}, user = null) {
 }
 function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
 
-// ---------- lead finder (Apollo → Hunter.io → builtin guess+verify) ----------
-// Provider priority: a configured Apollo key wins (full ICP search); without
-// one, Hunter.io (domain-search over target domains); the built-in crawler
-// is always the last resort so search never hard-fails on missing keys.
+// ---------- lead finder (Apollo → apollo-orgs → builtin guess+verify) ----------
+// Provider priority: an Apollo key wins (full ICP search); the built-in
+// crawler is always the last resort so search never hard-fails on missing
+// keys.
 function leadFinderProvider(user) {
   if (userApolloKey(user) || process.env.APOLLO_API_KEY) return 'apollo';
-  if (process.env.HUNTER_API_KEY) return 'hunter';
   return null;
 }
 function leadFinderSourceOrder(user) {
   const order = [];
-  const hasApollo = !!(userApolloKey(user) || process.env.APOLLO_API_KEY);
-  if (hasApollo) {
-    order.push('apollo', 'apollo-orgs'); // paid people-search → free-plan org fallback (uses Hunter internally if configured)
-  } else if (process.env.HUNTER_API_KEY) {
-    order.push('hunter'); // standalone Hunter only when no Apollo key at all
+  if (userApolloKey(user) || process.env.APOLLO_API_KEY) {
+    order.push('apollo', 'apollo-orgs'); // paid people-search → free-plan org fallback
   }
   order.push('builtin');
   return order;
@@ -803,8 +799,8 @@ async function apolloSearchLeads(f, perPage, user = null) {
 // Free-plan Apollo fallback: people-search endpoints are plan-gated, but
 // organizations/search works on Free accounts. Search companies via Apollo
 // org search (native keyword/location/headcount filters), then resolve people
-// per domain via Hunter domain-search or the builtin crawler. Leads are
-// tagged 'apollo-orgs' so the UI shows Apollo drove the discovery.
+// per domain via the builtin crawler. Leads are tagged 'apollo-orgs' so the
+// UI shows Apollo drove the discovery.
 const SKIP_INDUSTRY = /marketing|advertis|public relations|information technology|software|internet|staffing|recruit|consult/i;
 // The industry filter exists to keep vendor-noise out of vendor searches — but
 // if the user's ICP IS that industry ("marketing agencies"), the filter
@@ -851,45 +847,21 @@ async function apolloOrgsOrganizations(f, perPage, user = null) {
   return { domains: shortlist };
 }
 
-// people resolution for org domains: Hunter first, else builtin-crawl.
-// Both return lead rows; we tag them 'apollo-orgs' so status shows the
-// discovery source, and push fallthrough/downgrade guidance via warnings.
+// People resolution for org domains goes through the builtin crawler —
+// passing explicit domains so the crawler's own free-text discovery path
+// stays skipped. Leads get re-tagged 'apollo-orgs'; crawler warnings surface
+// upstream.
 async function apolloOrgsSearchLeads(f, perPage, sessionEmail, user = null) {
-  const direct = leadFinderDomains(f.keywords).slice(0, 10);
-  let domains = direct;
+  let domains = leadFinderDomains(f.keywords).slice(0, 10);
   if (!domains.length) {
     const orgs = await apolloOrgsOrganizations(f, perPage, user);
     domains = orgs.domains;
     if (!domains.length) return { leads: [], warnings: ['Apollo organization search matched no companies — try broader keywords.'] };
   }
-  // Once we have domains, resolve people the same way hunterSearchLeads /
-  // builtinSearchLeads do — passing explicit domains so their own free-text
-  // discovery (hunterDiscover / tryLlmDomainDiscover) is skipped.
-  let leads = [];
   const warnings = [];
-  try {
-    if (process.env.HUNTER_API_KEY) leads = await hunterSearchLeads({ ...f, __domains: domains }, perPage, sessionEmail);
-    else { await tryBuiltIn(); if (!leads.length) warnings.push('Apollo found the companies, but with no Hunter key the built-in crawler came up empty. Connect Hunter.io (Settings → Lead data source) for named contacts.'); }
-  } catch (err) {
-    if (err.code === 'NO_DOMAINS') warnings.push(err.message);
-    // Hunter quota/rate-limit errors (message mentions "limit" or status 429):
-    // don't kill the whole apollo-orgs step — the shortlisted org domains are
-    // still valid, so resolve them via the builtin crawler instead.
-    else if (process.env.HUNTER_API_KEY && /limit|quota|429|billing period/i.test(err.message)) {
-      warnings.push(`Hunter.io quota exhausted (${err.message}) — resolved via built-in crawler instead.`);
-      await tryBuiltIn();
-    } else throw err;
-  }
-  if (!leads.length) await tryBuiltIn();
-  return { leads: leads.map(l => ({ ...l, source: 'apollo-orgs' })), warnings };
-
-  async function tryBuiltIn() {
-    if (leads.length) return leads;
-    const b = await builtinSearchLeads({ ...f, __domains: domains }, perPage, sessionEmail);
-    if (b.warning) warnings.push(b.warning);
-    leads = b.leads;
-    return leads;
-  }
+  const found = await builtinSearchLeads({ ...f, __domains: domains }, perPage, sessionEmail);
+  if (found.warning) warnings.push(found.warning);
+  return { leads: found.leads.map(l => ({ ...l, source: 'apollo-orgs' })), warnings };
 }
 
 function leadFinderDomains(keywords) {
@@ -898,124 +870,6 @@ function leadFinderDomains(keywords) {
     .filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)).slice(0, 5);
 }
 
-// Hunter.io has no people search, so it works in two hops: free-text ICP
-// goes through Discover (natural-language company search → domains), then
-// domain-search reveals the people at those companies. Keywords that already
-// contain domains skip Discover. 1 credit per domain per 10 emails, so cap
-// at 3 domains per search.
-const HUNTER_BASE = () => (process.env.HUNTER_BASE_URL || 'https://api.hunter.io').replace(/\/$/, '');
-const EXEC_TITLES = /\b(founder|co-?founder|ceo|cto|cfo|coo|cmo|owner|president|partner|principal|chief|vp|vice president|head of|director)\b/i;
-// UI size select ("11,50") → Hunter headcount ranges ("11-50").
-const HUNTER_HEADCOUNT = { '1,10': ['1-10'], '11,50': ['11-50'], '51,200': ['51-200'], '201,500': ['201-500'], '501,1000': ['501-1000'], '1001,10000': ['1001-5000', '5001-10000'] };
-async function hunterDiscoverDomains(f, limit = 3) {
-  const query = [f.keywords, f.location ? `in ${splitFilter(f.location).join(' or ')}` : ''].filter(Boolean).join(' ');
-  if (!query.trim()) return [];
-  // NOTE: no limit/offset — pagination params are Premium-only and make
-  // Hunter reject the whole call on Free plans ("results are limited to
-  // 100 results on your current plan"). Default page is fine: we take the
-  // top 3 domains anyway.
-  const body = { query };
-  const headcount = HUNTER_HEADCOUNT[f.size];
-  if (headcount) body.filters = { headcount };
-  const res = await fetch(`${HUNTER_BASE()}/v2/discover?api_key=${encodeURIComponent(process.env.HUNTER_API_KEY)}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    const err = new Error(`Hunter.io Discover: ${data?.errors?.[0]?.details || `request failed (${res.status})`}`);
-    if (res.status === 401 || res.status === 403) err.code = 'INVALID_KEY';
-    else if (res.status === 429) err.code = 'RATE_LIMITED';
-    throw err;
-  }
-  // Discover matches loosely ("ecommerce brands" surfaces agencies and
-  // software vendors), so skip the industries an SGI-style user sells TO
-  // but never targets: marketing/IT/recruiting providers — unless the ICP
-  // explicitly IS that industry. Prefer companies Hunter actually has
-  // personal emails for.
-  const skipIndustry = icpTargetsSkipIndustry(f.keywords) ? null : SKIP_INDUSTRY;
-  return (data?.data || [])
-    .filter(c => c.domain && (!skipIndustry || !skipIndustry.test(c.industry || '')))
-    .sort((a, b) => (b.emails_count?.personal || 0) - (a.emails_count?.personal || 0))
-    .slice(0, limit)
-    .map(c => c.domain);
-}
-async function hunterSearchLeads(f, perPage) {
-  let domains = (f.__domains && f.__domains.length ? f.__domains : leadFinderDomains(f.keywords)).slice(0, 3);
-  if (!domains.length) domains = await hunterDiscoverDomains(f);
-  if (!domains.length) {
-    const err = new Error('Hunter.io found no companies matching that ICP — try broader keywords, add target domains (e.g. acme.com) to Ideal customer, or set APOLLO_API_KEY.');
-    err.code = 'NO_DOMAINS';
-    throw err;
-  }
-  const titles = splitFilter(f.title);
-  const isExec = EXEC_TITLES.test(f.title || '');
-  // Expand C-level abbreviations to their spelled-out forms — Hunter stores
-  // "Chief Executive Officer", so a "CEO" chip must match that too.
-  const TITLE_EXPANSIONS = {
-    ceo: 'chief executive officer', cto: 'chief technology officer',
-    cfo: 'chief financial officer', coo: 'chief operating officer',
-    cmo: 'chief marketing officer', cro: 'chief revenue officer',
-    cpo: 'chief product officer', cio: 'chief information officer',
-  };
-  const titleTerms = [...new Set(titles.flatMap(t => {
-    const clean = t.toLowerCase().replace(/[^a-z\s]/g, '').trim();
-    if (!clean) return [];
-    return TITLE_EXPANSIONS[clean] ? [clean, TITLE_EXPANSIONS[clean]] : [clean];
-  }))];
-  // Hunter's seniority=executive spans C-level through directors, so a
-  // "founder / CEO" search still surfaces Directors of AI. Post-filter by
-  // word boundary so the lead's title must contain one of the requested
-  // title words ("director of sales" matches "sales", never "founder").
-  const titleMatches = leadTitle => {
-    if (!titleTerms.length) return true;
-    const t = (leadTitle || '').toLowerCase();
-    return titleTerms.some(term => new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(t));
-  };
-  const seniority = isExec ? '&seniority=executive' : '';
-  const out = [];
-  const seen = new Set();
-  for (const domain of domains) {
-    if (out.length >= perPage * 3) break;
-    const res = await fetch(`${HUNTER_BASE()}/v2/domain-search?domain=${encodeURIComponent(domain)}&type=personal&limit=10${seniority}&api_key=${encodeURIComponent(process.env.HUNTER_API_KEY)}`);
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      const err = new Error(`Hunter.io: ${data?.errors?.[0]?.details || `request failed (${res.status})`}`);
-      if (res.status === 401 || res.status === 403) err.code = 'INVALID_KEY';
-      else if (res.status === 429) err.code = 'RATE_LIMITED';
-      throw err;
-    }
-    for (const e of data?.data?.emails || []) {
-      const email = (e.value || '').trim().toLowerCase();
-      if (!isEmail(email) || seen.has(email)) continue;
-      // Hunter returns 'valid' / 'invalid' / 'accept_all' / 'webmail' — or no
-      // verification object at all when the address was never checked. That
-      // unverified bucket is where junk like "Imma Russo, Founder of Google"
-      // lives (anyone can claim any title on an unchecked address), so keep
-      // only positively-verified emails.
-      if (e.verification?.status !== 'valid') continue;
-      if (!titleMatches(e.position)) continue;
-      seen.add(email);
-      out.push({
-        email, source: 'hunter',
-        firstName: e.first_name || '', lastName: e.last_name || '',
-        company: data.data.organization || domain,
-        title: e.position || '', linkedinUrl: e.linkedin || '',
-        size: '', country: '',
-        emailStatus: e.verification?.status || '',
-      });
-    }
-  }
-  return out;
-}
-
-// True when the ICP keywords pointed at specific company domains — Hunter ran
-// its domain-search on them and simply found no verified people. Falling
-// through to the built-in crawler would only scrape the same sites for
-// unverified junk, so return a clear zero-result instead.
-function hunterCovered(f) {
-  const domains = leadFinderDomains(f.keywords).slice(0, 3);
-  return domains.length > 0;
-}
 
 // Non-person mailboxes: department/role aliases that sites publish and our
 // crawler then mistakes for leads. Exact-match words, tested against the
@@ -1427,8 +1281,6 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
         const found = await apolloOrgsSearchLeads(f, perPage, sessionEmail, user);
         warnings.push(...found.warnings);
         leads = found.leads;
-      } else if (src === 'hunter') {
-        leads = await hunterSearchLeads(f, perPage);
       } else {
         const builtin = await builtinSearchLeads(f, perPage, sessionEmail);
         if (builtin.warning) warnings.push(builtin.warning);
@@ -1438,16 +1290,12 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
       // noise once leads landed. Drop it; real failures still land in errors[].
       if (leads.length) warnings.length && warnings.splice(0, warnings.length, ...warnings.filter(w => !/apollo.*api access/i.test(w)));
       if (leads.length) break;
-      // Hunter ran but returned nothing verified: if the search was
-      // domain-targeted, don't fall through to the crawler (it would scrape
-      // the same sites for unverified junk like "press@google.com").
-      if (src === 'hunter' && hunterCovered(f)) break;
     } catch (err) {
       // A free-plan or rejected provider key is a config issue, not a search
       // failure — the next source covers the search, so report it as a soft
       // warning instead of a provider error.
       if (err.code === 'API_INACCESSIBLE') warnings.push('Apollo key has no API access — fell back to the next source.');
-      else if (err.code === 'INVALID_KEY') warnings.push(`${src === 'hunter' ? 'Hunter.io' : 'Apollo'} key was rejected — fell back to the next source.`);
+      else if (err.code === 'INVALID_KEY') warnings.push('Apollo key was rejected — fell back to the next source.');
       else if (err.code === 'NO_DOMAINS') warnings.push(err.message);
       else errors.push(`${src}: ${err.message}`);
     }
