@@ -995,8 +995,10 @@ function discoverLinks(html, domain) {
 // Shared OpenAI-compatible LLM call that asks for a JSON object and parses
 // the first message back to an object; null if the key is missing or the
 // call misbehaves. Used by ICP inference and free-text lead discovery.
+// Fallbacks mirror `sendLlm`: the assistant's key is equally usable for inline
+// lead discovery.
 async function callLlmJson(system, user, timeoutMs = 20000) {
-  const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+  const key = process.env.ASSISTANT_API_KEY || process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '';
   if (!key) return null;
   try {
     const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
@@ -1037,7 +1039,7 @@ async function discoverDomains(f) {
     'You map B2B ideal-customer profiles to concrete company domains. Given an ICP (keywords, optional buyer title/size/location), return JSON ONLY: {"domains":["..."]} — up to 6 well-known companies matching the ICP. Prefer companies that publish people/emails publicly (startups, agencies, founder-led SMBs). Empty {"domains":[]} if none match. Do not invent domains.',
     JSON.stringify({ keywords: f.keywords, title: f.title, size: f.size, location: f.location }),
   );
-  if (!llm) return { domains: [], warning: 'Lead Finder fallback (crawler) needs LLM_API_KEY for free-text ICP — set it in the deployment env, or pass concrete domains (e.g. acme.com) as keywords' };
+  if (!llm) return { domains: [], warning: 'Lead Finder fallback (crawler) needs an LLM key for free-text ICP — set ASSISTANT_API_KEY or LLM_API_KEY, or pass concrete domains (e.g. acme.com) as keywords' };
   const DIRECT_DOMAIN_RE = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i;
   const domains = (Array.isArray(llm.domains) ? llm.domains : [])
     .map(d => String(d || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '').trim())
