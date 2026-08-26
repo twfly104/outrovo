@@ -802,10 +802,15 @@ async function apolloSearchLeads(f, perPage, user = null) {
 // per domain via Hunter domain-search or the builtin crawler. Leads are
 // tagged 'apollo-orgs' so the UI shows Apollo drove the discovery.
 const SKIP_INDUSTRY = /marketing|advertis|public relations|information technology|software|internet|staffing|recruit|consult/i;
+// The industry filter exists to keep vendor-noise out of vendor searches — but
+// if the user's ICP IS that industry ("marketing agencies"), the filter
+// would wipe out its own target market. Detect and skip.
+const icpTargetsSkipIndustry = kw => /marketing|advertis|agenc|consult|recruit|staff|public relations/i.test(kw || '');
 async function apolloOrgsOrganizations(f, perPage, user = null) {
   const key = userApolloKey(user) || process.env.APOLLO_API_KEY;
   const want = Math.min(8, Math.max(3, perPage)), pageSize = 25;
   const locations = splitFilter(f.location);
+  const skipIndustry = icpTargetsSkipIndustry(f.keywords) ? null : SKIP_INDUSTRY;
   const body = {
     per_page: pageSize,
     q_keywords: f.keywords || undefined,
@@ -833,7 +838,7 @@ async function apolloOrgsOrganizations(f, perPage, user = null) {
     const orgs = (data.organizations || [])
       .map(o => ({ domain: (o.primary_domain || '').replace(/^www\./, '').toLowerCase() || (o.website_url || '').replace(/^(https?:|)\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '').replace(/\/.*$/, '').toLowerCase(),
         industry: o.industry || '' }))
-      .filter(o => o.domain && /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(o.domain) && !SKIP_INDUSTRY.test(o.industry));
+      .filter(o => o.domain && /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(o.domain) && (!skipIndustry || !skipIndustry.test(o.industry)));
     for (const o of orgs) {
       if (!shortlist.includes(o.domain)) shortlist.push(o.domain);
       if (shortlist.length >= want) break;
@@ -914,11 +919,12 @@ async function hunterDiscoverDomains(f, limit = 3) {
   }
   // Discover matches loosely ("ecommerce brands" surfaces agencies and
   // software vendors), so skip the industries an SGI-style user sells TO
-  // but never targets: marketing/IT/recruiting providers. Prefer companies
-  // Hunter actually has personal emails for.
-  const SKIP_INDUSTRY = /marketing|advertis|public relations|information technology|software|internet|staffing|recruit|consult/i;
+  // but never targets: marketing/IT/recruiting providers — unless the ICP
+  // explicitly IS that industry. Prefer companies Hunter actually has
+  // personal emails for.
+  const skipIndustry = icpTargetsSkipIndustry(f.keywords) ? null : SKIP_INDUSTRY;
   return (data?.data || [])
-    .filter(c => c.domain && !SKIP_INDUSTRY.test(c.industry || ''))
+    .filter(c => c.domain && (!skipIndustry || !skipIndustry.test(c.industry || '')))
     .sort((a, b) => (b.emails_count?.personal || 0) - (a.emails_count?.personal || 0))
     .slice(0, limit)
     .map(c => c.domain);
@@ -1354,7 +1360,10 @@ async function builtinSearchLeads(f, perPage, sessionEmail) {
         email, source: 'builtin',
         firstName: (hint && hint.firstName) || (parts.length ? cap(parts[0]) : ''),
         lastName: (hint && hint.lastName) || (parts.length > 1 ? cap(parts[1]) : ''),
-        company: domain, title: (hint && hint.title) || f.title || '', linkedinUrl: '', emailStatus: '',
+        // No real title = show nothing. Stamping the user's raw filter text
+        // ("founder, CEO, co-founder, owner") onto a person row misrepresents
+        // who they actually are.
+        company: domain, title: (hint && hint.title) || '', linkedinUrl: '', emailStatus: '',
       });
       if (out.length >= perPage * 6) break;
     }
@@ -1440,6 +1449,25 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
   leads = leads.filter(l => !isGenericLocal(l.email.split('@')[0]));
   if (!leads.length && beforeJunkFilter > 0) {
     warnings.push(`Found ${beforeJunkFilter} address(es) but all were department/system inboxes (e.g. info@, affiliates@) — dropped. This site doesn't publish individual contacts publicly; connect an Apollo key (Settings → Lead data source) for named contacts.`);
+  }
+  // No company owns more than ~30% of the result list. Ranking providers
+  // (Apollo) sort by keyword relevance, and the LLM/crawler path both hop
+  // domain-by-domain, so a dominant brand (Ogilvy for "marketing agencies")
+  // can otherwise monopolize the page.
+  const DOMAIN_CAP = 2;
+  const domainCount = new Map();
+  const capped = [];
+  for (const l of leads) {
+    const d = l.email.split('@')[1] || '';
+    const n = (domainCount.get(d) || 0) + 1;
+    if (n > DOMAIN_CAP) continue;
+    domainCount.set(d, n);
+    capped.push(l);
+  }
+  if (capped.length !== leads.length) {
+    const groups = [...[...domainCount.keys()].map(d => [d, leads.filter(l => l.email.endsWith('@' + d)).length]).filter(([, n]) => n > DOMAIN_CAP)];
+    for (const [d, n] of groups) warnings.push(`Capped ${n - DOMAIN_CAP} result(s) from ${d} (max ${DOMAIN_CAP} per company) so the list stays diverse — refine keywords or pass more target domains.`);
+    leads = capped;
   }
   if (!leads.length) return { leads: [], provider: null, errors, warnings };
   const verified = await verifyLeadBatch(leads, perPage);
