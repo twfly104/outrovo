@@ -292,6 +292,14 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   (identity transforms, 0 diffs) — use --timeout=ms real-time screenshots
   and diff pixel regions to verify motion.
 
+
+## Iteration 31 — symmetric cog glyph (Aug 2026)
+- A fixed transform-origin isn't enough if the GLYPH is asymmetric: the
+  feather `settings` icon's teeth are hand-placed, so its visual centroid
+  orbits and the axis appears to drift on mobile (esp. Safari). Build
+  rotating icons rotationally symmetric (one tooth, rotate() <use>s).
+- When verifying "in place" rotation: diff bbox center of changed pixels
+  must equal the glyph center.
 ## Conventions
 - Brand name is "Outrovo" (formerly "Drummer" placeholder).
 - All product screenshots are pure CSS/HTML mockups (`.app-card`, `.panel`, `.orbit`).
