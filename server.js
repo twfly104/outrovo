@@ -975,7 +975,17 @@ async function crawlPage(domain, path) {
   });
   clearTimeout(timer);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.text();
+  const buf = Buffer.from(await res.arrayBuffer());
+  // res.text() hard-decodes UTF-8; european team pages still come back as
+  // ISO-8859-1/windows-1252 and mojibake corrupts both names (personHintFor)
+  // and accented-local-part emails. Honor the declared charset, fall back
+  // to UTF-8 when the label is unknown to TextDecoder.
+  const label = ((/charset=([\w.-]+)/i.exec(res.headers.get('content-type') || '') || [])[1] || 'utf-8').toLowerCase();
+  try {
+    return new TextDecoder(label).decode(buf);
+  } catch {
+    return new TextDecoder('utf-8').decode(buf);
+  }
 }
 
 const PERSON_NAME_RE = /^[\p{L}'’-]+(?:\s+[\p{L}'’-]+){1,3}$/u;
