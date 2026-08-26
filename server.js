@@ -932,6 +932,46 @@ function guessEmailPatterns(first, last, domain) {
   return [...new Set(pats)];
 }
 
+// Cloudflare email protection: data-cfemail is the address XORed byte-wise
+// with the attribute's first byte.
+function decodeCfEmail(hex) {
+  if (!/^[0-9a-fA-F]{10,}$/.test(hex) || hex.length % 2) return '';
+  const key = parseInt(hex.slice(0, 2), 16);
+  let out = '';
+  for (let i = 2; i < hex.length; i += 2) out += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16) ^ key);
+  return out;
+}
+
+function decodeNumericEntities(html) {
+  const safe = n => (n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '');
+  return html
+    .replace(/&#x([0-9a-fA-F]{1,6});/g, (_, h) => safe(parseInt(h, 16)))
+    .replace(/&#(\d{1,7});/g, (_, d) => safe(parseInt(d, 10)));
+}
+
+// Pull every published email out of a page: plain addresses and mailto links,
+// numeric HTML entities (&#64; = @), Cloudflare data-cfemail attributes, and
+// "name [at] domain [dot] com" style obfuscation.
+const OBF_AT = '(?:\\s*(?:\\[at\\]|\\(at\\)|\\{at\\})\\s*|\\s+at\\s+)';
+const OBF_DOT = '(?:\\s*(?:\\[dot\\]|\\(dot\\)|\\{dot\\})\\s*|\\s+dot\\s+)';
+function extractEmails(html) {
+  const found = new Set();
+  for (const m of html.matchAll(/data-cfemail="([0-9a-fA-F]+)"/g)) {
+    const e = decodeCfEmail(m[1]).toLowerCase();
+    if (/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(e)) found.add(e);
+  }
+  const decoded = decodeNumericEntities(html);
+  for (const m of decoded.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || []) {
+    found.add(m.toLowerCase());
+  }
+  const obf = new RegExp(`([A-Za-z0-9._%+-]{1,64})${OBF_AT}([A-Za-z0-9-]+(?:${OBF_DOT}[A-Za-z0-9-]+)*)${OBF_DOT}([A-Za-z]{2,24})`, 'gi');
+  const dotRe = new RegExp(OBF_DOT, 'gi');
+  for (const m of decoded.matchAll(obf)) {
+    found.add(`${m[1]}@${m[2].replace(dotRe, '.')}.${m[3]}`.toLowerCase());
+  }
+  return [...found];
+}
+
 async function builtinSearchLeads(f, perPage, sessionEmail) {
   // Free source: user supplies target domains (e.g. acme.com, orbcall.io);
   // we crawl the site's public pages for published emails, then MX-verify.
@@ -952,9 +992,7 @@ async function builtinSearchLeads(f, perPage, sessionEmail) {
         clearTimeout(timer);
         if (!res.ok) continue;
         const html = await res.text();
-        const matches = html.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
-        for (const m of matches) {
-          const e = m.toLowerCase();
+        for (const e of extractEmails(html)) {
           if (!e.endsWith('@' + domain)) continue;
           if (GENERIC_LOCALS.has(e.split('@')[0])) continue;
           if (/\.(png|jpg|jpeg|gif|webp|svg|css|js)$/.test(e)) continue;
