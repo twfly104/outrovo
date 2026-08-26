@@ -40,10 +40,10 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 
 ## Monetization
 - Plans in `PLANS` (server.js): trial (14d, 100 prospects, 1 campaign),
-  starter $39 (2K/3), growth-id displays as "Pro" $99 (10K/10 + LinkedIn),
-  scale $149 (Г”Е‚Г—). Plan IDs unchanged (growth id = Pro name) so existing
+  starter $39 (2K/3), growth-id displays as "Pro" $89 (10K/10 + LinkedIn),
+  scale $189 (Г”Е‚Г—). Plan IDs unchanged (growth id = Pro name) so existing
   users keep working. `TOPUP_PACKS` (server.js) sells pay-as-you-go Lead
-  Finder credit bundles (500/$19, 2K/$49, 10K/$149) via the same
+  Finder credit bundles (500/$19, 2K/$49, 10K/$189) via the same
   /api/billing/checkout + /api/billing/activate flow (Stripe mode=payment
   vs subscription); credits land on `user.leadFinderBonus` (survives the
   monthly leadFinder reset) and `GET /api/plans` exposes `topups` — the
@@ -781,4 +781,4 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
   webhook notifications — deliverability is NOT gated behind higher tiers
   (matches how the server already behaves: domainAudit + watchdog run for
   every user, classifyReply runs on all plans).
-- Verified via CDP screenshots: 4-bullet features, dev strip, $39/89/149 cards.
+- Verified via CDP screenshots: 4-bullet features, dev strip, $39/89/189 cards.
