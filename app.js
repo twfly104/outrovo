@@ -93,6 +93,23 @@ function enhanceAllSelects(root = document) {
 }
 
 const $ = id => document.getElementById(id);
+
+// Swap a button's content for a spinning gear while async work runs, then
+// restore the exact original markup (industry-standard busy affordance).
+const GEAR_SVG = '<svg class="spin-gear" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+function setBtnLoading(btn, loading, label = 'Working…') {
+  if (!btn) return;
+  if (loading) {
+    if (!btn.dataset.origHtml) btn.dataset.origHtml = btn.innerHTML;
+    btn.classList.add('is-loading');
+    btn.disabled = true;
+    btn.innerHTML = `${GEAR_SVG} ${label}`;
+  } else {
+    btn.classList.remove('is-loading');
+    btn.disabled = false;
+    if (btn.dataset.origHtml) { btn.innerHTML = btn.dataset.origHtml; delete btn.dataset.origHtml; }
+  }
+}
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtTime = t => new Date(t).toLocaleString();
 
@@ -1769,7 +1786,7 @@ function bindLeadFinderScan() {
       return;
     }
     const btn = $('lfScanBtn');
-    btn.disabled = true;
+    setBtnLoading(btn, true, 'Scanning…');
     status.className = 'ai-status loading';
     status.textContent = 'Reading your site…';
     try {
@@ -1792,7 +1809,7 @@ function bindLeadFinderScan() {
       status.className = 'ai-status err';
       status.textContent = `✕ ${err.message || 'Could not scan that site — fill manually.'}`;
     } finally {
-      btn.disabled = false;
+      setBtnLoading(btn, false);
     }
   });
 }
@@ -1945,7 +1962,8 @@ function bindLeadFinder() {
   $('leadFindBtn').addEventListener('click', async () => {
     const btn = $('leadFindBtn');
     const note = $('leadFindNote');
-    btn.disabled = true;
+    setBtnLoading(btn, true, 'Searching…');
+    note.classList.add('busy');
     note.textContent = 'Searching and checking emails…';
     $('leadResults').hidden = true;
     const keywords = leadSearchKeywords();
@@ -1957,8 +1975,16 @@ function bindLeadFinder() {
       limit: Number($('lfCount').value || 10),
     };
     if ($('lfService').value.trim()) servicePitch = $('lfService').value.trim();
-    const { status, data } = await api('POST', '/api/app/lead-finder/search', body);
-    btn.disabled = false;
+    let status, data;
+    try {
+      ({ status, data } = await api('POST', '/api/app/lead-finder/search', body));
+    } catch {
+      note.textContent = 'Search failed — check your connection and try again.';
+      return;
+    } finally {
+      setBtnLoading(btn, false);
+      note.classList.remove('busy');
+    }
     if (status !== 200 || !data.ok) {
       note.textContent = data.error || 'Search failed.';
       return;

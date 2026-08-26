@@ -3076,6 +3076,13 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .lf-find-row .btn-primary { flex: 1; justify-content: center; display: inline-flex; align-items: center; gap: 8px; }
 .lf-find-row .tab-ico { width: 15px; height: 15px; }
 
+/* Busy buttons: spinning gear + pulsing status note while a request runs */
+.btn .spin-gear { flex: none; vertical-align: -2px; animation: ov-spin 1.1s linear infinite; }
+@keyframes ov-spin { to { transform: rotate(360deg); } }
+.btn.is-loading { opacity: 0.85; cursor: progress; }
+.import-note.busy { animation: ov-pulse 1.4s ease-in-out infinite; }
+@keyframes ov-pulse { 50% { opacity: 0.45; } }
+
 /* Tag inputs — input-styled container holding removable orange chips */
 .lf-tags {
   position: relative;
