@@ -1049,8 +1049,8 @@ async function discoverDomains(f) {
   const direct = leadFinderDomains(f.keywords);
   if (direct.length) return { domains: direct };
   const llm = await callLlmJson(
-    'You map B2B ideal-customer profiles to concrete company domains. Given an ICP (keywords, optional buyer title/size/location), return JSON ONLY: {"domains":["..."]} — up to 6 well-known companies matching the ICP. Prefer companies that publish people/emails publicly (startups, agencies, founder-led SMBs). Empty {"domains":[]} if none match. Do not invent domains.',
-    JSON.stringify({ keywords: f.keywords, title: f.title, size: f.size, location: f.location }),
+    'You map B2B ideal-customer profiles to concrete company domains. Given free-form keywords IS the company target (the 業界) — job titles and company size describe individuals, NOT company names. Prefer company names strongly hinted by keywords, location, industry. Return JSON ONLY {"domains":["..."]} — up to 6 well-known companies matching the keywords. Prefer companies that publish people/emails publicly (startups, agencies, founder-led SMBs). Empty {"domains":[]} if none match. ONLY include domains — never invent a new string as a domain.',
+    JSON.stringify({ keywords: f.keywords, location: f.location, industry: f.industry }),
   );
   if (llm.reason) {
     const message = llm.reason === 'no-key'
