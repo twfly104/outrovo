@@ -716,8 +716,12 @@ function leadFinderProvider(user) {
 }
 function leadFinderSourceOrder(user) {
   const order = [];
-  if (userApolloKey(user) || process.env.APOLLO_API_KEY) order.push('apollo', 'apollo-orgs');
-  if (process.env.HUNTER_API_KEY) order.push('hunter');
+  const hasApollo = !!(userApolloKey(user) || process.env.APOLLO_API_KEY);
+  if (hasApollo) {
+    order.push('apollo', 'apollo-orgs'); // paid people-search → free-plan org fallback (uses Hunter internally if configured)
+  } else if (process.env.HUNTER_API_KEY) {
+    order.push('hunter'); // standalone Hunter only when no Apollo key at all
+  }
   order.push('builtin');
   return order;
 }
