@@ -3076,8 +3076,16 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .lf-find-row .btn-primary { flex: 1; justify-content: center; display: inline-flex; align-items: center; gap: 8px; }
 .lf-find-row .tab-ico { width: 15px; height: 15px; }
 
-/* Busy buttons: spinning gear + pulsing status note while a request runs */
-.btn .spin-gear { flex: none; vertical-align: -2px; animation: ov-spin 1.1s linear infinite; }
+/* Busy buttons: spinning gear + pulsing status note while a request runs.
+   CSS animations on SVG default to origin 0 0, so without transform-box the
+   gear orbits its top-left corner and looks like it's wobbling. */
+.btn .spin-gear {
+  flex: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform;
+  animation: ov-spin 1.2s linear infinite;
+}
 @keyframes ov-spin { to { transform: rotate(360deg); } }
 .btn.is-loading { opacity: 0.85; cursor: progress; }
 .import-note.busy { animation: ov-pulse 1.4s ease-in-out infinite; }

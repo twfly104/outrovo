@@ -920,7 +920,31 @@ function hunterCovered(f) {
   return domains.length > 0;
 }
 
+// Non-person mailboxes: department/role aliases that sites publish and our
+// crawler then mistakes for leads. Exact-match words, tested against the
+// entire local-part ("affiliates", "bizdev", "brandmarketing"), plus
+// separators handled by extracting sub-words (investors.gd → investors).
 const GENERIC_LOCALS = new Set(['info', 'contact', 'hello', 'support', 'sales', 'team', 'office', 'mail', 'admin', 'no-reply', 'noreply', 'press', 'media', 'pr', 'partners', 'partnerships', 'jobs', 'careers', 'hr', 'billing', 'legal', 'privacy']);
+const GENERIC_ALIAS = /^(?:it|no|pay|opt(?:in|out)?|test|example|demo|sample|foo|bar|abc|xyz|affiliates?|biz|bizdev|businessdev|brand|brandmarketing|marcom|marketing|news|newsroom|editorial|investors?|ir|charity|foundation|giving|community|esg|csr|dei|events?|webinar|webinars|promo|promotions?|offers|deals|newsletter|subscrib(?:e|er|ers)|unsubscribe|legal|compliance|security|abuse|spam|postmaster|webmaster|hostmaster|dns|noc|tech|technical|infrastructure|finance|accounting|invoice|payments?|orders?|returns?|reply|bounces?|despatch|dispatch|recruit|recruiting|talent|hire|hiring|legal|privacy|solutions?|development|dept|department|theteam|root|ops|operations|administrate|administrator|administration|adm|owner|owners|founder|founders|corp|corporate|company|business|enterprise|general|reception|front|hq|welcome|hello(?:world)?|enquiries|inquiries|guest|visitor|visitors?|prospect|service|services|help|helpdesk|support|care|clients?|customer|customers|success|accounts?|user|users|member|members|social|socialmedia|linkedin|facebook|twitter|in|comm|comms|communication|communications)$/i;
+function isGenericLocal(local) {
+  const l = String(local || '').toLowerCase();
+  if (!l) return true;
+  if (GENERIC_LOCALS.has(l)) return true;
+  if (GENERIC_ALIAS.test(l)) return true;
+  // "bizdev.team@" style: every sub-token generic → generic.
+  const subs = l.split(/[._-]+/).filter(Boolean);
+  if (subs.length > 1 && subs.every(s => GENERIC_LOCALS.has(s) || GENERIC_ALIAS.test(s))) return true;
+  // Run-together department phrases ("customeradvocacyinquiry") never match
+  // the word list, but a single concatenated string this long is never a
+  // person alias. Real people use separators or short names.
+  if (/^[a-z]+$/.test(l) && l.length > 14) return true;
+  // Composite junk ("tvmedia", "mopsdeals"): contain a ≥5-char generic word
+  // without separators.
+  if (l.length <= 14 && GENERIC_SUB.test(l)) return true;
+  return false;
+}
+// ≥5-char substrings that mark an unseparated local-part as a department.
+const GENERIC_SUB = /media|sales|press|legal|billing|business|marketing|partner|career|invest|charity|brand|finance|invoice|recruit|talent|security|compliance|service|account|customer|client|visitor|promo|deals|offer|newsletter|contact|office|admin|operations|development|department|founder|owner|corporate|company|enterprise|reception|social|linkedin|human|member|events|webinar|news/;
 function guessEmailPatterns(first, last, domain) {
   const f = (first || '').toLowerCase().replace(/[^a-z]/g, '');
   const l = (last || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -1011,7 +1035,7 @@ function extractEmails(html, domain, found) {
   while ((m = re.exec(text))) {
     const e = m[0].toLowerCase();
     if (!e.endsWith('@' + domain)) continue;
-    if (GENERIC_LOCALS.has(e.split('@')[0])) continue;
+    if (isGenericLocal(e.split('@')[0])) continue;
     if (IMAGE_EXTS.test(e)) continue;
     found.set(e, found.has(e) ? found.get(e) : personHintFor(text, m.index));
   }
@@ -1248,7 +1272,7 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
   const campaignIds = new Set(campaigns.map(c => c.id));
   const existing = new Set(load('prospects').filter(p => campaignIds.has(p.campaignId)).map(p => p.email));
   leads = leads.filter(l => !existing.has(l.email) && !isSuppressed(sessionEmail, l.email));
-  leads = leads.filter(l => !GENERIC_LOCALS.has(l.email.split('@')[0]));
+  leads = leads.filter(l => !isGenericLocal(l.email.split('@')[0]));
   if (!leads.length) return { leads: [], provider: null, errors, warnings };
   const verified = await verifyLeadBatch(leads, perPage);
   return { leads: verified.slice(0, perPage), provider: leads[0].source, errors, warnings };
