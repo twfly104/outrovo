@@ -1767,8 +1767,7 @@ async function loadLeadFinderStatus() {
   if (!data.ok) return;
   const src = data.provider === 'apollo'
     ? (data.apolloKeySet ? 'via your Apollo key' : 'via Apollo')
-    : data.provider === 'apollo-orgs' ? 'via Apollo companies (free plan)'
-    : data.provider === 'hunter' ? 'via Hunter.io' : 'built-in verify';
+    : 'built-in verify';
   $('leadFinderStatus').textContent = `${data.used}/${data.quota} credits used this month · ${src}`;
   $('lfTopupBtn').hidden = false;
   syncDetected();
