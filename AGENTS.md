@@ -272,6 +272,16 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   `transform-origin: center` + `will-change` is mandatory for any animated
   SVG icon.
 
+## Iteration 29 — LLM executive fallback for crawl-empty domains (Aug 2026)
+- Big companies publish only department inboxes; the crawler had no answer
+  and showed junk. Now `leadershipGuessLeads(domain, f)` asks the LLM for
+  public execs (two-pass: requested titles → generic C-suite), pattern-
+  guesses addresses, MX-verifies, flags `guessed: true` + warning.
+- gpt-oss reasoning answers are nondeterministic — two-pass prompt loop
+  turns coin-flips into reliable hits. Don't join prompts into one call.
+- `isGenericLocal` runs on sub-tokens with any-match (was every-match) +
+  substring at any length. Adding new alias words: extend GENERIC_ALIAS.
+
 ## Conventions
 - Brand name is "Outrovo" (formerly "Drummer" placeholder).
 - All product screenshots are pure CSS/HTML mockups (`.app-card`, `.panel`, `.orbit`).
