@@ -992,11 +992,65 @@ function discoverLinks(html, domain) {
   return out;
 }
 
+// Shared OpenAI-compatible LLM call that asks for a JSON object and parses
+// the first message back to an object; null if the key is missing or the
+// call misbehaves. Used by ICP inference and free-text lead discovery.
+async function callLlmJson(system, user, timeoutMs = 20000) {
+  const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+  if (!key) return null;
+  try {
+    const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+    const res = await fetch(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        temperature: 0.2, max_tokens: 180,
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const raw = data.choices?.[0]?.message?.content || '{}';
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function discoverDomains(f) {
+  // Free-text ICP (no domains in keywords): use the shared LLM helper to
+  // propose concrete company domains, then let the crawler run as usual.
+  // Returns { domains, warning } — warning is set when the LLM is needed
+  // but unconfigured so search can surface actionable guidance instead of
+  // a silent empty search.
+  const direct = leadFinderDomains(f.keywords);
+  if (direct.length) return { domains: direct };
+  const llm = await callLlmJson(
+    'You map B2B ideal-customer profiles to concrete company domains. Given an ICP (keywords, optional buyer title/size/location), return JSON ONLY: {"domains":["..."]} — up to 6 well-known companies matching the ICP. Prefer companies that publish people/emails publicly (startups, agencies, founder-led SMBs). Empty {"domains":[]} if none match. Do not invent domains.',
+    JSON.stringify({ keywords: f.keywords, title: f.title, size: f.size, location: f.location }),
+  );
+  if (!llm) return { domains: [], warning: 'Lead Finder fallback (crawler) needs LLM_API_KEY for free-text ICP — set it in the deployment env, or pass concrete domains (e.g. acme.com) as keywords' };
+  const DIRECT_DOMAIN_RE = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i;
+  const domains = (Array.isArray(llm.domains) ? llm.domains : [])
+    .map(d => String(d || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '').trim())
+    .filter(d => DIRECT_DOMAIN_RE.test(d));
+  return { domains };
+}
+
 async function builtinSearchLeads(f, perPage, sessionEmail) {
-  // Free source: user supplies target domains (e.g. acme.com, orbcall.io);
-  // we crawl the site's public pages for published emails, then MX-verify.
-  const domains = leadFinderDomains(f.keywords);
-  if (!domains.length) return [];
+  // Free source: when the keywords are domains, crawl them; otherwise try
+  // free-text discovery first. Returns { leads, warning } so searchLeads can
+  // surface the actionable guidance in warnings[] rather than a silent [].
+  const { domains, warning } = await discoverDomains(f);
+  if (!domains.length) return { leads: [], warning: warning || '' };
   const out = [];
   for (const domain of domains) {
     const found = new Set();
@@ -1029,7 +1083,7 @@ async function builtinSearchLeads(f, perPage, sessionEmail) {
     }
     if (out.length >= perPage * 6) break;
   }
-  return out;
+  return { leads: out, warning: warning || '' };
 }
 
 async function verifyLeadBatch(leads, limit) {
@@ -1060,9 +1114,15 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
   let leads = [];
   for (const src of order) {
     try {
-      if (src === 'apollo') leads = await apolloSearchLeads(f, perPage, user);
-      else if (src === 'hunter') leads = await hunterSearchLeads(f, perPage);
-      else leads = await builtinSearchLeads(f, perPage, sessionEmail);
+      if (src === 'apollo') {
+        leads = await apolloSearchLeads(f, perPage, user);
+      } else if (src === 'hunter') {
+        leads = await hunterSearchLeads(f, perPage);
+      } else {
+        const builtin = await builtinSearchLeads(f, perPage, sessionEmail);
+        if (builtin.warning) warnings.push(builtin.warning);
+        leads = builtin.leads;
+      }
       if (leads.length) break;
       // Hunter ran but returned nothing verified: if the search was
       // domain-targeted, don't fall through to the crawler (it would scrape
