@@ -282,6 +282,16 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - `isGenericLocal` runs on sub-tokens with any-match (was every-match) +
   substring at any length. Adding new alias words: extend GENERIC_ALIAS.
 
+## Iteration 30 — gear spin: animate a wrapper, not the SVG (Aug 2026)
+- transform-box: fill-box is unreliable when the SVG has fill="none"
+  (degenerate bbox; Safari recalcs origin per frame). Always rotate an HTML
+  wrapper element (default origin 50%/50%) sized to the icon instead.
+- Busy buttons must freeze min-width before swapping the label, or the
+  resize reads as a jitter.
+- Headless-Chromium testing: --virtual-time-budget FREEZES CSS animations
+  (identity transforms, 0 diffs) — use --timeout=ms real-time screenshots
+  and diff pixel regions to verify motion.
+
 ## Conventions
 - Brand name is "Outrovo" (formerly "Drummer" placeholder).
 - All product screenshots are pure CSS/HTML mockups (`.app-card`, `.panel`, `.orbit`).
