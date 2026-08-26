@@ -3076,25 +3076,29 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .lf-find-row .btn-primary { flex: 1; justify-content: center; display: inline-flex; align-items: center; gap: 8px; }
 .lf-find-row .tab-ico { width: 15px; height: 15px; }
 
-/* Busy buttons: spinning gear + pulsing status note while a request runs.
-   The animation runs on a plain HTML <span> wrapper (not the <svg>) — SVG
-   transform origins are inconsistent across browsers, especially Safari,
-   and fill="none" makes fill-box degenerate. A fixed square inline-flex
-   box + 50%/50% origin gives a stable center axis everywhere. */
+/* Busy buttons: spinning icon + pulsing status note while a request runs.
+   Locked-center pattern: wrapper = fixed 15x15 square; svg absolutely
+   centered via negative margins (not flex, not percentages). Rotation
+   happens on the wrapper with a 50%/50% origin — the svg's exact center
+   therefore becomes the rotation axis by construction, independent of
+   browser flexbox rounding or percentage-resolution subtleties. */
 .btn .spin-gear {
-  display: inline-flex;
+  position: relative;
+  display: inline-block;
   width: 15px;
   height: 15px;
   flex: none;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
   will-change: transform;
   animation: ov-spin 0.8s steps(8) infinite;
 }
 .btn .spin-gear svg {
-  display: block;
+  position: absolute;
+  top: 50%;
+  left: 50%;
   width: 15px;
   height: 15px;
+  margin: -7.5px 0 0 -7.5px;
 }
 @keyframes ov-spin { to { transform: rotate(1turn); } }
 .btn.is-loading { opacity: 0.85; cursor: progress; }
