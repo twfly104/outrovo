@@ -3089,7 +3089,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   align-items: center;
   justify-content: center;
   will-change: transform;
-  animation: ov-spin 1s linear infinite;
+  animation: ov-spin 0.8s steps(8) infinite;
 }
 .btn .spin-gear svg {
   display: block;

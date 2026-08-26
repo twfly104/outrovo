@@ -96,15 +96,15 @@ const $ = id => document.getElementById(id);
 
 // Swap a button's content for a spinning gear while async work runs, then
 // restore the exact original markup (industry-standard busy affordance).
-// Gear spins via a plain <span> wrapper (SVG transform origins are
-// unreliable cross-browser). The cog itself is built from ONE tooth rotated
-// 12× by exactly 30° — the previous feather-style icon had hand-placed
-// teeth, so its visual centroid orbited the center and the axis appeared to
-// drift even with a mathematically fixed origin. Symmetric by construction
-// = impossible to wobble.
-const COG_TEETH = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
-  .map(a => `<use href="#ov-tooth" transform="rotate(${a} 12 12)"/>`).join('');
-const GEAR_SVG = '<span class="spin-gear" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><defs><line id="ov-tooth" x1="12" y1="2.8" x2="12" y2="5.9"/></defs>' + COG_TEETH + '<circle cx="12" cy="12" r="5.9"/><circle cx="12" cy="12" r="2.3"/></svg></span>';
+// Industry-standard loader: 8 stroke-dash tapered ticks on a circle,
+// rotated stepwise (30°/frame). Rotating gears were a dead end — every
+// quality loader (iOS/Material/Tailwind/SpinKit) uses dash tapers on a
+// plain circle, so the whole SVG rotates as a rigid point (no axis drift,
+// no centroid wobble). steps(8) makes frames discrete, removing linear-
+// interpolation drift entirely.
+const TICKS = [0, 45, 90, 135, 180, 225, 270, 315]
+  .map(a => `<use href="#ov-tick" transform="rotate(${a} 12 12)"/>`).join('');
+const GEAR_SVG = '<span class="spin-gear" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><defs><line id="ov-tick" x1="12" y1="3.5" x2="12" y2="6.5"/></defs>' + TICKS + '</svg></span>';
 function setBtnLoading(btn, loading, label = 'Working…') {
   if (!btn) return;
   if (loading) {
