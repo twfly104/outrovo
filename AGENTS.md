@@ -97,10 +97,16 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   `GET /api/app/oauth/:id/start` (302 to consent, HMAC state binds session),
   `GET /api/app/oauth/:id/callback` (upserts sender, postMessages result to
   the opener popup). `publicSender` returns `oauth:true` and strips tokens.
-- Lead Finder source priority: Apollo (BYOK user key or `APOLLO_API_KEY`) →
-  Hunter.io (`HUNTER_API_KEY`) → built-in domain crawler. First source that
-  returns leads wins; rejected/expired keys degrade to a soft `warnings[]`
-  entry and the search falls through to the next source.
+- Lead Finder source priority: Apollo people-search (BYOK key or
+  `APOLLO_API_KEY`, plan-gated) → Apollo org fallback (`apollo-orgs`:
+  Free-plan `organizations/search` gives company domains, then Hunter
+  domain-search or the builtin crawler resolves people per domain; leads are
+  tagged source `apollo-orgs` and shown in the status line as "via Apollo
+  companies (free plan)") → Hunter.io (`HUNTER_API_KEY`) → built-in domain
+  crawler. First source that returns leads wins; rejected/expired/plan-gated
+  keys degrade to a soft `warnings[]` entry and the search falls through to
+  the next source. Once leads land, the "Apollo key has no API access" soft
+  warning is dropped from `warnings[]` so the success path stays clean.
 - `APOLLO_API_KEY` — powers Lead Finder ICP search
   (Find Leads page). Without it, Lead Finder tries Hunter.io, then falls
   back to crawling the target company domains the user types in and
