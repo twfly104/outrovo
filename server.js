@@ -1012,19 +1012,23 @@ async function callLlmJson(system, user, timeoutMs = 20000) {
   try {
     const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
     const model = llmModel();
+    const isGroq = base.includes('api.groq.com');
+    const body = {
+      model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      temperature: 0.2, max_tokens: 180,
+    };
+    // OpenAI's json-mode `response_format: { type: 'json_object' }` is not
+    // accepted by every provider (Groq/others return HTTP 400). Only send it
+    // when the endpoint claims to be OpenAI-compatible.
+    if (!isGroq) body.response_format = { type: 'json_object' };
     const res = await fetch(`${base}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        temperature: 0.2, max_tokens: 180,
-      }),
-      signal: AbortSignal.timeout(timeoutMs),
+      body: JSON.stringify(body),
     });
     if (!res.ok) return { reason: `LLM HTTP ${res.status}` };
     const data = await res.json();
