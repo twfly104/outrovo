@@ -999,7 +999,7 @@ function discoverLinks(html, domain) {
 // lead discovery.
 async function callLlmJson(system, user, timeoutMs = 20000) {
   const key = process.env.ASSISTANT_API_KEY || process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '';
-  if (!key) return null;
+  if (!key) return { reason: 'no-key' };
   try {
     const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
     const model = process.env.LLM_MODEL || 'gpt-4o-mini';
@@ -1017,13 +1017,13 @@ async function callLlmJson(system, user, timeoutMs = 20000) {
       }),
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { reason: `LLM HTTP ${res.status}` };
     const data = await res.json();
     const raw = data.choices?.[0]?.message?.content || '{}';
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch {
-    return null;
+    return parsed && typeof parsed === 'object' ? { result: parsed } : { reason: 'LLM returned non-JSON' };
+  } catch (err) {
+    return { reason: `LLM call failed: ${err.message}` };
   }
 }
 
@@ -1039,9 +1039,14 @@ async function discoverDomains(f) {
     'You map B2B ideal-customer profiles to concrete company domains. Given an ICP (keywords, optional buyer title/size/location), return JSON ONLY: {"domains":["..."]} — up to 6 well-known companies matching the ICP. Prefer companies that publish people/emails publicly (startups, agencies, founder-led SMBs). Empty {"domains":[]} if none match. Do not invent domains.',
     JSON.stringify({ keywords: f.keywords, title: f.title, size: f.size, location: f.location }),
   );
-  if (!llm) return { domains: [], warning: 'Lead Finder fallback (crawler) needs an LLM key for free-text ICP — set ASSISTANT_API_KEY or LLM_API_KEY, or pass concrete domains (e.g. acme.com) as keywords' };
+  if (llm.reason) {
+    const message = llm.reason === 'no-key'
+      ? 'Lead Finder fallback (crawler) needs an LLM key for free-text ICP — set ASSISTANT_API_KEY or LLM_API_KEY, or pass concrete domains (e.g. acme.com) as keywords'
+      : `Lead Finder fallback (crawler) LLM call failed for free-text ICP: ${llm.reason}. Pass concrete domains (e.g. acme.com) as keywords.`;
+    return { domains: [], warning: message };
+  }
   const DIRECT_DOMAIN_RE = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i;
-  const domains = (Array.isArray(llm.domains) ? llm.domains : [])
+  const domains = (Array.isArray(llm.result?.domains) ? llm.result.domains : [])
     .map(d => String(d || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '').trim())
     .filter(d => DIRECT_DOMAIN_RE.test(d));
   return { domains };
