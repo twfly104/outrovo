@@ -611,7 +611,7 @@ async function classifyIntent(reply) {
   if (key) {
     try {
       const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-      const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+      const model = llmModel();
       const res = await fetch(`${base}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
@@ -992,6 +992,15 @@ function discoverLinks(html, domain) {
   return out;
 }
 
+// Shared LLM model resolution: prefer explicit env, then Groq's fast
+// default when the base URL is Groq, else OpenAI's fast default.
+function llmModel() {
+  if (process.env.LLM_MODEL) return process.env.LLM_MODEL;
+  const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+  if (base.includes('api.groq.com')) return 'llama-3.1-8b-instant';
+  return 'gpt-4o-mini';
+}
+
 // Shared OpenAI-compatible LLM call that asks for a JSON object and parses
 // the first message back to an object; null if the key is missing or the
 // call misbehaves. Used by ICP inference and free-text lead discovery.
@@ -1002,7 +1011,7 @@ async function callLlmJson(system, user, timeoutMs = 20000) {
   if (!key) return { reason: 'no-key' };
   try {
     const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-    const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+    const model = llmModel();
     const res = await fetch(`${base}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
@@ -1992,7 +2001,7 @@ async function inferIcpFromSite(domain) {
   if (key) {
     try {
       const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-      const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+      const model = llmModel();
       const llmRes = await fetch(`${base}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
@@ -2072,7 +2081,7 @@ async function leadIntel(domain, { pitch = '', title = '' } = {}) {
   if (key) {
     try {
       const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-      const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+      const model = llmModel();
       const res = await fetch(`${base}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
@@ -2131,7 +2140,7 @@ async function leadIntel(domain, { pitch = '', title = '' } = {}) {
 async function analyzeSite(info) {
   const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
   const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-  const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+  const model = llmModel();
   if (key) {
     try {
       const res = await fetch(`${base}/chat/completions`, {
@@ -2165,7 +2174,7 @@ async function analyzeSite(info) {
 async function aiGenerateSequence(input) {
   const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
   const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-  const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+  const model = llmModel();
   if (key) {
     try {
       const res = await fetch(`${base}/chat/completions`, {
@@ -2205,7 +2214,7 @@ delayMinutes: realistic gap after the previous step (2880=2 days, 4320=3 days).`
 async function aiGenerateStep({ campaignName, existingSteps, instruction }) {
   const key = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
   const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-  const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+  const model = llmModel();
   const prior = existingSteps.map((s, i) => {
     if (s.type === 'email') return `${i + 1}. email — subject: ${s.subject || ''}`;
     if (s.type === 'task') return `${i + 1}. LinkedIn task — ${s.note || ''}`;
@@ -2788,7 +2797,7 @@ async function assistantLlm(q, history) {
   const key = process.env.ASSISTANT_API_KEY || process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '';
   if (!key) throw new Error('no LLM key configured');
   const base = (process.env.ASSISTANT_BASE_URL || process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-  const model = process.env.ASSISTANT_MODEL || process.env.LLM_MODEL || 'gpt-4o-mini';
+  const model = process.env.ASSISTANT_MODEL || llmModel();
   const res = await fetch(`${base}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
@@ -2849,7 +2858,7 @@ const router = {
   // the key itself — just the mode. GET https://<host>/api/assistant
   'GET /api/assistant': (req, res) => {
     const keyed = !!(process.env.ASSISTANT_API_KEY || process.env.LLM_API_KEY || process.env.OPENAI_API_KEY);
-    send(res, 200, { ok: true, mode: keyed ? 'llm' : 'keyword', model: keyed ? (process.env.ASSISTANT_MODEL || process.env.LLM_MODEL || 'gpt-4o-mini') : null });
+    send(res, 200, { ok: true, mode: keyed ? 'llm' : 'keyword', model: keyed ? (process.env.ASSISTANT_MODEL || llmModel()) : null });
   },
 
   'POST /api/assistant': async (req, res) => {
@@ -3406,7 +3415,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
     if (key) {
       try {
         const base = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-        const model = process.env.LLM_MODEL || 'gpt-4o-mini';
+        const model = llmModel();
         const r = await fetch(`${base}/chat/completions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
