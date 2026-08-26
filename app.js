@@ -193,6 +193,7 @@ async function init() {
   bindProspects();
   bindSenders();
   bindSettingsHero();
+  bindByokApollo();
   bindAccount();
   bindAgency();
   bindWhiteLabel();
@@ -1259,6 +1260,43 @@ async function loadSettingsHero() {
   $('notifHotLead').checked = n.hotLead !== false;
   $('notifDailyDigest').checked = n.dailyDigest !== false;
   $('notifBounce').checked = Boolean(n.bounceWarnings);
+  loadByokApollo();
+}
+
+// BYOK: Apollo key save/remove — the backend validates against Apollo before
+// storing, so a typo here can't silently downgrade the user to the crawler.
+async function loadByokApollo() {
+  const { data } = await api('GET', '/api/app/integrations/apollo-key');
+  if (!data.ok) return;
+  const btn = $('apolloHeroBtn');
+  if (data.set) {
+    btn.textContent = `Key ${data.hint} — change`;
+    $('byokApolloRemove').hidden = false;
+  } else {
+    btn.textContent = 'Connect your Apollo key';
+    $('byokApolloRemove').hidden = true;
+  }
+}
+
+function bindByokApollo() {
+  const block = $('byokApolloBlock');
+  const status = $('byokApolloStatus');
+  const input = $('byokApolloKey');
+  $('apolloHeroBtn').addEventListener('click', () => { block.hidden = !block.hidden; if (!block.hidden) input.focus(); });
+  $('byokApolloSave').addEventListener('click', async () => {
+    status.textContent = 'Validating with Apollo…';
+    const { data } = await api('POST', '/api/app/integrations/apollo-key', { key: input.value.trim() });
+    if (!data.ok) { status.textContent = data.error || 'Could not save'; return; }
+    status.textContent = `Apollo key saved (${data.hint}) — searches now run through your account.`;
+    input.value = '';
+    loadSettingsHero();
+  });
+  $('byokApolloRemove').addEventListener('click', async () => {
+    if (!confirm('Remove your Apollo key? Searches fall back to our shared Apollo/built-in pipeline.')) return;
+    await api('DELETE', '/api/app/integrations/apollo-key');
+    status.textContent = 'Key removed.';
+    loadSettingsHero();
+  });
 }
 
 function bindSettingsHero() {
