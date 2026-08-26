@@ -300,6 +300,13 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   rotating icons rotationally symmetric (one tooth, rotate() <use>s).
 - When verifying "in place" rotation: diff bbox center of changed pixels
   must equal the glyph center.
+
+## Iteration 32 — stop animating gears, ship a rotor (Aug 2026)
+- 4 attempts at rotating-gear loaders failed first-frame stability. Every
+  production loader (iOS/Material/Tailwind/SpinKit) uses tapered stroke-dash
+  ticks + stepwise steps(n) rotation — do that, never continuous gears.
+- Headless-debug trick: diff frames → bbox of changed pixels must match
+  the icon's footprint and its center must equal the glyph center.
 ## Conventions
 - Brand name is "Outrovo" (formerly "Drummer" placeholder).
 - All product screenshots are pure CSS/HTML mockups (`.app-card`, `.panel`, `.orbit`).
