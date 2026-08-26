@@ -953,6 +953,40 @@ async function crawlPage(domain, path) {
   return res.text();
 }
 
+const PERSON_NAME_RE = /^[\p{L}'’-]+(?:\s+[\p{L}'’-]+){1,3}$/u;
+const GENERIC_HEADINGS = new Set(['team', 'our team', 'the team', 'meet the team', 'about', 'about us',
+  'contact', 'contact us', 'company', 'people', 'staff', 'leadership', 'who we are', 'our people']);
+const TITLE_RE = /(?:\b(?:head|vp|vice president|director|senior manager|manager)\s+of\s+[\p{L}]{2,15}(?:\s*&\s*[\p{L}]{2,15})?|\b(?:co-?founder|founder|ceo|cto|cfo|coo|cmo|president)\b(?:\s*[&/]\s*[\p{Lu}][\p{L}]{1,15})?|\b(?:senior |principal |lead |staff )?(?:engineer|designer|developer|consultant|partner|scientist|analyst|attorney|architect)\b)/iu;
+
+// Team pages typically render each person as a card: an <h*> name with the
+// job title and a mailto: nearby. Mine the text around each email so leads
+// carry a real name/title instead of a local-part guess. Conservative on
+// purpose — any doubt means an empty hint and the caller falls back.
+function personHintFor(text, idx) {
+  const hint = { firstName: '', lastName: '', title: '' };
+  const before = text.slice(Math.max(0, idx - 900), idx);
+  const after = text.slice(idx, idx + 400);
+  const headRe = /<(?:h[1-6]|strong|b)[^>]*>([^<]{2,60})<\/(?:h[1-6]|strong|b)>/gi;
+  let m, name = '', nameIdx = -1;
+  while ((m = headRe.exec(before))) {
+    const cand = m[1].replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+    if (PERSON_NAME_RE.test(cand) && !GENERIC_HEADINGS.has(cand.toLowerCase()) && !/\d|@/.test(cand)) { name = cand; nameIdx = m.index; }
+  }
+  if (name) {
+    const words = name.split(/\s+/);
+    hint.firstName = words[0];
+    hint.lastName = words.length > 1 ? words[words.length - 1] : '';
+  }
+  // Title search stays inside the card that owns the name (heading→email span),
+  // so a sentence like "Head of Sales" can't spill into the next person.
+  const scope = nameIdx >= 0 ? before.slice(nameIdx) + ' ' + after.slice(0, 150)
+    : before.slice(-150) + ' ' + after.slice(0, 150);
+  const plain = scope.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ');
+  const tm = plain.match(TITLE_RE);
+  if (tm) hint.title = tm[0].replace(/\s+/g, ' ').trim();
+  return hint;
+}
+
 function extractEmails(html, domain, found) {
   // Normalize common obfuscations before regexing: entities, (at)/(dot),
   // and mailto: prefixes that a plain `x@y.tld` regex would miss. We
@@ -965,20 +999,21 @@ function extractEmails(html, domain, found) {
     .replace(/&#46;/gi, '.')
     .replace(/&amp;/gi, '&')
     .replace(/mailto:([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/gi, (_, e) => e)
+    .replace(/\s*\[at\]\s*/gi, '@')
+    .replace(/\s*\[dot\]\s*/gi, '.')
+    .replace(/\s*\(at\)\s*/gi, '@')
+    .replace(/\s*\(dot\)\s*/gi, '.')
     .replace(/\s+at\s+/gi, '@')
-    .replace(/\s+dot\s+/gi, '.')
-    .replace(/\(at\)/gi, '@')
-    .replace(/\(dot\)/gi, '.')
-    .replace(/\[at\]/gi, '@')
-    .replace(/\[dot\]/gi, '.');
+    .replace(/\s+dot\s+/gi, '.');
   const IMAGE_EXTS = /\.(png|jpg|jpeg|gif|webp|svg|css|js|json|xml)$/;
-  const matches = text.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
-  for (const m of matches) {
-    const e = m.toLowerCase();
+  const re = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const e = m[0].toLowerCase();
     if (!e.endsWith('@' + domain)) continue;
     if (GENERIC_LOCALS.has(e.split('@')[0])) continue;
     if (IMAGE_EXTS.test(e)) continue;
-    found.add(e);
+    found.set(e, found.has(e) ? found.get(e) : personHintFor(text, m.index));
   }
 }
 
@@ -1096,7 +1131,7 @@ async function builtinSearchLeads(f, perPage, sessionEmail) {
   if (!domains.length) return { leads: [], warning: warning || '' };
   const out = [];
   for (const domain of domains) {
-    const found = new Set();
+    const found = new Map(); // email -> { firstName, lastName, title } page hint
     let queue = [...CRAWL_PATHS];
     // Try sitemap.xml ahead of everything — most blogs/products ship one.
     try {
@@ -1120,13 +1155,14 @@ async function builtinSearchLeads(f, perPage, sessionEmail) {
         extractEmails(html, domain, found);
       } catch { /* page missing/unreachable — move on */ }
     }
-    for (const email of found) {
+    for (const [email, hint] of found) {
       const local = email.split('@')[0];
       const parts = local.split(/[._-]+/).filter(Boolean);
       out.push({
         email, source: 'builtin',
-        firstName: parts.length ? cap(parts[0]) : '', lastName: parts.length > 1 ? cap(parts[1]) : '',
-        company: domain, title: f.title || '', linkedinUrl: '', emailStatus: '',
+        firstName: (hint && hint.firstName) || (parts.length ? cap(parts[0]) : ''),
+        lastName: (hint && hint.lastName) || (parts.length > 1 ? cap(parts[1]) : ''),
+        company: domain, title: (hint && hint.title) || f.title || '', linkedinUrl: '', emailStatus: '',
       });
       if (out.length >= perPage * 6) break;
     }
