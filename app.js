@@ -1976,10 +1976,12 @@ function bindLeadFinder() {
         note.appendChild(a);
       }
     } else {
-      note.textContent = 'No verified leads matched — try a broader title, a different domain, or add APOLLO_API_KEY for full ICP search.';
+      const warnings = (data.warnings || []).filter(Boolean);
+      const meaningfulWarning = warnings.find(w => !/apollo.*api access/i.test(w));
+      note.textContent = meaningfulWarning
+        ? `Search finished — no verified leads found. ${meaningfulWarning}`
+        : 'Search finished — no verified leads found. Try a broader title, pass concrete domains (e.g. acme.com) as keywords, or narrow your filters.';
     }
-    // Soft config warnings (e.g. free-plan Apollo key) — informational, not an error.
-    if (data.warnings?.length) note.textContent += ` · ${data.warnings.join(' · ')}`;
     renderLeadResults(data.leads, keywords);
     loadLeadFinderStatus();
   });

@@ -955,11 +955,22 @@ async function crawlPage(domain, path) {
 
 function extractEmails(html, domain, found) {
   // Normalize common obfuscations before regexing: entities, (at)/(dot),
-  // and mailto: prefixes that a plain `x@y.tld` regex would miss.
+  // and mailto: prefixes that a plain `x@y.tld` regex would miss. We
+  // deliberately scope replacements to things that can't be local-parts so
+  // domains or emails aren't mangled.
   const text = (html || '')
+    .replace(/&#x40;/gi, '@')
+    .replace(/&#x2E;/gi, '.')
     .replace(/&#64;/gi, '@')
     .replace(/&#46;/gi, '.')
-    .replace(/&amp;/gi, '&');
+    .replace(/&amp;/gi, '&')
+    .replace(/mailto:([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/gi, (_, e) => e)
+    .replace(/\s+at\s+/gi, '@')
+    .replace(/\s+dot\s+/gi, '.')
+    .replace(/\(at\)/gi, '@')
+    .replace(/\(dot\)/gi, '.')
+    .replace(/\[at\]/gi, '@')
+    .replace(/\[dot\]/gi, '.');
   const IMAGE_EXTS = /\.(png|jpg|jpeg|gif|webp|svg|css|js|json|xml)$/;
   const matches = text.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [];
   for (const m of matches) {
@@ -974,6 +985,18 @@ function extractEmails(html, domain, found) {
 function discoverLinks(html, domain) {
   // Internal homepage links that look like people pages: they're the most
   // likely place a company publishes emails, ranked above our guesses.
+  // Accepts regular HTML or sitemap.xml content (partially parsed).
+  if (/^<\?xml|<urlset|<sitemapindex/i.test(html.trim())) {
+    const sitemapPaths = [];
+    const locRe = /<loc>([^<]+)<\/loc>/gi;
+    let m;
+    while ((m = locRe.exec(html))) {
+      let link;
+      try { link = new URL(m[1].trim()).pathname; } catch { continue; }
+      if (PERSONISH_LINK.test(link) && !sitemapPaths.includes(link)) sitemapPaths.push(link);
+    }
+    return sitemapPaths;
+  }
   const out = [];
   const re = /href\s*=\s*["']([^"']+)["']/gi;
   let m;
@@ -1075,12 +1098,18 @@ async function builtinSearchLeads(f, perPage, sessionEmail) {
   for (const domain of domains) {
     const found = new Set();
     let queue = [...CRAWL_PATHS];
+    // Try sitemap.xml ahead of everything — most blogs/products ship one.
+    try {
+      const sitemap = await crawlPage(domain, '/sitemap.xml');
+      const sitemapPaths = discoverLinks(sitemap, domain);
+      if (sitemapPaths.length) queue = [...sitemapPaths, ...CRAWL_PATHS.filter(p => !sitemapPaths.includes(p))];
+    } catch { /* no sitemap — guessed paths stay */ }
     try {
       // Homepage first: collect its emails AND mine it for people-page links.
       const home = await crawlPage(domain, '');
       extractEmails(home, domain, found);
       const discovered = discoverLinks(home, domain);
-      queue = [...discovered, ...CRAWL_PATHS.filter(p => !discovered.includes(p))];
+      queue = [...discovered, ...queue];
     } catch { /* homepage unreachable — still try the guessed paths */ }
     let pages = 0;
     for (const path of queue) {
