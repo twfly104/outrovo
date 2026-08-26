@@ -3077,16 +3077,26 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .lf-find-row .tab-ico { width: 15px; height: 15px; }
 
 /* Busy buttons: spinning gear + pulsing status note while a request runs.
-   CSS animations on SVG default to origin 0 0, so without transform-box the
-   gear orbits its top-left corner and looks like it's wobbling. */
+   The animation runs on a plain HTML <span> wrapper (not the <svg>) — SVG
+   transform origins are inconsistent across browsers, especially Safari,
+   and fill="none" makes fill-box degenerate. A fixed square inline-flex
+   box + 50%/50% origin gives a stable center axis everywhere. */
 .btn .spin-gear {
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
   flex: none;
-  transform-box: fill-box;
-  transform-origin: center;
+  align-items: center;
+  justify-content: center;
   will-change: transform;
-  animation: ov-spin 1.2s linear infinite;
+  animation: ov-spin 1s linear infinite;
 }
-@keyframes ov-spin { to { transform: rotate(360deg); } }
+.btn .spin-gear svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+@keyframes ov-spin { to { transform: rotate(1turn); } }
 .btn.is-loading { opacity: 0.85; cursor: progress; }
 .import-note.busy { animation: ov-pulse 1.4s ease-in-out infinite; }
 @keyframes ov-pulse { 50% { opacity: 0.45; } }
