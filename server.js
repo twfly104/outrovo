@@ -1344,6 +1344,9 @@ async function searchLeads(f, perPage, sessionEmail, user = null) {
   }
   if (!leads.length) return { leads: [], provider: null, errors, warnings };
   const verified = await verifyLeadBatch(leads, perPage);
+  if (leads.some(l => l.guessed)) {
+    warnings.push('Named executives resolved via public knowledge + pattern-guessed corporate addresses (flagged "guessed") — the company publishes no individual contacts. Verify before campaign sends.');
+  }
   return { leads: verified.slice(0, perPage), provider: leads[0].source, errors, warnings };
 }
 
