@@ -621,7 +621,7 @@ async function classifyIntent(reply) {
             { role: 'system', content: 'Categorize a cold-outreach reply into exactly one label. Respond with only the label, one of: ' + INTENT_LABELS.join(', ') + '. unsubscribe means an opt-out request. bounce means an auto-reply delivery failure. out_of_office means an auto-responder.' },
             { role: 'user', content: text },
           ],
-          temperature: 0, max_tokens: 12,
+          temperature: 0, max_tokens: llmMaxTokens(60),
         }),
       });
       const data = await res.json();
@@ -920,7 +920,7 @@ function hunterCovered(f) {
   return domains.length > 0;
 }
 
-const GENERIC_LOCALS = new Set(['info', 'contact', 'hello', 'support', 'sales', 'team', 'office', 'mail', 'admin', 'no-reply', 'noreply']);
+const GENERIC_LOCALS = new Set(['info', 'contact', 'hello', 'support', 'sales', 'team', 'office', 'mail', 'admin', 'no-reply', 'noreply', 'press', 'media', 'pr', 'partners', 'partnerships', 'jobs', 'careers', 'hr', 'billing', 'legal', 'privacy']);
 function guessEmailPatterns(first, last, domain) {
   const f = (first || '').toLowerCase().replace(/[^a-z]/g, '');
   const l = (last || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -1059,6 +1059,27 @@ function llmModel() {
   return 'gpt-4o-mini';
 }
 
+// Reasoning models (gpt-oss, o1/o3, deepseek-r1, qwq) spend completion
+// tokens on hidden reasoning before any visible answer — a tight max_tokens
+// cap yields empty content (Groq then 400s json-mode with
+// "json_validate_failed"). Give them real headroom.
+const REASONING_MODEL = /gpt-oss|^o[0-9]|deepseek-r1|qwq/i;
+function llmMaxTokens(n) {
+  return REASONING_MODEL.test(llmModel()) ? Math.max(n, 2048) : n;
+}
+
+// Tolerant JSON parse for chat models: json-mode guarantees a bare object,
+// but providers without it (Groq) may wrap the answer in code fences or
+// surrounding prose.
+function parseLlmJson(raw) {
+  const text = String(raw || '').replace(/```(?:json)?/gi, '').trim();
+  if (!text) throw new Error('empty LLM reply');
+  try { return JSON.parse(text); } catch { /* fall through to extraction */ }
+  const m = text.match(/\{[\s\S]*\}/);
+  if (m) return JSON.parse(m[0]);
+  throw new Error('LLM returned non-JSON');
+}
+
 // Shared OpenAI-compatible LLM call that asks for a JSON object and parses
 // the first message back to an object; null if the key is missing or the
 // call misbehaves. Used by ICP inference and free-text lead discovery.
@@ -1077,7 +1098,7 @@ async function callLlmJson(system, user, timeoutMs = 20000) {
         { role: 'system', content: system },
         { role: 'user', content: user },
       ],
-      temperature: 0.2, max_tokens: 180,
+      temperature: 0.2, max_tokens: llmMaxTokens(600),
     };
     // OpenAI's json-mode `response_format: { type: 'json_object' }` is not
     // accepted by every provider (Groq/others return HTTP 400). Only send it
@@ -1090,8 +1111,7 @@ async function callLlmJson(system, user, timeoutMs = 20000) {
     });
     if (!res.ok) return { reason: `LLM HTTP ${res.status}` };
     const data = await res.json();
-    const raw = data.choices?.[0]?.message?.content || '{}';
-    const parsed = JSON.parse(raw);
+    const parsed = parseLlmJson(data.choices?.[0]?.message?.content);
     return parsed && typeof parsed === 'object' ? { result: parsed } : { reason: 'LLM returned non-JSON' };
   } catch (err) {
     return { reason: `LLM call failed: ${err.message}` };
@@ -2076,19 +2096,19 @@ async function inferIcpFromSite(domain) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({
           model,
-          response_format: { type: 'json_object' },
+          // Groq rejects json-mode (HTTP 400) — plain prompt-only JSON there.
+          ...(base.includes('api.groq.com') ? {} : { response_format: { type: 'json_object' } }),
           messages: [
             { role: 'system', content: 'You help sales teams find their ideal customer profile (ICP). Given a company website, infer: (a) what the company sells — "service" (5-12 words), (b) its core value proposition — "valueProp" (5-15 words), and (c) WHO IT SELLS TO — its customers, never the company itself: "keywords" (target market or industry to search, 2-4 words, NEVER the company\'s own domain), "title" (typical buyer job title), "size" (typical customer company size bucket like "11-50" or "1001-10000"), "location" (customer geography — for non-English sites read native-script address/country names: 台灣→Taiwan, 日本→Japan etc; never default to United States without evidence). Return ONLY JSON: {"service":"...","valueProp":"...","keywords":"...","title":"...","size":"...","location":"..."} — short phrases, no sentences.' },
             { role: 'user', content: JSON.stringify({ url: info.url, title: info.title, description: info.desc, headings: info.h1s, types: info.ldTypes, text: info.text.slice(0, 2000) }) },
           ],
-          temperature: 0.3, max_tokens: 120,
+          temperature: 0.3, max_tokens: llmMaxTokens(200),
         }),
         signal: AbortSignal.timeout(25000),
       });
       if (!llmRes.ok) throw new Error(`LLM ${llmRes.status}`);
       const llmData = await llmRes.json();
-      const raw = llmData.choices?.[0]?.message?.content || '{}';
-      const parsed = JSON.parse(raw);
+      const parsed = parseLlmJson(llmData.choices?.[0]?.message?.content);
       const prefill = {
         service: (parsed.service || '').slice(0, 120),
         valueProp: (parsed.valueProp || '').slice(0, 140),
@@ -2156,18 +2176,18 @@ async function leadIntel(domain, { pitch = '', title = '' } = {}) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({
           model,
-          response_format: { type: 'json_object' },
+          ...(base.includes('api.groq.com') ? {} : { response_format: { type: 'json_object' } }),
           messages: [
             { role: 'system', content: 'You research B2B prospects for sales outreach. From a company\'s website, extract: summary (one sentence — what they do), features (≤5 short phrases — their key services/features), vsOthers (≤2 phrases — what makes them different from alternatives / their compare-us claim), whyChoose (≤2 phrases — proof points like stats, logos, guarantees: why buyers choose them), angle (one sentence — how the sender\'s pitch helps this prospect; make it specific, not generic). Return ONLY JSON: {"summary":"...","features":[...],"vsOthers":[...],"whyChoose":[...],"angle":"..."}' },
             { role: 'user', content: JSON.stringify({ url: info.url, title_: info.title, desc: info.desc, headings: info.h1s, text: text.slice(0, 2000), senderPitch: pitch, buyerTitle: title }) },
           ],
-          temperature: 0.4, max_tokens: 300,
+          temperature: 0.4, max_tokens: llmMaxTokens(400),
         }),
         signal: AbortSignal.timeout(25000),
       });
       if (!res.ok) throw new Error(`LLM ${res.status}`);
       const data = await res.json();
-      const parsed = JSON.parse(data.choices?.[0]?.message?.content || '{}');
+      const parsed = parseLlmJson(data.choices?.[0]?.message?.content);
       const intel = {
         domain,
         summary: String(parsed.summary || info.desc || info.title).slice(0, 300),
@@ -2217,17 +2237,18 @@ async function analyzeSite(info) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({
           model,
-          response_format: { type: 'json_object' },
+          ...(base.includes('api.groq.com') ? {} : { response_format: { type: 'json_object' } }),
           messages: [
             { role: 'system', content: `Given website content, infer what the company SELLS (its product/offer, as the company would pitch it), WHO buys it (specific audience), and a likely outreach GOAL for its sales team. Return ONLY JSON: {"product":"...","audience":"...","goal":"..."} — each a short phrase, no sentences.` },
             { role: 'user', content: JSON.stringify({ title: info.title, description: info.desc, headings: info.h1s, text: info.text.slice(0, 1500) }) },
           ],
+          max_tokens: llmMaxTokens(200),
         }),
         signal: AbortSignal.timeout(25000),
       });
       if (res.ok) {
         const json = await res.json();
-        const parsed = JSON.parse(json.choices?.[0]?.message?.content || '{}');
+        const parsed = parseLlmJson(json.choices?.[0]?.message?.content);
         if (parsed.product) return { ...parsed, ai: true };
       }
     } catch { /* fall through */ }
@@ -2251,17 +2272,18 @@ async function aiGenerateSequence(input) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({
           model,
-          response_format: { type: 'json_object' },
+          ...(base.includes('api.groq.com') ? {} : { response_format: { type: 'json_object' } }),
           messages: [
             { role: 'system', content: AI_SYSTEM_PROMPT },
             { role: 'user', content: JSON.stringify(input) },
           ],
+          max_tokens: llmMaxTokens(800),
         }),
         signal: AbortSignal.timeout(30000),
       });
       if (res.ok) {
         const json = await res.json();
-        const parsed = JSON.parse(json.choices?.[0]?.message?.content || '{}');
+        const parsed = parseLlmJson(json.choices?.[0]?.message?.content);
         const steps = normalizeSteps(parsed.steps || []);
         if (steps.length) return { steps, ai: true, model };
       }
@@ -2297,17 +2319,18 @@ async function aiGenerateStep({ campaignName, existingSteps, instruction }) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({
           model,
-          response_format: { type: 'json_object' },
+          ...(base.includes('api.groq.com') ? {} : { response_format: { type: 'json_object' } }),
           messages: [
             { role: 'system', content: AI_STEP_SYSTEM_PROMPT },
             { role: 'user', content: JSON.stringify({ campaign: campaignName, stepsSoFar: prior || '(none yet)', instruction: instruction || 'Write a natural next step.' }) },
           ],
+          max_tokens: llmMaxTokens(300),
         }),
         signal: AbortSignal.timeout(30000),
       });
       if (res.ok) {
         const json = await res.json();
-        const parsed = JSON.parse(json.choices?.[0]?.message?.content || '{}');
+        const parsed = parseLlmJson(json.choices?.[0]?.message?.content);
         // Some models wrap in {"step": ...}, others return the step directly.
         const [step] = normalizeSteps([parsed.step || parsed]);
         if (step && (step.body || step.note || step.type === 'wait')) return { step, ai: true, model };
@@ -2873,7 +2896,7 @@ async function assistantLlm(q, history) {
     body: JSON.stringify({
       model,
       messages: [{ role: 'system', content: ASSISTANT_SYSTEM }, ...history, { role: 'user', content: q }],
-      temperature: 0.4, max_tokens: 250,
+      temperature: 0.4, max_tokens: llmMaxTokens(250),
     }),
     signal: AbortSignal.timeout(25000),
   });
@@ -3489,7 +3512,7 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
           body: JSON.stringify({
-            model, temperature: 0.7, max_tokens: 220,
+            model, temperature: 0.7, max_tokens: llmMaxTokens(220),
             messages: [
               { role: 'system', content: `You write short, human cold-outreach replies on behalf of ${user?.firstName || 'the sender'} at ${user?.company || 'their company'}. Reply to the prospect's message directly, keep it under 90 words, no fluff, one clear next step. Intent of their reply: ${reply.intent || 'unknown'}.` },
               { role: 'user', content: `Their reply:\nSubject: ${reply.subject}\n${String(reply.body || '').slice(0, 1000)}\n\nInstruction: ${b.instruction || 'draft a reply'}` },
