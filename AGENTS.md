@@ -246,6 +246,20 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
   ab, add-prospect, replies Г”Г‡Г¶ all ride the MCP endpoint.
 - `/app.html` and `/app.js` redirect to `/login.html` without a session
 
+## Iteration 27 — LLM/Groq fix + busy buttons (Aug 2026)
+- Find Leads/Scan & fill now swap to a spinning gear + status while requests
+  run (helper `setBtnLoading` + `GEAR_SVG` in app.js, `.spin-gear` keyframes in
+  styles.css). Apply the helper to any new async button.
+- Groq rejects `response_format:{type:'json_object'}` (HTTP 400) — all LLM
+  call sites must omit it on Groq (`base.includes('api.groq.com')` guard) or
+  use callLlmJson (already guarded).
+- Reasoning models (gpt-oss/o*/deepseek-r1/qwq) burn hidden tokens first —
+  `llmMaxTokens(n)` floors caps at 2048; never pick small max_tokens caps in
+  new LLM call sites. `parseLlmJson()` extracts JSON from chatty/wrapped
+  replies; use it instead of raw JSON.parse on message content.
+- GENERIC_LOCALS blocks press/media/partners/jobs/hr/billing/legal/privacy
+  aliases in the built-in crawler to keep junk off the lead table.
+
 ## Conventions
 - Brand name is "Outrovo" (formerly "Drummer" placeholder).
 - All product screenshots are pure CSS/HTML mockups (`.app-card`, `.panel`, `.orbit`).
