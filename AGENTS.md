@@ -260,6 +260,18 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - GENERIC_LOCALS blocks press/media/partners/jobs/hr/billing/legal/privacy
   aliases in the built-in crawler to keep junk off the lead table.
 
+## Iteration 28 — junk-alias detector + SVG spin smoothness (Aug 2026)
+- Leads were department/test mailboxes because GENERIC_LOCALS was 20 words.
+  New layered detector (`isGenericLocal` in server.js): exact-word set +
+  GENERIC_ALIAS regex + all-sub-token-generic + >14-char run-together word +
+  contains ≥5-char generic substring (GENERIC_SUB). Catches "affiliates",
+  "bizdev", "brandmarketing", "customeradvocacyinquiry", "tvmedia", "abc/xyz"
+  test junk while real names (sol, tim.cook, mreutzel) pass.
+- Spinning gear wobble fix: SVG `transform` CSS animations default the origin
+  to 0 0, making the gear orbit its corner. `transform-box: fill-box` +
+  `transform-origin: center` + `will-change` is mandatory for any animated
+  SVG icon.
+
 ## Conventions
 - Brand name is "Outrovo" (formerly "Drummer" placeholder).
 - All product screenshots are pure CSS/HTML mockups (`.app-card`, `.panel`, `.orbit`).
