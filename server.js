@@ -2413,7 +2413,8 @@ function normalizePlanId(id) {
 const TOPUP_PACKS = {
   credits_500: { name: '500 Lead Finder credits', credits: 500, price: 19 },
   credits_2000: { name: '2,000 Lead Finder credits', credits: 2000, price: 49 },
-  credits_10000: { name: '10,000 Lead Finder credits (Scale included)', credits: 10000, price: 189 },
+  credits_5000: { name: '5,000 Lead Finder credits', credits: 5000, price: 99 },
+  credits_10000: { name: '10,000 Lead Finder credits', credits: 10000, price: 189 },
   dns_setup: { name: 'Done-for-you domain setup (SPF · DKIM · DMARC)', price: 99, service: true },
 };
 
