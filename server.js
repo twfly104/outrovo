@@ -2395,7 +2395,7 @@ const PLANS = {
   trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, leadFinderCredits: 25, linkedIn: true, agency: false, whiteLabel: false },
   starter: { name: 'Starter', priceMonthly: 39, maxProspects: 2000, maxCampaigns: 3, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false },
   growth: { name: 'Pro', priceMonthly: 89, maxProspects: 10000, maxCampaigns: 10, leadFinderCredits: 1000, linkedIn: true, agency: false, whiteLabel: false },
-  scale: { name: 'Scale', priceMonthly: 189, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: false, whiteLabel: true },
+  scale: { name: 'Scale', priceMonthly: 159, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: false, whiteLabel: true },
   agency: { name: 'Agency', priceMonthly: 249, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: true, whiteLabel: true },
 };
 // Display-name aliases accepted at API boundaries (e.g. the pricing page
@@ -2842,7 +2842,7 @@ const ASSISTANT_PERSONA = `You are the Outrovo agent — the built-in product ex
 const ASSISTANT_FACTS = [
   'Outrovo is a cold-outreach platform: find leads with the built-in Lead Finder, send email + LinkedIn sequences (AI-drafted if you want), and read every reply in one unified inbox. Verification, warm-up and domain checks are built in, not paid add-ons.',
   'Services in one line: lead finding, email + LinkedIn sequences, AI copywriting, email verification, warm-up, domain health checks, unified inbox, CRM integrations.',
-  'Pricing: Starter $39/slot/mo, Pro $89 (most popular), Scale $189 — less billed annually (−20%). Agency $249/mo with client workspaces and white-labeling.',
+  'Pricing: Starter $39/slot/mo, Pro $89 (most popular), Scale $159 — heavy users bring their own Apollo key (Settings → BYOK) (−20%). Agency $249/mo with client workspaces and white-labeling.',
   'Unlike per-seat tools (Lemlist charges $50-90+ per sender seat), every Outrovo plan includes UNLIMITED sending inboxes — connect as many as you like, campaigns rotate across them, no per-inbox fees.',
   'Lead Finder “Add Credits” packs: pay-as-you-go bundles (500 credits $19, 2,000 $49, 10,000 $189) that never expire, on top of the monthly plan credits.',
   'Done-for-you domain setup is a $99 one-time service: we configure SPF, DKIM, DMARC and secondary domain DNS with you instead of trial-and-error. Purchased inside the app.',

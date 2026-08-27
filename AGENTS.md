@@ -41,9 +41,9 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 ## Monetization
 - Plans in `PLANS` (server.js): trial (14d, 100 prospects, 1 campaign),
   starter $39 (2K/3), growth-id displays as "Pro" $89 (10K/10 + LinkedIn),
-  scale $189 (Г”Е‚Г—). Plan IDs unchanged (growth id = Pro name) so existing
+  scale $159 (Г”Е‚Г—). Plan IDs unchanged (growth id = Pro name) so existing
   users keep working. `TOPUP_PACKS` (server.js) sells pay-as-you-go Lead
-  Finder credit bundles (500/$19, 2K/$49, 10K/$189) via the same
+  Finder credit bundles (500/$19, 2K/$49, 10K/$189 (BYOK-first for heavy users)) via the same
   /api/billing/checkout + /api/billing/activate flow (Stripe mode=payment
   vs subscription); credits land on `user.leadFinderBonus` (survives the
   monthly leadFinder reset) and `GET /api/plans` exposes `topups` — the
