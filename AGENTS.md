@@ -782,3 +782,9 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
   (matches how the server already behaves: domainAudit + watchdog run for
   every user, classifyReply runs on all plans).
 - Verified via CDP screenshots: 4-bullet features, dev strip, $39/89/189 cards.
+
+## Iteration - pricing voice simplified: drop "per slot" (Aug 2026)
+- The pricing page advertised $39 per slot / mo AND unlimited email inboxes in the same breath - contradicting and confusing users. How the product is actually sold: flat monthly per-plan price, unlimited sending inboxes + free warm-up included (no per-inbox/per-seat fee).
+- Removed the ambiguous "slot" pricing voice everywhere: pricing.html (3 plan cards + meta + lede), index.html FAQ pricing rule, server.js ASSISTANT_FACTS pricing line. All now read $39/mo, $89/mo, $159/mo with yearly totals like $372/yr (no "/ slot").
+- No functional change to plans, credits, or billing - only pricing copy.
+- Verified: node --check passes; server boots; /pricing.html /index.html /api/plans all 200; served pricing page has 0 "slot" refs; all 5 plan tiers + 5 topups exposed; auth signup -> /app.html serves dashboard.
