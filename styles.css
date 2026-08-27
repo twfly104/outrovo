@@ -3076,21 +3076,21 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .lf-find-row .btn-primary { flex: 1; justify-content: center; display: inline-flex; align-items: center; gap: 8px; }
 .lf-find-row .tab-ico { width: 15px; height: 15px; }
 
-/* Busy buttons: spinning icon + pulsing status note while a request runs.
+/* Busy buttons: spinning gear + pulsing status note while a request runs.
    Locked-center pattern: wrapper = fixed 15x15 square; svg absolutely
    centered via negative margins (not flex, not percentages). Rotation
    happens on the wrapper with a 50%/50% origin — the svg's exact center
    therefore becomes the rotation axis by construction, independent of
-   browser flexbox rounding or percentage-resolution subtleties. */
+   browser flexbox rounding or percentage-resolution subtleties.
+   Smooth continuous linear rotation, the way Apple's gear animations run. */
 .btn .spin-gear {
   position: relative;
   display: inline-block;
   width: 15px;
   height: 15px;
   flex: none;
-  overflow: hidden;
   will-change: transform;
-  animation: ov-spin 0.8s steps(8) infinite;
+  animation: ov-gear-spin 1.6s linear infinite;
 }
 .btn .spin-gear svg {
   position: absolute;
@@ -3100,7 +3100,10 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   height: 15px;
   margin: -7.5px 0 0 -7.5px;
 }
-@keyframes ov-spin { to { transform: rotate(1turn); } }
+@keyframes ov-gear-spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) {
+  .btn .spin-gear { animation: none; }
+}
 .btn.is-loading { opacity: 0.85; cursor: progress; }
 .import-note.busy { animation: ov-pulse 1.4s ease-in-out infinite; }
 @keyframes ov-pulse { 50% { opacity: 0.45; } }

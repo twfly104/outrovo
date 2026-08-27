@@ -96,15 +96,16 @@ const $ = id => document.getElementById(id);
 
 // Swap a button's content for a spinning gear while async work runs, then
 // restore the exact original markup (industry-standard busy affordance).
-// Industry-standard loader: 8 stroke-dash tapered ticks on a circle,
-// rotated stepwise (30°/frame). Rotating gears were a dead end — every
-// quality loader (iOS/Material/Tailwind/SpinKit) uses dash tapers on a
-// plain circle, so the whole SVG rotates as a rigid point (no axis drift,
-// no centroid wobble). steps(8) makes frames discrete, removing linear-
-// interpolation drift entirely.
-const TICKS = [0, 45, 90, 135, 180, 225, 270, 315]
-  .map(a => `<use href="#ov-tick" transform="rotate(${a} 12 12)"/>`).join('');
-const GEAR_SVG = '<span class="spin-gear" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><defs><line id="ov-tick" x1="12" y1="3.5" x2="12" y2="6.5"/></defs>' + TICKS + '</svg></span>';
+// The gear is built from circles centered at (12,12) — the dashed outer
+// ring forms 8 teeth, the small ring is the hub. Because every element is
+// concentric by construction, the visual center equals the svg center, so
+// continuous linear rotation (Apple Settings-gear style) has zero axis
+// drift or centroid wobble. 2π·7.5 = 8 × (3.1 + 2.79), so the dashes
+// divide the ring into exactly 8 teeth with no seam.
+const GEAR_SVG = '<span class="spin-gear" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">'
+  + '<circle cx="12" cy="12" r="7.5" stroke-width="4.4" stroke-dasharray="3.1 2.79" stroke-dashoffset="1.55"/>'
+  + '<circle cx="12" cy="12" r="2.6" stroke-width="2.2"/>'
+  + '</svg></span>';
 function setBtnLoading(btn, loading, label = 'Working…') {
   if (!btn) return;
   if (loading) {
