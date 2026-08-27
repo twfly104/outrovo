@@ -1131,61 +1131,6 @@ async function discoverDomains(f) {
   return { domains };
 }
 
-// Last-resort person resolution: the company site published no usable
-// emails, so ask the LLM for public leadership names (CTO/VP/…) and pattern-
-// guess their corporate addresses. Every guess is MX-verified upstream; the
-// caller marks these leads as 'guessed' so the UI never presents them as
-// confirmed contacts. Requires an LLM key; silently skips without one.
-async function leadershipGuessLeads(domain, f) {
-  const titles = (Array.isArray(f.title) ? f.title : [f.title]).filter(Boolean);
-  const want = titles.length ? titles.join(', ') : 'CTO, VP of Engineering, Head of Product, CEO, Founder';
-  // Reasoning models (gpt-oss) answer this nondeterministically — same
-  // prompt sometimes returns the right exec, sometimes {"people":[]}. Ask
-  // twice (titles first, generic C-suite fallback) and keep the first hit.
-  const prompts = [
-    JSON.stringify({ domain, titles: want }),
-    JSON.stringify({ domain, titles: 'CEO, CTO, COO, Founder, Managing Director' }),
-  ];
-  let people = [];
-  for (const user of prompts) {
-    const llm = await callLlmJson(
-      'List well-known public executives of the company at the given domain whose role matches the requested titles (from your training knowledge). Return JSON ONLY {"people":[{"firstName":"...","lastName":"...","title":"..."}]} with up to 4 people. Return {"people":[]} only if you genuinely do not know the company.',
-      user,
-      25000,
-    );
-    if (llm.result?.people?.length) { people = llm.result.people; break; }
-  }
-  if (!people.length) return [];
-  const out = [];
-  const domainMx = (await verifyEmail(`nothing-here-${Date.now()}@${domain}`).catch(() => null))?.mx?.length ? true : null;
-  for (const p of people.slice(0, 4)) {
-    const first = String(p.firstName || '').trim(), last = String(p.lastName || '').trim(), title = String(p.title || '').trim();
-    if (!first || !PERSON_NAME_RE.test(`${first} ${last}`.trim())) continue;
-    // Full-name catch-all check: if the domain has no MX at all, a guessed
-    // address can't be delivered; without MX evidence, pattern guessing is
-    // the only signal and we keep the lead flagged as guessed.
-    const patterns = guessEmailPatterns(first, last, domain);
-    if (!patterns.length) continue;
-    let email = '';
-    for (const cand of patterns) {
-      try {
-        const v = await verifyEmail(cand);
-        if (v.verdict === 'deliverable') { email = cand; break; }
-        if (v.mx?.length && !email) email = cand; // MX exists — keep as best guess
-      } catch { /* try next pattern */ }
-    }
-    if (!email) continue;
-    if (isGenericLocal(email.split('@')[0])) continue;
-    out.push({
-      email, source: 'builtin', guessed: true,
-      firstName: cap(first), lastName: cap(last),
-      company: domain, title: title || want.split(',')[0].trim(), linkedinUrl: '', emailStatus: '',
-    });
-    if (domainMx === false) break; // no MX — guesses won't deliver anyway
-  }
-  return out;
-}
-
 async function builtinSearchLeads(f, perPage, sessionEmail) {
   // Free source: explicit __domains short-circuit discovery (e.g. Apollo org
   // search already found the companies); else when the keywords are domains,
@@ -1232,15 +1177,6 @@ async function builtinSearchLeads(f, perPage, sessionEmail) {
         company: domain, title: (hint && hint.title) || '', linkedinUrl: '', emailStatus: '',
       });
       if (out.length >= perPage * 6) break;
-    }
-    // Crawl yielded nothing usable on this domain (only department aliases,
-    // or nothing at all): resolve named executives via the LLM and pattern-
-    // guess their addresses. Better a flagged guess than another info@ row.
-    if (!found.size && out.length < perPage * 6) {
-      try {
-        const guessed = await leadershipGuessLeads(domain, f);
-        out.push(...guessed);
-      } catch { /* guess path is best-effort */ }
     }
     if (out.length >= perPage * 6) break;
   }
