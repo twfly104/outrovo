@@ -2395,7 +2395,7 @@ const PLANS = {
   trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, leadFinderCredits: 25, linkedIn: true, agency: false, whiteLabel: false },
   starter: { name: 'Starter', priceMonthly: 39, maxProspects: 2000, maxCampaigns: 3, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false },
   growth: { name: 'Pro', priceMonthly: 89, maxProspects: 10000, maxCampaigns: 10, leadFinderCredits: 1000, linkedIn: true, agency: false, whiteLabel: false },
-  scale: { name: 'Scale', priceMonthly: 159, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: false, whiteLabel: true },
+  scale: { name: 'Scale', priceMonthly: 159, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 5000, linkedIn: true, agency: false, whiteLabel: true },
   agency: { name: 'Agency', priceMonthly: 249, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: true, whiteLabel: true },
 };
 // Display-name aliases accepted at API boundaries (e.g. the pricing page
@@ -2844,7 +2844,7 @@ const ASSISTANT_FACTS = [
   'Services in one line: lead finding, email + LinkedIn sequences, AI copywriting, email verification, warm-up, domain health checks, unified inbox, CRM integrations.',
   'Pricing: Starter $39/slot/mo, Pro $89 (most popular), Scale $159 — heavy users bring their own Apollo key (Settings → BYOK) (−20%). Agency $249/mo with client workspaces and white-labeling.',
   'Unlike per-seat tools (Lemlist charges $50-90+ per sender seat), every Outrovo plan includes UNLIMITED sending inboxes — connect as many as you like, campaigns rotate across them, no per-inbox fees.',
-  'Lead Finder “Add Credits” packs: pay-as-you-go bundles (500 credits $19, 2,000 $49, 10,000 $189) that never expire, on top of the monthly plan credits.',
+  'Lead Finder “Add Credits” packs: pay-as-you-go (500 credits $19, 2,000 $49, 5,000 $99, 10,000 $189) that never expire. Heavy use? Bring your own Apollo key in Settings → BYOK.',
   'Done-for-you domain setup is a $99 one-time service: we configure SPF, DKIM, DMARC and secondary domain DNS with you instead of trial-and-error. Purchased inside the app.',
   'AI features are focused micro-AI, not a bloated autonomous agent: AI sequence writer (drafts from your website), AI reply drafts, reply intent tagging (interested / not interested / unsubscribe / out-of-office), spintax generation for deliverability, and 1-line website personalization.',
   'Every plan starts with a 14-day free trial, no credit card needed. Cancel anytime in one click.',
