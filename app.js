@@ -2054,9 +2054,13 @@ function bindLeadFinder() {
     } else {
       const warnings = (data.warnings || []).filter(Boolean);
       const meaningfulWarning = warnings.find(w => !/apollo.*api access/i.test(w));
+      // Industry-standard empty state: tell the user what was tried and what to broaden.
+      const chain = ($('leadFinderStatus').textContent || '').includes('via your Apollo key')
+        ? 'your Apollo key → free Apollo → public web'
+        : 'Apollo → free Apollo → public web';
       note.textContent = meaningfulWarning
-        ? `Search finished — no verified leads found. ${meaningfulWarning}`
-        : 'Search finished — no verified leads found. Try a broader title, pass concrete domains (e.g. acme.com) as keywords, or narrow your filters.';
+        ? `No verified leads after checking ${chain}. ${meaningfulWarning}`
+        : `No verified leads after checking ${chain}. Try a broader title, use concrete domains (e.g. acme.com) as keywords, or loosen your filters.`;
     }
     renderLeadResults(data.leads, keywords);
     loadLeadFinderStatus();
