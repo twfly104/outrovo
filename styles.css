@@ -1036,6 +1036,12 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   border-left: 1px solid var(--line);
 }
 .plan:first-child { border-left: 0; }
+/* The featured card draws its own rounded border, so hide the hairline
+   divider on the next column (Scale) — otherwise the two lines sit 10px
+   apart and never connect. Desktop only; mobile cards use full borders. */
+@media (min-width: 1101px) {
+  .plan.featured + .plan { border-left: 0; }
+}
 .plan.featured {
   background: linear-gradient(180deg, rgba(232, 73, 15, 0.07), rgba(232, 73, 15, 0.02));
   border: 1px solid rgba(232, 73, 15, 0.4);
