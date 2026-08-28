@@ -1021,7 +1021,7 @@ const CRAWL_PATHS = ['/about', '/contact', '/team', '/about-us', '/contact-us',
 const PERSONISH_LINK = /about|contact|team|staff|leadership|people|company|impress/i;
 const MAX_PAGES_PER_DOMAIN = 8;
 
-async function crawlPage(domain, path) {
+async function fetchLeadPage(domain, path) {
   // One page fetch with a hard 6s budget; throws on non-2xx so callers skip.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 6000);
@@ -1041,6 +1041,24 @@ async function crawlPage(domain, path) {
     return new TextDecoder(label).decode(buf);
   } catch {
     return new TextDecoder('utf-8').decode(buf);
+  }
+}
+
+// One retry on transient statuses (429 rate-limit, 5xx): shared hosting/
+// CDNs flake often enough that a single 429/5xx would otherwise burn one of
+// the MAX_PAGES_PER_DOMAIN slots and silently lose the page. Bounded at 2
+// total attempts with a short backoff so politeness stays intact.
+const CRAWL_RETRY_BACKOFF_MS = 700;
+async function crawlPage(domain, path) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetchLeadPage(domain, path);
+    } catch (err) {
+      const status = Number((/HTTP (\d+)/.exec(String(err && err.message)) || [])[1]);
+      const retryable = status === 429 || (status >= 500 && status < 600);
+      if (!retryable || attempt >= 1) throw err;
+      await new Promise(resolve => setTimeout(resolve, CRAWL_RETRY_BACKOFF_MS * (attempt + 1)));
+    }
   }
 }
 
