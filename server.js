@@ -1078,33 +1078,57 @@ function personHintFor(text, idx) {
   return hint;
 }
 
+// Cloudflare email protection: data-cfemail is the address XORed byte-wise
+// with the attribute's first byte.
+function decodeCfEmail(hex) {
+  if (!/^[0-9a-fA-F]{10,}$/.test(hex) || hex.length % 2) return '';
+  const key = parseInt(hex.slice(0, 2), 16);
+  let out = '';
+  for (let i = 2; i < hex.length; i += 2) out += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16) ^ key);
+  return out;
+}
+
+// Decode every numeric HTML entity (not just &#64;/&#46;): sites routinely
+// entity-encode the whole address char-by-char, so a partial mapping lets
+// the majority slip through.
+function decodeNumericEntities(html) {
+  const safe = n => (n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '');
+  return (html || '')
+    .replace(/&#x([0-9a-fA-F]{1,6});/g, (_, h) => safe(parseInt(h, 16)))
+    .replace(/&#(\d{1,7});/g, (_, d) => safe(parseInt(d, 10)));
+}
+
+const EMAIL_SHAPE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+const IMAGE_EXTS = /\.(png|jpg|jpeg|gif|webp|svg|css|js|json|xml)$/;
+
 function extractEmails(html, domain, found) {
-  // Normalize common obfuscations before regexing: entities, (at)/(dot),
-  // and mailto: prefixes that a plain `x@y.tld` regex would miss. We
-  // deliberately scope replacements to things that can't be local-parts so
-  // domains or emails aren't mangled.
-  const text = (html || '')
-    .replace(/&#x40;/gi, '@')
-    .replace(/&#x2E;/gi, '.')
-    .replace(/&#64;/gi, '@')
-    .replace(/&#46;/gi, '.')
+  // Normalize common obfuscations before regexing: entities, (at)/(dot) in
+  // any bracket form, " at " word forms, and mailto: prefixes that a plain
+  // `x@y.tld` regex would miss. Replacements are scoped to things that
+  // can't be local-parts so domains or emails aren't mangled.
+  const text = decodeNumericEntities(html)
     .replace(/&amp;/gi, '&')
     .replace(/mailto:([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/gi, (_, e) => e)
-    .replace(/\s*\[at\]\s*/gi, '@')
-    .replace(/\s*\[dot\]\s*/gi, '.')
-    .replace(/\s*\(at\)\s*/gi, '@')
-    .replace(/\s*\(dot\)\s*/gi, '.')
+    .replace(/\s*(?:\[|\(|\{)at(?:\]|\)|\})\s*/gi, '@')
+    .replace(/\s*(?:\[|\(|\{)dot(?:\]|\)|\})\s*/gi, '.')
     .replace(/\s+at\s+/gi, '@')
     .replace(/\s+dot\s+/gi, '.');
-  const IMAGE_EXTS = /\.(png|jpg|jpeg|gif|webp|svg|css|js|json|xml)$/;
-  const re = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+  const push = (e, idx) => {
+    e = e.toLowerCase();
+    if (!e.endsWith('@' + domain)) return;
+    if (isGenericLocal(e.split('@')[0])) return;
+    if (IMAGE_EXTS.test(e)) return;
+    found.set(e, found.has(e) ? found.get(e) : personHintFor(text, idx));
+  };
   let m;
-  while ((m = re.exec(text))) {
-    const e = m[0].toLowerCase();
-    if (!e.endsWith('@' + domain)) continue;
-    if (isGenericLocal(e.split('@')[0])) continue;
-    if (IMAGE_EXTS.test(e)) continue;
-    found.set(e, found.has(e) ? found.get(e) : personHintFor(text, m.index));
+  const re = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+  while ((m = re.exec(text))) push(m[0], m.index);
+  // Cloudflare-protected pages carry only the XOR hex — decode separately,
+  // (run against `text` so person-hint indexing stays consistent).
+  const cf = /data-cfemail="([0-9a-fA-F]{10,})"/g;
+  while ((m = cf.exec(text))) {
+    const decoded = decodeCfEmail(m[1]);
+    if (EMAIL_SHAPE.test(decoded)) push(decoded, m.index);
   }
 }
 
@@ -5099,5 +5123,8 @@ if (!process.env.VERCEL) {
   });
 }
 
-// Vercel imports the handler as a serverless function.
+// Vercel imports the handler as a serverless function; helpers hang off the
+// export so tests can exercise the extraction pipeline directly.
 module.exports = (req, res) => server.emit("request", req, res);
+module.exports.extractEmails = extractEmails;
+module.exports.decodeCfEmail = decodeCfEmail;
