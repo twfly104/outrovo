@@ -62,6 +62,44 @@
     ]
   }
   </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Do I need a card to start the trial?",
+        "acceptedAnswer": { "@type": "Answer", "text": "No. The 14-day Starter trial runs without a card — connect senders, run campaigns, and upgrade only after it has paid for itself." }
+      },
+      {
+        "@type": "Question",
+        "name": "What happens when the trial ends?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Nothing is charged — we never collected a card. Sending pauses until you pick a plan, and your prospects, sequences and sender setup stay right where you left them." }
+      },
+      {
+        "@type": "Question",
+        "name": "How do Lead Finder credits work?",
+        "acceptedAnswer": { "@type": "Answer", "text": "One credit = one contact found and verified. Plans include 100/month on Starter, 1,000 on Pro, 5,000 on Scale and 10,000 on Agency. Credits are charged only per returned lead and capped at your remaining quota — no surprise bills." }
+      },
+      {
+        "@type": "Question",
+        "name": "Do unused credits roll over?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Monthly plan allowances reset with each billing month. Pay-as-you-go credit packs never expire — they sit on top of your plan quota until you use them." }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I switch plans later?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Yes — upgrade from the in-app billing page any time, and your campaigns and credit balance carry over. Yearly billing takes ~20% off the monthly price." }
+      },
+      {
+        "@type": "Question",
+        "name": "Who processes payments?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Checkout runs through Stripe — card details never touch our servers." }
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
 
@@ -264,6 +302,40 @@
       </div>
     </section>
 
+    <!-- Billing FAQ — answers purchase objections at the decision point -->
+    <section class="band" id="billing-faq">
+      <div class="wrap">
+        <span class="eyebrow" style="justify-content:center;">Billing FAQ</span>
+        <h2 class="h-l" style="margin:14px auto 40px;text-align:center;">Questions buyers ask before they pay</h2>
+        <div class="fq">
+          <div class="item">
+            <button class="q">Do I need a card to start the trial?<span class="p">+</span></button>
+            <div class="a"><p>No. The 14-day Starter trial runs without a card — connect senders, run campaigns, and upgrade only after it has paid for itself.</p></div>
+          </div>
+          <div class="item">
+            <button class="q">What happens when the trial ends?<span class="p">+</span></button>
+            <div class="a"><p>Nothing is charged — we never collected a card. Sending pauses until you pick a plan, and your prospects, sequences and sender setup stay right where you left them.</p></div>
+          </div>
+          <div class="item">
+            <button class="q">How do Lead Finder credits work?<span class="p">+</span></button>
+            <div class="a"><p>One credit = one contact found and verified. Plans include 100/month on Starter, 1,000 on Pro, 5,000 on Scale and 10,000 on Agency. Credits are charged only per returned lead and capped at your remaining quota — no surprise bills.</p></div>
+          </div>
+          <div class="item">
+            <button class="q">Do unused credits roll over?<span class="p">+</span></button>
+            <div class="a"><p>Monthly plan allowances reset with each billing month. Pay-as-you-go credit packs (the add-on packs above) never expire — they sit on top of your plan quota until you use them.</p></div>
+          </div>
+          <div class="item">
+            <button class="q">Can I switch plans later?<span class="p">+</span></button>
+            <div class="a"><p>Yes — upgrade from the in-app billing page any time, and your campaigns and credit balance carry over. The yearly toggle above takes ~20% off the monthly price.</p></div>
+          </div>
+          <div class="item">
+            <button class="q">Who processes payments?<span class="p">+</span></button>
+            <div class="a"><p>Checkout runs through Stripe — card details never touch our servers.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- CTA band -->
     <section class="cta-band" style="margin-top: 110px;">
       <div class="wrap">
@@ -388,6 +460,17 @@
       btn.addEventListener('click', () => toggle(!menu.classList.contains('open')));
       menu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => toggle(false)));
     })();
+  </script>
+  <script>
+    // Billing FAQ accordion (same .fq/.item/.q/.a pattern as index)
+    document.querySelectorAll('.fq .item').forEach(item => {
+      item.querySelector('.q').addEventListener('click', () => {
+        document.querySelectorAll('.fq .item.open').forEach(o => { o.classList.remove('open'); o.querySelector('.a').style.maxHeight = null; });
+        if (item.classList.contains('open')) return;
+        item.classList.add('open');
+        item.querySelector('.a').style.maxHeight = item.querySelector('.a').scrollHeight + 'px';
+      });
+    });
   </script>
 
   <!-- Assistant widget — engages high-intent pricing visitors -->
