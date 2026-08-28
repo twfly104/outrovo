@@ -74,32 +74,31 @@ function load(name) {
 function save(name, data) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(path.join(DATA_DIR, FILES[name]), JSON.stringify(data, null, 2));
-  if (name === 'users') scheduleBackup();
+  scheduleBackup();
 }
 
 // ---------- GitHub backup/restore ----------
 // On Render's free tier there's no persistent disk, so DATA_DIR is wiped on
-// every deploy/restart. To survive that, the users file is backed up to a
-// private GitHub repo (data/users.json) whenever it changes, and restored on
-// startup. Other data (campaigns, sessions, etc.) is rebuilt as users work.
+// every deploy/restart. To survive that, all data files are backed up to a
+// private GitHub repo (data/*.json) whenever they change, and restored on
+// startup. This gives full persistence without needing a paid Render plan.
 const BACKUP_REPO = process.env.GITHUB_BACKUP_REPO || 'twfly104/outrovo-backup';
 const BACKUP_TOKEN = process.env.GITHUB_KEY || process.env.GITHUB_TOKEN || '';
-const BACKUP_PATH = 'data/users.json';
 let backupTimer = null;
 
-async function githubGetFile() {
+async function githubGetFile(path) {
   if (!BACKUP_TOKEN) return null;
-  const url = `https://api.github.com/repos/${BACKUP_REPO}/contents/${BACKUP_PATH}`;
+  const url = `https://api.github.com/repos/${BACKUP_REPO}/contents/${path}`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${BACKUP_TOKEN}`, Accept: 'application/vnd.github+json' } });
   if (!res.ok) return null;
   return res.json();
 }
 
-async function githubPutFile(content, sha = null) {
+async function githubPutFile(path, content, sha = null) {
   if (!BACKUP_TOKEN) return false;
-  const url = `https://api.github.com/repos/${BACKUP_REPO}/contents/${BACKUP_PATH}`;
+  const url = `https://api.github.com/repos/${BACKUP_REPO}/contents/${path}`;
   const body = {
-    message: `Backup users.json ${new Date().toISOString()}`,
+    message: `Backup ${path} ${new Date().toISOString()}`,
     content: Buffer.from(content).toString('base64'),
     ...(sha ? { sha } : {}),
   };
@@ -111,15 +110,30 @@ async function githubPutFile(content, sha = null) {
   return res.ok;
 }
 
+async function githubListDir(path) {
+  if (!BACKUP_TOKEN) return [];
+  const url = `https://api.github.com/repos/${BACKUP_REPO}/contents/${path}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${BACKUP_TOKEN}`, Accept: 'application/vnd.github+json' } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
 function scheduleBackup() {
   if (!BACKUP_TOKEN) return;
   clearTimeout(backupTimer);
   backupTimer = setTimeout(async () => {
     try {
-      const users = load('users');
-      const existing = await githubGetFile();
-      const ok = await githubPutFile(JSON.stringify(users, null, 2), existing?.sha);
-      if (ok) console.log(`[backup] users.json → ${BACKUP_REPO} (${users.length} users)`);
+      const files = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.json'));
+      let backedUp = 0;
+      for (const file of files) {
+        const path = `data/${file}`;
+        const content = fs.readFileSync(`${DATA_DIR}/${file}`, 'utf8');
+        const existing = await githubGetFile(path);
+        const ok = await githubPutFile(path, content, existing?.sha);
+        if (ok) backedUp++;
+      }
+      if (backedUp > 0) console.log(`[backup] ${backedUp} files → ${BACKUP_REPO}`);
     } catch (err) {
       console.error('[backup] failed:', err.message);
     }
@@ -129,15 +143,23 @@ function scheduleBackup() {
 async function restoreFromGitHub() {
   if (!BACKUP_TOKEN) return;
   try {
-    const local = load('users');
-    if (local.length > 0) return; // already have data
-    const file = await githubGetFile();
-    if (!file?.content) return;
-    const users = JSON.parse(Buffer.from(file.content, 'base64').toString());
-    if (Array.isArray(users) && users.length > 0) {
-      save('users', users);
-      console.log(`[restore] users.json ← ${BACKUP_REPO} (${users.length} users)`);
+    const files = await githubListDir('data');
+    if (files.length === 0) return;
+    let restored = 0;
+    for (const file of files) {
+      if (!file.name.endsWith('.json')) continue;
+      const name = file.name.replace('.json', '');
+      const local = load(name);
+      if (local.length > 0) continue; // already have data
+      const full = await githubGetFile(`data/${file.name}`);
+      if (!full?.content) continue;
+      const data = JSON.parse(Buffer.from(full.content, 'base64').toString());
+      if (Array.isArray(data) && data.length > 0) {
+        save(name, data);
+        restored++;
+      }
     }
+    if (restored > 0) console.log(`[restore] ${restored} files ← ${BACKUP_REPO}`);
   } catch (err) {
     console.error('[restore] failed:', err.message);
   }
