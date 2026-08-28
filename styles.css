@@ -1041,11 +1041,17 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   border: 1px solid rgba(232, 73, 15, 0.4);
   border-radius: var(--radius-l);
   box-shadow: var(--shadow-m);
+  /* The card pops 12px above the row; the extra 12px of top padding
+     compensates so its content rows align with the other columns. */
   margin: -12px 10px;
-  padding: 46px 30px;
+  padding: 46px 30px 34px;
 }
+/* Badge floats above the card so it doesn't push the featured plan's
+   content out of alignment with the other columns. */
 .plan-badge {
-  align-self: flex-start;
+  position: absolute;
+  top: -13px;
+  left: 30px;
   background: var(--crest);
   color: #fff;
   font-size: 0.68rem;
@@ -1054,7 +1060,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   text-transform: uppercase;
   padding: 5px 12px;
   border-radius: 999px;
-  margin-bottom: 14px;
   white-space: nowrap;
 }
 .plan h3 { font-size: 1.5rem; }
@@ -1075,6 +1080,9 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   gap: 10px;
   color: var(--ink);
   margin: 0 0 22px;
+  /* Long credit labels ("1,000 Lead Finder credits") wrap to two lines on
+     some plans; reserve the space so every CTA button sits on one row. */
+  min-height: 68px;
 }
 .plan-credits svg { color: var(--crest); flex: none; margin-top: 3px; }
 .plan-credits strong { display: block; font-size: 0.92rem; font-weight: 650; }
@@ -1481,7 +1489,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
     background: var(--card);
     box-shadow: var(--shadow-s);
   }
-  .plan.featured { margin: 0; padding: 46px 30px 34px; border-color: rgba(232, 73, 15, 0.4); }
+  .plan.featured { margin: 0; padding: 34px 30px; border-color: rgba(232, 73, 15, 0.4); }
 }
 @media (max-width: 640px) {
   .plans { grid-template-columns: 1fr; max-width: 480px; }
