@@ -483,68 +483,23 @@
       <!-- Settings -->
       <section class="app-page" id="page-settings" hidden>
         <h1>Settings</h1>
-        <p class="page-sub">Inboxes, integrations and alerts. Everything else is tucked away below.</p>
-
-        <div class="settings-hero">
-          <div class="app-card-block mailbox-card">
+        <p class="page-sub">Inboxes, deliverability, integrations and account.</p>
+        <div class="settings-layout">
+          <nav class="settings-subnav" id="settingsSubnav">
+            <button type="button" class="subnav-item active" data-spane="inboxes">Inboxes</button>
+            <button type="button" class="subnav-item" data-spane="deliverability">Deliverability</button>
+            <button type="button" class="subnav-item" data-spane="notifications">Notifications</button>
+            <button type="button" class="subnav-item" data-spane="integrations">Integrations</button>
+            <button type="button" class="subnav-item" data-spane="account">Account</button>
+          </nav>
+          <div class="settings-panes">
+          <div class="settings-pane" id="spane-inboxes"><div class="app-card-block mailbox-card">
+            <h2>Mailboxes</h2>
+            <p class="sec-hint">Warmup and health per connected inbox.</p>
             <div id="mailboxHeroList"></div>
             <button type="button" class="connect-mailbox-btn" id="connectMailboxBtn">+ Connect mailbox</button>
-          </div>
-
-          <div class="app-card-block integ-card">
-            <div class="integ-row">
-              <div class="integ-main">
-                <div class="integ-name">Apollo.io</div>
-                <div class="integ-desc">Lead database · 240M+ contacts. Plug in your own key to keep all monthly credits.</div>
-              </div>
-              <span class="status-pill pill-green" id="apolloHeroPill" hidden><i></i>Linked</span>
-              <button type="button" class="btn btn-ghost btn-s" id="apolloHeroBtn">Connect your Apollo key</button>
+          
             </div>
-            <div class="byok-form" id="byokApolloBlock" hidden>
-              <input id="byokApolloKey" type="password" placeholder="Paste Apollo API key" autocomplete="off" />
-              <button type="button" class="btn btn-primary btn-s" id="byokApolloSave">Save</button>
-              <button type="button" class="btn btn-ghost btn-s" id="byokApolloRemove" hidden>Remove</button>
-              <span class="byok-note" id="byokApolloStatus"></span>
-              <a class="byok-note" href="https://developer.apollo.io/keys" target="_blank" rel="noopener">Where do I find my Apollo key?</a>
-            </div>
-            <div class="integ-row">
-              <div class="integ-main">
-                <div class="integ-name">OpenAI</div>
-                <div class="integ-desc">Powers ✦ Intel analysis &amp; openers</div>
-              </div>
-              <span class="status-pill pill-green" id="llmHeroPill" hidden><i></i>Linked</span>
-              <span class="status-pill pill-gray" id="llmHeroOff" hidden>Not configured</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="app-card-block notif-card">
-          <h2>Notifications</h2>
-          <p class="sec-hint">What lands in your Slack.</p>
-          <div class="notif-row">
-            <div class="integ-main">
-              <div class="integ-name">Hot lead alert</div>
-              <div class="integ-desc">Instant ping when someone replies “Interested”</div>
-            </div>
-            <label class="ov-switch"><input type="checkbox" id="notifHotLead" /><span class="ov-track"></span></label>
-          </div>
-          <div class="notif-row">
-            <div class="integ-main">
-              <div class="integ-name">Daily digest</div>
-              <div class="integ-desc">9:00 AM summary of sends, opens, replies</div>
-            </div>
-            <label class="ov-switch"><input type="checkbox" id="notifDailyDigest" /><span class="ov-track"></span></label>
-          </div>
-          <div class="notif-row">
-            <div class="integ-main">
-              <div class="integ-name">Bounce warnings</div>
-              <div class="integ-desc">Alert when bounce rate crosses 3%</div>
-            </div>
-            <label class="ov-switch"><input type="checkbox" id="notifBounce" /><span class="ov-track"></span></label>
-          </div>
-        </div>
-
-        <div class="settings-pane" id="stab-inboxes">
         <!-- Sender accounts: one-click connect -->
         <div class="app-card-block" id="senderCard">
           <h2>Sender accounts</h2>
@@ -634,9 +589,9 @@
             </div>
           </details>
         </div>
-        </div><!-- /stab-inboxes -->
-
-        <div class="settings-pane" id="stab-tools">
+        
+          </div>
+          <div class="settings-pane" id="spane-deliverability" hidden>
         <!-- Domain health -->
         <div class="app-card-block" id="domainHealthCard">
           <h2>Domain health</h2>
@@ -659,9 +614,63 @@
           <button class="btn btn-dark btn-s" id="suppAddBtn">Add to suppression</button>
           <div class="tool-result" id="suppResult"></div>
         </div>
-        </div><!-- /stab-tools -->
-
-        <div class="settings-pane" id="stab-developer">
+        
+          </div>
+          <div class="settings-pane" id="spane-notifications" hidden><div class="app-card-block">
+          <h2>Notifications</h2>
+          <p class="sec-hint">What lands in your Slack.</p>
+          <div class="notif-row">
+            <div class="integ-main">
+              <div class="integ-name">Hot lead alert</div>
+              <div class="integ-desc">Instant ping when someone replies “Interested”</div>
+            </div>
+            <label class="ov-switch"><input type="checkbox" id="notifHotLead" /><span class="ov-track"></span></label>
+          </div>
+          <div class="notif-row">
+            <div class="integ-main">
+              <div class="integ-name">Daily digest</div>
+              <div class="integ-desc">9:00 AM summary of sends, opens, replies</div>
+            </div>
+            <label class="ov-switch"><input type="checkbox" id="notifDailyDigest" /><span class="ov-track"></span></label>
+          </div>
+          <div class="notif-row">
+            <div class="integ-main">
+              <div class="integ-name">Bounce warnings</div>
+              <div class="integ-desc">Alert when bounce rate crosses 3%</div>
+            </div>
+            <label class="ov-switch"><input type="checkbox" id="notifBounce" /><span class="ov-track"></span></label>
+          </div>
+        
+            </div>
+          </div>
+          <div class="settings-pane" id="spane-integrations" hidden><div class="app-card-block integ-card">
+            <h2>Lead data &amp; AI</h2>
+            <p class="sec-hint">Lead credits and the AI models behind Intel.</p>
+            <div class="integ-row">
+              <div class="integ-main">
+                <div class="integ-name">Apollo.io</div>
+                <div class="integ-desc">Lead database · 240M+ contacts. Plug in your own key to keep all monthly credits.</div>
+              </div>
+              <span class="status-pill pill-green" id="apolloHeroPill" hidden><i></i>Linked</span>
+              <button type="button" class="btn btn-ghost btn-s" id="apolloHeroBtn">Connect your Apollo key</button>
+            </div>
+            <div class="byok-form" id="byokApolloBlock" hidden>
+              <input id="byokApolloKey" type="password" placeholder="Paste Apollo API key" autocomplete="off" />
+              <button type="button" class="btn btn-primary btn-s" id="byokApolloSave">Save</button>
+              <button type="button" class="btn btn-ghost btn-s" id="byokApolloRemove" hidden>Remove</button>
+              <span class="byok-note" id="byokApolloStatus"></span>
+              <a class="byok-note" href="https://developer.apollo.io/keys" target="_blank" rel="noopener">Where do I find my Apollo key?</a>
+            </div>
+            <div class="integ-row">
+              <div class="integ-main">
+                <div class="integ-name">OpenAI</div>
+                <div class="integ-desc">Powers ✦ Intel analysis &amp; openers</div>
+              </div>
+              <span class="status-pill pill-green" id="llmHeroPill" hidden><i></i>Linked</span>
+              <span class="status-pill pill-gray" id="llmHeroOff" hidden>Not configured</span>
+            </div>
+          
+            </div>
         <div class="app-card-block" id="secDeveloper">
           <h2>Integrations &amp; API</h2>
           <p class="sec-hint" style="margin-bottom:16px;">Connect your tools · automate workflows</p>
@@ -775,9 +784,9 @@
             </div>
           </details>
         </div>
-        </div><!-- /stab-developer -->
-
-        <div class="settings-pane" id="stab-account">
+        
+          </div>
+          <div class="settings-pane" id="spane-account" hidden>
 <div class="app-card-block" id="secAccount">
           <h2>Account</h2>
           <p class="sec-hint" style="margin-bottom:16px;">log out · export · erase (GDPR)</p>
@@ -791,6 +800,9 @@
               <button class="btn btn-ghost btn-s" id="deleteAccountBtn" style="color:#d93025;border-color:#d93025;">Delete account…</button>
             </div>
             <div class="tool-result" id="accountResult"></div>
+          </div>
+        
+          </div>
           </div>
         </div><!-- /stab-account -->
 

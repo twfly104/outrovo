@@ -810,3 +810,25 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
 - Headless chromium UI testing gotcha: --virtual-time-budget aborts
   fetch-driven redirects and --dump-dom may dump mid-flight; drive with
   CDP over --remote-debugging-port (Node 22 global WebSocket) instead.
+
+## Iteration 28 - Settings: left sub-nav redesign (Aug 2026)
+- Owner: "why is the settings page so ugly" — restructured into an industry-style
+  left sub-nav (Linear/HubSpot pattern): Inboxes / Deliverability / Notifications /
+  Integrations / Account. The `.settings-hero` 2-col wrapper is GONE; panes are
+  `.settings-pane` `#spane-*` inside `.settings-panes` beside `#settingsSubnav`.
+- Apollo.io + OpenAI hero card moved into the Integrations pane as "Lead data & AI";
+  Mailboxes hero card now carries an actual h2. Sender accounts + inbound guide
+  live in the Inboxes pane; Domain health + Suppression in Deliverability.
+- app.js: `settingsPane(name)` toggles panes + subnav active state;
+  `bindSettingsSubnav()` uses scoped `#settingsSubnav` delegation (NOT the old
+  global `.settings-tab` selector that mis-bound campaign-detail tabs). 
+  showPage('settings') resets to the Inboxes pane on every visit.
+- Duplicated empty state fixed: `renderSenders` no longer writes the
+  "No inboxes connected yet" note (hero `renderMailboxHero` owns it now),
+  so the Inboxes pane shows the message once, upstream of the provider tiles.
+- `.btn-dark` recolored to the orange primary within `#page-settings` (scoped
+  override at the end of styles.css) so Check domain / Add suppression / Export
+  buttons match the cream theme; `.settings-hero` and its responsive rule were
+  left in the stylesheet but unused (kept to not break cached hero markup).
+- Verified real-browser: all 5 panes toggle, Export now orange, hero
+  empty state de-duped. node --check passes.

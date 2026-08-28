@@ -3294,3 +3294,21 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .byok-form[hidden] { display: none; }
 .byok-note { font-size: 12px; color: var(--muted, #777); }
 a.byok-note { text-decoration: underline; }
+
+/* Settings sub-nav redesign */
+.app-body .settings-layout { display: grid; grid-template-columns: 190px 1fr; gap: 28px; align-items: start; }
+.app-body .settings-panes { min-width: 0; }
+.app-body .settings-subnav { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 2px; }
+.app-body .subnav-item { text-align: left; background: none; border: 0; padding: 9px 14px; border-radius: 8px; font-family: inherit; font-size: 0.9rem; color: #6b665b; cursor: pointer; }
+.app-body .subnav-item:hover { background: #f1ece4; color: #1b1915; }
+.app-body .subnav-item.active { background: #fdece1; color: #f2501e; font-weight: 600; }
+@media (max-width: 900px) {
+  .app-body .settings-layout { grid-template-columns: 1fr; }
+  .app-body .settings-subnav { position: static; flex-direction: row; overflow-x: auto; }
+  .app-body .subnav-item { white-space: nowrap; }
+}
+.app-body .settings-pane[hidden] { display: none; }
+.app-body #page-settings .app-card-block + .app-card-block { margin-top: 20px; }
+/* unify action buttons in Settings to the orange primary */
+.app-body #page-settings .btn-dark { background: #f2501e; border-color: #f2501e; color: #fff; }
+.app-body #page-settings .btn-dark:hover { background: #d94415; border-color: #d94415; }

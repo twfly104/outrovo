@@ -194,6 +194,7 @@ async function init() {
   bindProspects();
   bindSenders();
   bindSettingsHero();
+  bindSettingsSubnav();
   bindByokApollo();
   bindAccount();
   bindAgency();
@@ -233,7 +234,7 @@ function showPage(name) {
   if (name === 'campaigns') { backToList(); loadCampaigns(); }
   if (name === 'leads') loadLeadFinderStatus();
   if (name === 'overview') { loadOverview(); loadOvExtras(); }
-  if (name === 'settings') { loadSenders(); loadSettingsHero(); loadDeveloper(); loadSuppression(); prefillDhDomain(); }
+  if (name === 'settings') { settingsPane('inboxes'); loadSenders(); loadSettingsHero(); loadDeveloper(); loadSuppression(); prefillDhDomain(); }
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
 
@@ -1201,7 +1202,7 @@ async function loadSenders() {
       <span class="sender-pill">gateway</span>
     </div>`);
   }
-  $('senderList').innerHTML = rows.join('') || '<p class="settings-note" style="margin-bottom:16px">No inboxes connected yet — pick a provider below.</p>';
+  $('senderList').innerHTML = rows.join('');
   renderMailboxHero(data.senders);
   $('senderList').querySelectorAll('[data-del-sender]').forEach(btn => btn.addEventListener('click', async () => {
     if (!confirm('Remove this inbox from the rotation?')) return;
@@ -1301,12 +1302,27 @@ function bindByokApollo() {
   });
 }
 
+function settingsPane(name) {
+  const nav = $('settingsSubnav');
+  document.querySelectorAll('#page-settings .settings-pane').forEach(p => {
+    p.hidden = p.id !== 'spane-' + name;
+  });
+  if (nav) nav.querySelectorAll('[data-spane]').forEach(b =>
+    b.classList.toggle('active', b.dataset.spane === name));
+}
+
+function bindSettingsSubnav() {
+  const nav = $('settingsSubnav');
+  if (!nav) return;
+  nav.addEventListener('click', e => {
+    const btn = e.target.closest('[data-spane]');
+    if (btn) settingsPane(btn.dataset.spane);
+  });
+}
+
 function bindSettingsHero() {
-  const gotoTab = stab => {
-    $(`stab-${stab}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
   $('connectMailboxBtn').addEventListener('click', () => {
-    gotoTab('inboxes');
+    settingsPane('inboxes');
     $('connectGoogle').classList.add('pulse');
     $('connectMicrosoft').classList.add('pulse');
     setTimeout(() => ['connectGoogle', 'connectMicrosoft'].forEach(id => $(id).classList.remove('pulse')), 1600);
