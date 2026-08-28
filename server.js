@@ -74,6 +74,73 @@ function load(name) {
 function save(name, data) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(path.join(DATA_DIR, FILES[name]), JSON.stringify(data, null, 2));
+  if (name === 'users') scheduleBackup();
+}
+
+// ---------- GitHub backup/restore ----------
+// On Render's free tier there's no persistent disk, so DATA_DIR is wiped on
+// every deploy/restart. To survive that, the users file is backed up to a
+// private GitHub repo (data/users.json) whenever it changes, and restored on
+// startup. Other data (campaigns, sessions, etc.) is rebuilt as users work.
+const BACKUP_REPO = process.env.GITHUB_BACKUP_REPO || 'twfly104/outrovo-backup';
+const BACKUP_TOKEN = process.env.GITHUB_KEY || process.env.GITHUB_TOKEN || '';
+const BACKUP_PATH = 'data/users.json';
+let backupTimer = null;
+
+async function githubGetFile() {
+  if (!BACKUP_TOKEN) return null;
+  const url = `https://api.github.com/repos/${BACKUP_REPO}/contents/${BACKUP_PATH}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${BACKUP_TOKEN}`, Accept: 'application/vnd.github+json' } });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+async function githubPutFile(content, sha = null) {
+  if (!BACKUP_TOKEN) return false;
+  const url = `https://api.github.com/repos/${BACKUP_REPO}/contents/${BACKUP_PATH}`;
+  const body = {
+    message: `Backup users.json ${new Date().toISOString()}`,
+    content: Buffer.from(content).toString('base64'),
+    ...(sha ? { sha } : {}),
+  };
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${BACKUP_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res.ok;
+}
+
+function scheduleBackup() {
+  if (!BACKUP_TOKEN) return;
+  clearTimeout(backupTimer);
+  backupTimer = setTimeout(async () => {
+    try {
+      const users = load('users');
+      const existing = await githubGetFile();
+      const ok = await githubPutFile(JSON.stringify(users, null, 2), existing?.sha);
+      if (ok) console.log(`[backup] users.json → ${BACKUP_REPO} (${users.length} users)`);
+    } catch (err) {
+      console.error('[backup] failed:', err.message);
+    }
+  }, 3000);
+}
+
+async function restoreFromGitHub() {
+  if (!BACKUP_TOKEN) return;
+  try {
+    const local = load('users');
+    if (local.length > 0) return; // already have data
+    const file = await githubGetFile();
+    if (!file?.content) return;
+    const users = JSON.parse(Buffer.from(file.content, 'base64').toString());
+    if (Array.isArray(users) && users.length > 0) {
+      save('users', users);
+      console.log(`[restore] users.json ← ${BACKUP_REPO} (${users.length} users)`);
+    }
+  } catch (err) {
+    console.error('[restore] failed:', err.message);
+  }
 }
 
 // ---------- crypto ----------
@@ -4992,7 +5059,8 @@ if (!process.env.VERCEL) {
     if (!process.env.RESEND_API_KEY && !process.env.SMTP_HOST) console.warn('No email gateway configured (RESEND_API_KEY or SMTP_*) — outbound email runs in demo mode.');
     if (process.env.RESEND_API_KEY && (process.env.RESEND_FROM || '').includes('resend.dev')) console.warn('RESEND_FROM is a resend.dev sandbox address — verify your sending domain in Resend and set RESEND_FROM to it, or email delivery will fail outside testing.');
     if (!process.env.PUBLIC_URL) console.warn('PUBLIC_URL is not set — list-unsubscribe links and OAuth callbacks will use request Host headers.');
-    if (!process.env.DATA_DIR && !process.env.VERCEL) console.warn('DATA_DIR is not set — data is stored under ./data on the app filesystem and is LOST on every deploy unless a persistent disk is mounted.');
+    if (!process.env.DATA_DIR && !process.env.VERCEL && !BACKUP_TOKEN) console.warn('DATA_DIR is not set and no GITHUB_KEY/GITHUB_TOKEN backup is configured — data is stored under ./data on the app filesystem and is LOST on every deploy unless a persistent disk is mounted.');
+    if (BACKUP_TOKEN) restoreFromGitHub();
   });
 }
 

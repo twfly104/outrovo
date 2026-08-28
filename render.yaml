@@ -6,12 +6,6 @@ services:
     buildCommand: npm install
     startCommand: node server.js
     healthCheckPath: /api/health
-    # Persistent disk so user data, campaigns and sessions survive deploys.
-    # Without this, the filesystem resets on every deploy and all data is lost.
-    disk:
-      name: outrovo-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       # Set these in Render > Environment before launch; `sync: false` means
       # they are read from the dashboard. The app fails closed when unset.
