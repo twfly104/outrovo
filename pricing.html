@@ -361,10 +361,12 @@
         a.addEventListener('click', async e => {
           e.preventDefault();
           if (isCurrent) return;
+          // Honor the bill toggle so the advertised "Yearly −20%" is purchasable.
+          const interval = document.querySelector('#billToggle .active')?.dataset.mode === 'yearly' ? 'year' : 'month';
           const res = await fetch('/api/billing/checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ plan: name }),
+            body: JSON.stringify({ plan: name, interval }),
           });
           const data = await res.json();
           if (data.checkoutUrl) window.location.href = data.checkoutUrl;

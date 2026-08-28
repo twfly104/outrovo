@@ -2538,12 +2538,14 @@ async function aiGenerateStep({ campaignName, existingSteps, instruction }) {
 // white-label, agency panel) are never in the trial. Stripe Checkout when
 // STRIPE_SECRET_KEY is set; otherwise a manual activation path (admin key)
 // keeps the flow usable.
+// Yearly list prices match the "Yearly −20%" toggle on pricing.html exactly
+// (round(monthly × 0.8) × 12) so the advertised annual total is what Stripe charges.
 const PLANS = {
-  trial: { name: 'Starter trial', priceMonthly: 0, maxProspects: 2000, maxCampaigns: 3, trialDays: 14, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false, byok: false },
-  starter: { name: 'Starter', priceMonthly: 39, maxProspects: 2000, maxCampaigns: 3, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false, byok: false },
-  growth: { name: 'Pro', priceMonthly: 89, maxProspects: 10000, maxCampaigns: 10, leadFinderCredits: 1000, linkedIn: true, agency: false, whiteLabel: false, byok: true },
-  scale: { name: 'Scale', priceMonthly: 159, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 5000, linkedIn: true, agency: false, whiteLabel: true, byok: true },
-  agency: { name: 'Agency', priceMonthly: 249, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: true, whiteLabel: true, byok: true },
+  trial: { name: 'Starter trial', priceMonthly: 0, priceYearly: 0, maxProspects: 2000, maxCampaigns: 3, trialDays: 14, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false, byok: false },
+  starter: { name: 'Starter', priceMonthly: 39, priceYearly: 372, maxProspects: 2000, maxCampaigns: 3, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false, byok: false },
+  growth: { name: 'Pro', priceMonthly: 89, priceYearly: 852, maxProspects: 10000, maxCampaigns: 10, leadFinderCredits: 1000, linkedIn: true, agency: false, whiteLabel: false, byok: true },
+  scale: { name: 'Scale', priceMonthly: 159, priceYearly: 1524, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 5000, linkedIn: true, agency: false, whiteLabel: true, byok: true },
+  agency: { name: 'Agency', priceMonthly: 249, priceYearly: 2388, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: true, whiteLabel: true, byok: true },
 };
 // Display-name aliases accepted at API boundaries (e.g. the pricing page
 // posts the card's lowercase name, and "Pro" lives under the `growth` id).
@@ -2617,7 +2619,7 @@ function fulfillService(email, packId) {
 }
 
 // Minimal Stripe integration via fetch (no SDK dependency).
-async function stripeCheckout(secret, { planId, email, amount, successUrl, cancelUrl }) {
+async function stripeCheckout(secret, { planId, email, amount, successUrl, cancelUrl, interval }) {
   const topup = TOPUP_PACKS[planId];
   const params = new URLSearchParams({
     mode: topup ? 'payment' : 'subscription',
@@ -2631,7 +2633,7 @@ async function stripeCheckout(secret, { planId, email, amount, successUrl, cance
     'metadata[plan]': planId,
     'metadata[email]': email,
   });
-  if (!topup) params.set('line_items[0][price_data][recurring][interval]', 'month');
+  if (!topup) params.set('line_items[0][price_data][recurring][interval]', interval === 'year' ? 'year' : 'month');
   const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: `Bearer ${secret}` },
@@ -3290,15 +3292,21 @@ const router = {
     const planId = normalizePlanId(b.plan);
     const topup = TOPUP_PACKS[planId];
     if ((!PLANS[planId] || planId === 'trial') && !topup) return send(res, 400, { ok: false, error: 'Unknown plan' });
+    // Annual billing: the pricing page "Yearly −20%" toggle posts the period
+    // so buyers can actually purchase what the page advertises (default month).
+    const rawInterval = String(b.interval || '').trim().toLowerCase();
+    const lookup = { month: 'month', monthly: 'month', year: 'year', yearly: 'year' };
+    const interval = topup || !rawInterval ? 'month' : lookup[rawInterval];
+    if (!interval) return send(res, 400, { ok: false, error: 'Invalid billing interval' });
     const user = load('users').find(u => u.email === getSession(req).email);
     if (!user) return send(res, 404, { ok: false, error: 'User not found' });
 
     const key = process.env.STRIPE_SECRET_KEY;
     if (key) {
       try {
-        const price = topup ? topup.price : PLANS[planId].priceMonthly;
+        const price = topup ? topup.price : (interval === 'year' ? PLANS[planId].priceYearly : PLANS[planId].priceMonthly);
         const session = await stripeCheckout(key, {
-          planId, email: user.email, amount: price,
+          planId, email: user.email, amount: price, interval,
           successUrl: `${publicBase(req)}/app.html?upgraded=${planId}`,
           cancelUrl: `${publicBase(req)}/pricing.html`,
         });
