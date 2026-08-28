@@ -367,7 +367,8 @@ function demoSender() {
   return { id: '__demo__', owner: '*', provider: 'demo', email: SMTP.from || 'demo@outrovo.app', fromName: '', status: 'active', dailyLimit: Infinity, demo: true };
 }
 function hasRealSender(ownerEmail) {
-  return Boolean(gatewaySender() || (ownerEmail && load('senders').some(s => s.owner === ownerEmail && s.status === 'active')));
+  const gateway = gatewayIsSandbox() ? null : gatewaySender();
+  return Boolean(gateway || (ownerEmail && load('senders').some(s => s.owner === ownerEmail && s.status === 'active')));
 }
 
 function engineMode(ownerEmail) {
@@ -414,10 +415,18 @@ function senderUsedToday(s) {
 // Round-robin across warming inboxes interleaved with ready ones: warm
 // inboxes still get picks (small caps), and every pick cycles, so no single
 // account carries the load. Returns null when every inbox is capped for today.
+// A resend.dev sandbox address can only deliver to the Resend account
+// owner's own email — every campaign send to a real prospect would 403.
+// Treat it as "no gateway" for campaigns so users get demo sends (and a
+// clear prompt to connect an inbox) instead of silent delivery failures.
+function gatewayIsSandbox() {
+  return Boolean(RESEND_KEY && /@resend\.dev$/i.test(RESEND_FROM || ''));
+}
+
 function pickSender(ownerEmail, prospect) {
   const pool = [
     ...ownerSenders(ownerEmail).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))),
-    gatewaySender(),
+    ...(gatewayIsSandbox() ? [] : [gatewaySender()]),
   ].filter(Boolean);
   if (!pool.length) return null;
   const seed = Array.from(String(prospect.email).replace(/[^a-z0-9]/gi, ''))
