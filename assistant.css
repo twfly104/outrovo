@@ -1,0 +1,30 @@
+/* Assistant widget styles. Loaded alongside the page stylesheet wherever the assistant markup renders (index, pricing). var() fallbacks below make it self-contained */
+.asst-fab{position:fixed;right:22px;bottom:22px;z-index:90;display:inline-flex;align-items:center;gap:9px;padding:14px 20px;border:none;border-radius:999px;background:var(--accent,#f97316);color:#fff;font:600 .95rem var(--fb,'Instrument Sans',sans-serif);cursor:pointer;box-shadow:0 10px 26px rgba(249,115,22,.28);transition:.22s cubic-bezier(.22,1,.36,1)}
+.asst-fab:hover{background:var(--accent2,#ea580c);transform:translateY(-2px)}
+.asst-fab svg{flex:none}
+.asst-fab.hide{opacity:0;pointer-events:none;transform:translateY(8px)}
+.asst{position:fixed;right:22px;bottom:22px;z-index:91;width:min(392px,calc(100vw - 32px));height:min(560px,calc(100vh - 60px));display:flex;flex-direction:column;background:var(--card,#fff);border:1px solid var(--line,#e9e3d7);border-radius:20px;box-shadow:0 24px 60px rgba(11,12,14,.18);overflow:hidden;opacity:0;pointer-events:none;transform:translateY(14px) scale(.98);transition:.25s cubic-bezier(.22,1,.36,1)}
+.asst.open{opacity:1;pointer-events:auto;transform:none}
+.asst-h{display:flex;align-items:center;gap:11px;padding:15px 16px;background:var(--dark,#15171b);color:#fff;flex:none}
+.asst-h img{width:30px;height:30px}
+.asst-h strong{display:block;font-family:var(--fd,'Instrument Sans',sans-serif);font-size:1.02rem;letter-spacing:-.01em}
+.asst-h span{display:block;font-size:.74rem;color:rgba(255,255,255,.62)}
+.asst-h .asst-x{margin-left:auto;width:32px;height:32px;border:none;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:1rem;cursor:pointer;display:grid;place-items:center;transition:background .2s}
+.asst-h .asst-x:hover{background:rgba(255,255,255,.25)}
+.asst-body{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:10px;background:var(--bg,#f8f6f2)}
+.asst-msg{max-width:86%;padding:10px 14px;border-radius:14px;font-size:.88rem;line-height:1.5;animation:asstIn .25s cubic-bezier(.22,1,.36,1)}
+@keyframes asstIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.asst-msg.bot{background:var(--card,#fff);border:1px solid var(--line,#e9e3d7);border-bottom-left-radius:4px;align-self:flex-start;color:var(--ink2,#4c473e)}
+.asst-msg.me{background:var(--accent,#f97316);color:#fff;border-bottom-right-radius:4px;align-self:flex-end}
+.asst-msg a{color:var(--accent,#f97316);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+.asst-msg.me a{color:#fff}
+.asst-msg.asst-typing{color:var(--muted,var(--ink3,#948d7f));letter-spacing:.2em;padding:8px 14px}
+.asst-chips{display:flex;flex-wrap:wrap;gap:7px;align-self:flex-start;animation:asstIn .25s}
+.asst-chips button{padding:7px 13px;border:1.5px solid var(--accent,#f97316);border-radius:999px;background:none;color:var(--accent2,#ea580c);font:600 .78rem var(--fb,'Instrument Sans',sans-serif);cursor:pointer;transition:.18s}
+.asst-chips button:hover{background:var(--accent,#f97316);color:#fff}
+.asst-in{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line,#e9e3d7);background:var(--card,#fff);flex:none}
+.asst-in input{flex:1;padding:11px 15px;border:1.5px solid var(--line,#e9e3d7);border-radius:999px;font:400 .9rem var(--fb,'Instrument Sans',sans-serif);outline:none;transition:border-color .2s}
+.asst-in input:focus{border-color:var(--accent,#f97316)}
+.asst-send{width:42px;height:42px;border:none;border-radius:50%;background:var(--accent,#f97316);color:#fff;cursor:pointer;display:grid;place-items:center;flex:none;transition:background .2s}
+.asst-send:hover{background:var(--accent2,#ea580c)}
+@media(max-width:480px){.asst{right:16px;bottom:16px;height:min(540px,calc(100vh - 40px))}.asst-fab{right:16px;bottom:16px}}

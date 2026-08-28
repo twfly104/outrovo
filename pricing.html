@@ -20,6 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="assistant.css" />
   <link rel="icon" href="logo.svg" />
 </head>
 <body>
@@ -346,5 +347,26 @@
       menu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => toggle(false)));
     })();
   </script>
+
+  <!-- Assistant widget — engages high-intent pricing visitors -->
+  <button class="asst-fab" id="asstFab" aria-label="Ask the Outrovo assistant" aria-haspopup="dialog">
+    <svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M16 8.5c0 3.6-3.1 6.5-7 6.5-.9 0-1.8-.13-2.6-.4L2 16l1.3-3.4A6.1 6.1 0 0 1 2 8.5C2 4.9 5.1 2 9 2s7 2.9 7 6.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    Ask us
+  </button>
+  <div class="asst" id="asstPanel" role="dialog" aria-modal="false" aria-label="Outrovo assistant">
+    <div class="asst-h">
+      <img src="logo.svg" alt="" />
+      <div><strong>Outrovo assistant</strong><span>Straight answers about cold outreach</span></div>
+      <button class="asst-x" id="asstClose" aria-label="Close assistant">✕</button>
+    </div>
+    <div class="asst-body" id="asstBody"></div>
+    <form class="asst-in" id="asstForm">
+      <input id="asstText" placeholder="e.g. What does it cost?" autocomplete="off" maxlength="300" />
+      <button class="asst-send" type="submit" aria-label="Send">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M14 8H2m5-6 6 6-6 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </form>
+  </div>
+  <script src="assistant.js" defer></script>
 </body>
 </html>
