@@ -1071,15 +1071,26 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .plan-bill { font-size: 0.8rem; color: var(--ink-faint); min-height: 1.2em; margin-bottom: 18px; }
 .plan-credits {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.85rem;
-  font-weight: 600;
+  align-items: flex-start;
+  gap: 10px;
   color: var(--ink);
-  margin: 0 0 20px;
+  margin: 0 0 22px;
 }
-.plan-credits svg { color: var(--crest); flex: none; }
-.plan .btn { justify-content: center; width: 100%; margin-bottom: 28px; }
+.plan-credits svg { color: var(--crest); flex: none; margin-top: 3px; }
+.plan-credits strong { display: block; font-size: 0.92rem; font-weight: 650; }
+.plan-credits span { display: block; font-size: 0.78rem; font-weight: 400; color: var(--ink-faint); margin-top: 2px; }
+/* Apollo-style CTAs: big solid rectangular buttons, dark on the featured plan */
+.plan .btn {
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 28px;
+  border-radius: 12px;
+  padding: 16px 22px;
+  font-size: 1rem;
+}
+.plan .btn-primary:hover { transform: translateY(-1px); }
+.plan.featured .btn-primary { background: var(--ink); }
+.plan.featured .btn-primary:hover { background: #000; box-shadow: 0 10px 24px rgba(27, 25, 21, 0.25); }
 .plan-feats { display: grid; gap: 11px; font-size: 0.92rem; }
 .plan-feats li { display: flex; gap: 10px; align-items: flex-start; color: var(--ink-soft); }
 .plan-feats .tick { width: 19px; height: 19px; margin-top: 3px; }
