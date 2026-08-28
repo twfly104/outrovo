@@ -294,12 +294,16 @@ A cold email & LinkedIn outreach SaaS landing page inspired by woodpecker.co's s
 - When verifying "in place" rotation: diff bbox center of changed pixels
   must equal the glyph center.
 
-## Iteration 32 — stop animating gears, ship a rotor (Aug 2026)
-- 4 attempts at rotating-gear loaders failed first-frame stability. Every
-  production loader (iOS/Material/Tailwind/SpinKit) uses tapered stroke-dash
-  ticks + stepwise steps(n) rotation — do that, never continuous gears.
-- Headless-debug trick: diff frames → bbox of changed pixels must match
-  the icon's footprint and its center must equal the glyph center.
+## Iteration 33 — cfemail decode + stale-PR lesson (Aug 2026)
+- Open PR branches cut from old main can diverge badly (PR #23 would have
+  reverted backup/restore + sandbox-gateway fixes if merged). When an
+  audit-PR branch is stale, re-implement the delta on current main instead
+  of merging; push direct-to-main is the standing authorization from #19.
+- Lead Finder builtin crawler now decodes Cloudflare data-cfemail (XOR,
+  first byte = key), ANY numeric HTML entity (not just &#64;/&#46;), and
+  {at}/{dot} brace forms. `extractEmails`/`decodeCfEmail` hang off
+  `module.exports` so `require('server.js')` with `VERCEL=1` gives direct
+  unit access without a listen.
 ## Conventions
 - Brand name is "Outrovo" (formerly "Drummer" placeholder).
 - All product screenshots are pure CSS/HTML mockups (`.app-card`, `.panel`, `.orbit`).
