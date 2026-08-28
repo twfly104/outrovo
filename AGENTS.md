@@ -792,3 +792,21 @@ If the workspace preview URL for the app (work-1/2 ports 12000/12001) returns "B
 - Removed the ambiguous "slot" pricing voice everywhere: pricing.html (3 plan cards + meta + lede), index.html FAQ pricing rule, server.js ASSISTANT_FACTS pricing line. All now read $39/mo, $89/mo, $159/mo with yearly totals like $372/yr (no "/ slot").
 - No functional change to plans, credits, or billing - only pricing copy.
 - Verified: node --check passes; server boots; /pricing.html /index.html /api/plans all 200; served pricing page has 0 "slot" refs; all 5 plan tiers + 5 topups exposed; auth signup -> /app.html serves dashboard.
+
+## Iteration 27 - Settings: Tools & verification pane (Aug 2026)
+- Gap: server had fully working `GET/POST/DELETE /api/app/suppression` and
+  `GET /api/app/tools/domain-audit`, but the Settings page had no UI for
+  them (only inboxes, developer, account panes). Suppression was marketed
+  ("Compliant by default") yet invisible; domain check only ran once at
+  signup. New `#stab-tools` pane in app.html: Domain health card
+  (MX/SPF/DMARC/DKIM, score pill, per-check pass/fix rows, signup-domain
+  prefill) + Suppression card (list with Unblock, manual add).
+- app.js: `loadSuppression()`, `prefillDhDomain()`, `runDomainCheck()`,
+  `bindTools()` (wired in init; settings loader chain extended).
+- Verified: curl API round-trip (suppression add/remove, error path) and
+  real-browser CDP test on PORT=12095 DATA_DIR=/tmp/otoifs — pane visible,
+  domain prefilled from signup email, suppression add/unblock via UI,
+  live DNS check scored google.com 75/100 (4 checks rendered).
+- Headless chromium UI testing gotcha: --virtual-time-budget aborts
+  fetch-driven redirects and --dump-dom may dump mid-flight; drive with
+  CDP over --remote-debugging-port (Node 22 global WebSocket) instead.

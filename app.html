@@ -636,6 +636,31 @@
         </div>
         </div><!-- /stab-inboxes -->
 
+        <div class="settings-pane" id="stab-tools">
+        <!-- Domain health -->
+        <div class="app-card-block" id="domainHealthCard">
+          <h2>Domain health</h2>
+          <p class="settings-note">Check MX, SPF, DMARC and DKIM before you send — a missing record is the top reason cold email lands in spam.</p>
+          <div class="field-row">
+            <div class="field"><label>Domain to check</label><input id="dhDomain" placeholder="yourdomain.com" /></div>
+          </div>
+          <button class="btn btn-dark btn-s" id="dhCheckBtn">Check domain</button>
+          <div class="tool-result" id="dhResult"></div>
+          <div id="dhChecks"></div>
+        </div>
+        <!-- Suppression list -->
+        <div class="app-card-block" id="suppressionCard">
+          <h2>Suppression list</h2>
+          <p class="settings-note">People who unsubscribed or you blocked manually. Campaign sends and lead imports skip them automatically.</p>
+          <div id="suppList"></div>
+          <div class="field-row">
+            <div class="field"><label>Block an address</label><input id="suppEmail" placeholder="someone@company.com" /></div>
+          </div>
+          <button class="btn btn-dark btn-s" id="suppAddBtn">Add to suppression</button>
+          <div class="tool-result" id="suppResult"></div>
+        </div>
+        </div><!-- /stab-tools -->
+
         <div class="settings-pane" id="stab-developer">
         <div class="app-card-block" id="secDeveloper">
           <h2>Integrations &amp; API</h2>

@@ -200,6 +200,7 @@ async function init() {
   bindWhiteLabel();
   bindTopup();
   bindBulkTools();
+  bindTools();
   bindDeveloper();
   loadCredits();
   // Agency plan → reveal the Agency nav
@@ -232,7 +233,7 @@ function showPage(name) {
   if (name === 'campaigns') { backToList(); loadCampaigns(); }
   if (name === 'leads') loadLeadFinderStatus();
   if (name === 'overview') { loadOverview(); loadOvExtras(); }
-  if (name === 'settings') { loadSenders(); loadSettingsHero(); loadDeveloper(); }
+  if (name === 'settings') { loadSenders(); loadSettingsHero(); loadDeveloper(); loadSuppression(); prefillDhDomain(); }
   if (name === 'agency') { loadClients(); loadBilling(); loadWhiteLabel(); }
 }
 
@@ -1339,7 +1340,66 @@ function bindAccount() {
 // ---------- LinkedIn safety ----------
 // ---------- LinkedIn autopilot bridge ----------
 // ---------- BYOK: Apollo lead data source ----------
-// ---------- suppression list ----------
+// ---------- tools: domain health + suppression ----------
+async function loadSuppression() {
+  const { data } = await api('GET', '/api/app/suppression');
+  const rows = (data.suppressed || []).map(s => `<div class="sender-row">
+    <div class="sender-info">
+      <strong>${esc(s.email)}</strong>
+      <span>${esc(s.reason || 'unsubscribe')} · blocked ${new Date(s.at).toLocaleDateString()}</span>
+    </div>
+    <button class="link" data-supp-del="${esc(s.email)}">Unblock</button>
+  </div>`);
+  $('suppList').innerHTML = rows.join('') || '<p class="settings-note">Nobody blocked — unsubscribes and manual blocks land here.</p>';
+}
+
+function prefillDhDomain() {
+  const input = $('dhDomain');
+  const domain = (me?.email || '').split('@')[1];
+  if (input && !input.value && domain) input.value = domain;
+}
+
+function renderDomainAudit(result) {
+  const rows = result.checks.map(chk => `<div class="sender-row">
+    <div class="sender-info">
+      <strong>${esc(chk.name)}</strong>
+      <span>${esc(chk.detail)}</span>
+    </div>
+    <span class="${chk.ok ? 'ok-tag' : 'no-tag'}">${chk.ok ? '✓ Pass' : '✗ Fix'}</span>
+  </div>`);
+  $('dhResult').innerHTML = `<span class="${result.score === 100 ? 'ok-tag' : 'no-tag'}">Domain score ${result.score}/100</span>`;
+  $('dhChecks').innerHTML = rows.join('');
+}
+
+async function runDomainCheck() {
+  const domain = $('dhDomain').value.trim();
+  if (!domain) { $('dhResult').innerHTML = '<span class="no-tag">Enter a domain first.</span>'; return; }
+  setBtnLoading($('dhCheckBtn'), true);
+  const { data } = await api('GET', `/api/app/tools/domain-audit?domain=${encodeURIComponent(domain)}`);
+  setBtnLoading($('dhCheckBtn'), false);
+  if (!data.ok) { $('dhResult').innerHTML = `<span class="no-tag">${esc(data.error || 'Check failed')}</span>`; return; }
+  renderDomainAudit(data.result);
+}
+
+function bindTools() {
+  $('dhCheckBtn').addEventListener('click', runDomainCheck);
+  $('dhDomain').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runDomainCheck(); } });
+  $('suppAddBtn').addEventListener('click', async () => {
+    const email = $('suppEmail').value.trim();
+    const { data } = await api('POST', '/api/app/suppression', { email });
+    $('suppResult').innerHTML = data.ok
+      ? '<span class="ok-tag">✓ Blocked</span>'
+      : `<span class="no-tag">${esc(data.error || 'Valid email required')}</span>`;
+    if (data.ok) { $('suppEmail').value = ''; loadSuppression(); }
+  });
+  $('suppList').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-supp-del]');
+    if (!btn) return;
+    await api('DELETE', `/api/app/suppression/${encodeURIComponent(btn.dataset.suppDel)}`);
+    loadSuppression();
+  });
+}
+
 // ---------- developer: API key + webhooks + MCP/CLI ----------
 async function bindDeveloper() {
   $('genApiKeyBtn').addEventListener('click', async () => {
