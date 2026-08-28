@@ -644,7 +644,10 @@ async function classifyIntent(reply) {
 // ---------- enrichment (Apollo / Dropcontact) ----------
 // A per-user Apollo key (BYOK, Settings → Lead data) takes priority over the
 // deployment-wide APOLLO_API_KEY so users can use their own paid plan.
+// BYOK is a Pro/Scale/Agency feature (plan flag `byok`); entry plans run on
+// the deployment-wide key or the built-in finder.
 function userApolloKey(user) {
+  if (!planOf(user).byok) return null;
   const enc = user?.apolloKeyEnc;
   return enc ? (decryptSecret(enc) || null) : null;
 }
@@ -2392,11 +2395,11 @@ async function aiGenerateStep({ campaignName, existingSteps, instruction }) {
 // tiers with hard prospect limits. Stripe Checkout when STRIPE_SECRET_KEY is
 // set; otherwise a manual activation path (admin key) keeps the flow usable.
 const PLANS = {
-  trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, leadFinderCredits: 25, linkedIn: true, agency: false, whiteLabel: false },
-  starter: { name: 'Starter', priceMonthly: 39, maxProspects: 2000, maxCampaigns: 3, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false },
-  growth: { name: 'Pro', priceMonthly: 89, maxProspects: 10000, maxCampaigns: 10, leadFinderCredits: 1000, linkedIn: true, agency: false, whiteLabel: false },
-  scale: { name: 'Scale', priceMonthly: 159, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 5000, linkedIn: true, agency: false, whiteLabel: true },
-  agency: { name: 'Agency', priceMonthly: 249, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: true, whiteLabel: true },
+  trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, leadFinderCredits: 25, linkedIn: true, agency: false, whiteLabel: false, byok: false },
+  starter: { name: 'Starter', priceMonthly: 39, maxProspects: 2000, maxCampaigns: 3, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false, byok: false },
+  growth: { name: 'Pro', priceMonthly: 89, maxProspects: 10000, maxCampaigns: 10, leadFinderCredits: 1000, linkedIn: true, agency: false, whiteLabel: false, byok: true },
+  scale: { name: 'Scale', priceMonthly: 159, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 5000, linkedIn: true, agency: false, whiteLabel: true, byok: true },
+  agency: { name: 'Agency', priceMonthly: 249, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 10000, linkedIn: true, agency: true, whiteLabel: true, byok: true },
 };
 // Display-name aliases accepted at API boundaries (e.g. the pricing page
 // posts the card's lowercase name, and "Pro" lives under the `growth` id).
@@ -2843,12 +2846,12 @@ const ASSISTANT_PERSONA = `You are the Outrovo agent — the built-in product ex
 const ASSISTANT_FACTS = [
   'Outrovo is a cold-outreach platform: find leads with the built-in Lead Finder, send email + LinkedIn sequences (AI-drafted if you want), and read every reply in one unified inbox. Verification, warm-up and domain checks are built in, not paid add-ons.',
   'Services in one line: lead finding, email + LinkedIn sequences, AI copywriting, email verification, warm-up, domain health checks, unified inbox, CRM integrations.',
-  'Pricing: Starter $39/mo, Pro $89 (most popular), Scale $159 — heavy users bring their own Apollo key (Settings → BYOK) (−20%). Agency $249/mo with client workspaces and white-labeling.',
+  'Pricing: Starter $39/mo, Pro $89 (most popular), Scale $159 (−20% billed annually). Agency $249/mo with client workspaces and white-labeling. Bringing your own Apollo key (Settings → BYOK) is available on Pro, Scale and Agency.',
   'Unlike per-seat tools (Lemlist charges $50-90+ per sender seat), every Outrovo plan includes UNLIMITED sending inboxes — connect as many as you like, campaigns rotate across them, no per-inbox fees.',
-  'Lead Finder “Add Credits” packs: pay-as-you-go (500 credits $19, 2,000 $49, 5,000 $99, 10,000 $189) that never expire. Heavy use? Bring your own Apollo key in Settings → BYOK.',
+  'Lead Finder “Add Credits” packs: pay-as-you-go (500 credits $19, 2,000 $49, 5,000 $99, 10,000 $189) that never expire. On Pro, Scale or Agency you can also bring your own Apollo key in Settings → BYOK.',
   'Done-for-you domain setup is a $99 one-time service: we configure SPF, DKIM, DMARC and secondary domain DNS with you instead of trial-and-error. Purchased inside the app.',
   'AI features are focused micro-AI, not a bloated autonomous agent: AI sequence writer (drafts from your website), AI reply drafts, reply intent tagging (interested / not interested / unsubscribe / out-of-office), spintax generation for deliverability, and 1-line website personalization.',
-  'Every plan starts with a 14-day free trial, no credit card needed. Cancel anytime in one click.',
+  'Starter, Pro and Scale start with a 14-day free trial, no credit card needed. Agency is set up with our team — talk to sales. Cancel anytime in one click.',
   'Deliverability: no tool can guarantee inbox placement — anyone claiming it is selling something. Outrovo verifies every email before sending, checks SPF/DKIM/DMARC with a one-click domain health check, and paces sends so nothing looks bot-like.',
   'Warm-up is free on every plan: new inboxes start small and the daily sending cap grows automatically so mailbox providers build trust before volume ramps.',
   'Verification: every prospect email is verified at import; invalid addresses are skipped before they bounce and hurt sender score. Catch-all verification is free on every plan.',
@@ -4650,6 +4653,8 @@ ${rows.map(r => `<div class="card"><h3 style="margin-top:0">${r.owner}</h3><tabl
   'POST /api/app/integrations/apollo-key': async (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
+    const gateUser = load('users').find(u => u.email === session.email);
+    if (!planOf(gateUser).byok) return send(res, 403, { ok: false, error: 'Bringing your own Apollo key is available on Pro, Scale and Agency — upgrade to connect your own key.' });
     const b = await readBody(req);
     const key = String(b.key || '').trim();
     if (!key) return send(res, 400, { ok: false, error: 'API key required' });
