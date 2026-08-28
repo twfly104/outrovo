@@ -4983,7 +4983,16 @@ const server = http.createServer(async (req, res) => {
 if (!process.env.VERCEL) {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Outrovo server on http://0.0.0.0:${PORT} — engine mode: ${smtpConfigured ? 'smtp' : 'demo'}`);
+    // Launch-readiness warnings — each of these breaks a production flow.
     if (!ADMIN_KEY) console.warn('ADMIN_KEY is not set — admin endpoints (/api/signups, /api/billing/activate) are locked.');
+    if (ADMIN_KEY && /change-me|admin-20/i.test(ADMIN_KEY)) console.warn('ADMIN_KEY still looks like a default/placeholder — rotate it before launch.');
+    if (!process.env.DATA_KEY) console.warn('DATA_KEY is not set — sender-account passwords and stored API keys are encrypted with a derived fallback; set DATA_KEY before users connect inboxes or those secrets become unreadable if the fallback changes.');
+    if (!process.env.STRIPE_SECRET_KEY) console.warn('STRIPE_SECRET_KEY is not set — billing checkout falls back to manual admin activation.');
+    if (process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_WEBHOOK_SECRET) console.warn('STRIPE_WEBHOOK_SECRET is not set — Stripe payments will NOT auto-activate plans. Register a webhook endpoint for POST /api/billing/activate in the Stripe dashboard.');
+    if (!process.env.RESEND_API_KEY && !process.env.SMTP_HOST) console.warn('No email gateway configured (RESEND_API_KEY or SMTP_*) — outbound email runs in demo mode.');
+    if (process.env.RESEND_API_KEY && (process.env.RESEND_FROM || '').includes('resend.dev')) console.warn('RESEND_FROM is a resend.dev sandbox address — verify your sending domain in Resend and set RESEND_FROM to it, or email delivery will fail outside testing.');
+    if (!process.env.PUBLIC_URL) console.warn('PUBLIC_URL is not set — list-unsubscribe links and OAuth callbacks will use request Host headers.');
+    if (!process.env.DATA_DIR && !process.env.VERCEL) console.warn('DATA_DIR is not set — data is stored under ./data on the app filesystem and is LOST on every deploy unless a persistent disk is mounted.');
   });
 }
 
