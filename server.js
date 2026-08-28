@@ -2489,11 +2489,13 @@ async function aiGenerateStep({ campaignName, existingSteps, instruction }) {
 }
 
 // ---------- plans & billing ----------
-// Pricing strategy: card-free 14-day trial with full features → paid per-seat
-// tiers with hard prospect limits. Stripe Checkout when STRIPE_SECRET_KEY is
-// set; otherwise a manual activation path (admin key) keeps the flow usable.
+// Pricing strategy: card-free 14-day trial of the Starter plan → paid tiers
+// with hard prospect limits. Pro/Scale/Agency features (LinkedIn, BYOK,
+// white-label, agency panel) are never in the trial. Stripe Checkout when
+// STRIPE_SECRET_KEY is set; otherwise a manual activation path (admin key)
+// keeps the flow usable.
 const PLANS = {
-  trial: { name: 'Free trial', priceMonthly: 0, maxProspects: 100, maxCampaigns: 1, trialDays: 14, leadFinderCredits: 25, linkedIn: true, agency: false, whiteLabel: false, byok: false },
+  trial: { name: 'Starter trial', priceMonthly: 0, maxProspects: 2000, maxCampaigns: 3, trialDays: 14, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false, byok: false },
   starter: { name: 'Starter', priceMonthly: 39, maxProspects: 2000, maxCampaigns: 3, leadFinderCredits: 100, linkedIn: false, agency: false, whiteLabel: false, byok: false },
   growth: { name: 'Pro', priceMonthly: 89, maxProspects: 10000, maxCampaigns: 10, leadFinderCredits: 1000, linkedIn: true, agency: false, whiteLabel: false, byok: true },
   scale: { name: 'Scale', priceMonthly: 159, maxProspects: Infinity, maxCampaigns: Infinity, leadFinderCredits: 5000, linkedIn: true, agency: false, whiteLabel: true, byok: true },
