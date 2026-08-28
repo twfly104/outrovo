@@ -1021,46 +1021,44 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .plans {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  gap: 0;
   padding: 56px 0 20px;
   align-items: stretch;
 }
+/* Apollo-style columns: borderless plans separated by hairline dividers,
+   the featured plan sits in a warm-tinted card */
 .plan {
   position: relative;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-l);
   padding: 34px 30px;
   display: flex;
   flex-direction: column;
-  box-shadow: var(--shadow-s);
-  transition: transform 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out);
+  text-align: left;
+  border-left: 1px solid var(--line);
 }
-.plan:hover { transform: translateY(-6px); box-shadow: var(--shadow-m); }
+.plan:first-child { border-left: 0; }
 .plan.featured {
-  background: var(--card);
-  color: var(--ink);
-  border-color: var(--forest-deep);
-  box-shadow: var(--shadow-l);
+  background: linear-gradient(180deg, rgba(232, 73, 15, 0.07), rgba(232, 73, 15, 0.02));
+  border: 1px solid rgba(232, 73, 15, 0.4);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-m);
+  margin: -12px 10px;
+  padding: 46px 30px;
 }
 .plan-badge {
-  position: absolute;
-  top: -14px; left: 50%;
-  transform: translateX(-50%);
+  align-self: flex-start;
   background: var(--crest);
   color: #fff;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 6px 16px;
+  padding: 5px 12px;
   border-radius: 999px;
-  box-shadow: 0 6px 16px rgba(232, 73, 15, 0.28);
+  margin-bottom: 14px;
   white-space: nowrap;
 }
-.plan h3 { font-size: 1.4rem; }
-.plan .for { font-size: 0.88rem; color: var(--ink-faint); margin: 6px 0 24px; }
-.plan.featured .for { color: var(--ink-faint); }
+.plan h3 { font-size: 1.5rem; }
+.plan .for { font-size: 0.88rem; color: var(--ink-faint); margin: 6px 0 24px; min-height: 2.7em; }
 .plan-price { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
 .plan-price .amount {
   font-family: var(--font-display);
@@ -1070,10 +1068,18 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
   letter-spacing: -0.02em;
 }
 .plan-price .per { font-size: 0.9rem; color: var(--ink-faint); }
-.plan.featured .per { color: var(--ink-faint); }
-.plan-bill { font-size: 0.8rem; color: var(--ink-faint); min-height: 1.2em; margin-bottom: 26px; }
-.plan.featured .plan-bill { color: var(--ink-faint); }
-.plan .btn { justify-content: center; margin-bottom: 28px; }
+.plan-bill { font-size: 0.8rem; color: var(--ink-faint); min-height: 1.2em; margin-bottom: 18px; }
+.plan-credits {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 20px;
+}
+.plan-credits svg { color: var(--crest); flex: none; }
+.plan .btn { justify-content: center; width: 100%; margin-bottom: 28px; }
 .plan-feats { display: grid; gap: 11px; font-size: 0.92rem; }
 .plan-feats li { display: flex; gap: 10px; align-items: flex-start; color: var(--ink-soft); }
 .plan-feats .tick { width: 19px; height: 19px; margin-top: 3px; }
@@ -1457,7 +1463,14 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 560; line-height: 1.
 .modal.playing .demo-idle { display: none; }
 
 @media (max-width: 1100px) {
-  .plans { grid-template-columns: repeat(2, 1fr); max-width: 760px; margin-inline: auto; }
+  .plans { grid-template-columns: repeat(2, 1fr); gap: 20px; max-width: 760px; margin-inline: auto; }
+  .plan {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+    background: var(--card);
+    box-shadow: var(--shadow-s);
+  }
+  .plan.featured { margin: 0; padding: 46px 30px 34px; border-color: rgba(232, 73, 15, 0.4); }
 }
 @media (max-width: 640px) {
   .plans { grid-template-columns: 1fr; max-width: 480px; }
